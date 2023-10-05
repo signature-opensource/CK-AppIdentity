@@ -1,9 +1,7 @@
 using CK.Core;
 using FluentAssertions;
 using NUnit.Framework;
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
@@ -17,11 +15,13 @@ namespace CK.AppIdentity.Tests
         public async Task creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async ) );
-            await using ApplicationIdentityService s = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
             {
                 c["FullName"] = "OneCS-SaaS/$OneCS1";
             } );
             var events = new List<string>();
+            var s = running.ApplicationIdentityService;
+
             s.AllPartyChanged.Sync += ( m, r ) =>
             {
                 bool appear = !r.IsDestroyed;

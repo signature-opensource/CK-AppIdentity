@@ -5,7 +5,6 @@ using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
@@ -20,7 +19,7 @@ namespace CK.AppIdentity.Tests
         public async Task without_feature_builders_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( without_feature_builders_Async ) );
-            await using ApplicationIdentityService s = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
             {
                 c["DomainName"] = "D";
                 c["EnvironmentName"] = "#Production";
@@ -28,6 +27,7 @@ namespace CK.AppIdentity.Tests
                 c["Parties:0:PartyName"] = "Remote1";
                 c["Parties:1:PartyName"] = "Remote2";
             } );
+            var s = running.ApplicationIdentityService;
 
             s.DomainName.Should().Be( "D" );
             s.EnvironmentName.Should().Be( "#Production" );
@@ -171,11 +171,6 @@ namespace CK.AppIdentity.Tests
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( feature_builders_initialization_follows_the_dependency_order_Async ) );
             CheckOrderFeatureDriver.Reset();
-            var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" );
-            Throw.DebugAssert( c != null );
-            ServiceCollection serviceBuilder = new ServiceCollection();
-            serviceBuilder.AddSingleton( c );
-            serviceBuilder.AddSingleton<ApplicationIdentityService>();
             var builderTypes = new List<Type>() { typeof( F1FeatureDriver ),
                                                   typeof( F2_1FeatureDriver ),
                                                   typeof( F3_2FeatureDriver ),
@@ -184,16 +179,17 @@ namespace CK.AppIdentity.Tests
                                                   typeof( FC_A_3FeatureDriver ),
                                                   typeof( FD_B_2FeatureDriver ) };
             if( revert ) builderTypes.Reverse();
-            foreach( var t in builderTypes )
-            {
-                serviceBuilder.AddSingleton( t );
-                serviceBuilder.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
-            }
-            var services = serviceBuilder.BuildServiceProvider();
-            var s = services.GetRequiredService<ApplicationIdentityService>();
-
-            _ = ((IHostedService)s).StartAsync( default );
-            await s.InitializationTask;
+            await using var runningContext = await TestHelper.CreateApplicationServiceAsync(
+                c => c["FullName"] = "FakeDomain/$FakeApp",
+                services =>
+                {
+                    foreach( var t in builderTypes )
+                    {
+                        services.AddSingleton( t );
+                        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
+                    }
+                } );
+            var services = runningContext.Services;
 
             var f1 = services.GetRequiredService<F1FeatureDriver>();
             var f2_1 = services.GetRequiredService<F2_1FeatureDriver>();
@@ -220,7 +216,7 @@ namespace CK.AppIdentity.Tests
             fC_A_3.SetupOrder.Should().BeGreaterThan( fA_1.SetupOrder ).And.BeGreaterThan( f3_2.SetupOrder );
             fD_B_2.SetupOrder.Should().BeGreaterThan( fB_A.SetupOrder ).And.BeGreaterThan( f2_1.SetupOrder );
 
-            var r = await s.AddRemoteAsync( TestHelper.Monitor, c =>
+            var r = await runningContext.ApplicationIdentityService.AddRemoteAsync( TestHelper.Monitor, c =>
             {
                 c["PartyName"] = "SomeDynamicRemote";
             } );
@@ -232,7 +228,7 @@ namespace CK.AppIdentity.Tests
             CheckOrderFeatureDriver._dynamicTeardownCount.Should().Be( 7 );
             CheckOrderFeatureDriver._teardownCount.Should().Be( 0 );
 
-            await s.DisposeAsync();
+            await runningContext.ApplicationIdentityService.DisposeAsync();
             CheckOrderFeatureDriver._teardownCount.Should().Be( 7 );
         }
     }

@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Description>Application identity core abstraction and implementation.</Description>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-      <PackageReference Include="CK.Monitoring.Hosting" Version="18.0.3--0047-develop" />
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.1" />
+    <PackageReference Include="CK.Testing.Monitoring" Version="7.1.2--0048-develop" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,6 @@
 using CK.Core;
 using FluentAssertions;
 using NUnit.Framework;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
@@ -15,7 +14,7 @@ namespace CK.AppIdentity.Tests
         public async Task with_tenant_domains_initialization_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( with_tenant_domains_initialization_Async ) );
-            await using var s = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
             {
                 c["DomainName"] = "SaaSProduct";
                 c["PartyName"] = "SaaS1";
@@ -29,12 +28,12 @@ namespace CK.AppIdentity.Tests
                 c["Parties:1:Parties:0:PartyName"] = "ControlBox";
                 c["Parties:1:Parties:1:PartyName"] = "MeasureStation";
             } );
-            s.DomainName.Should().Be( "SaaSProduct" );
-            s.EnvironmentName.Should().Be( "#Dev" );
-            s.PartyName.Should().Be( "$SaaS1" );
-            s.Parties.Should().HaveCount( 2 );
+            running.ApplicationIdentityService.DomainName.Should().Be( "SaaSProduct" );
+            running.ApplicationIdentityService.EnvironmentName.Should().Be( "#Dev" );
+            running.ApplicationIdentityService.PartyName.Should().Be( "$SaaS1" );
+            running.ApplicationIdentityService.Parties.Should().HaveCount( 2 );
 
-            var allInOne = s.TenantDomains.Single( d => d.PartyName == "$AllInOneInc" );
+            var allInOne = running.ApplicationIdentityService.TenantDomains.Single( d => d.PartyName == "$AllInOneInc" );
             allInOne.Configuration.EnvironmentName.Should().Be( "#Dev" );
             allInOne.Remotes.Should().HaveCount( 5, "There are 5 agents in this group." );
             allInOne.Remotes.Should().AllSatisfy( r =>
@@ -43,7 +42,7 @@ namespace CK.AppIdentity.Tests
                 r.DomainName.Should().Be( "AllInOneInc" );
                 r.EnvironmentName.Should().Be( "#Dev" );
             } );
-            var opal = s.TenantDomains.Single( p => p.PartyName == "$OpalCorp" );
+            var opal = running.ApplicationIdentityService.TenantDomains.Single( p => p.PartyName == "$OpalCorp" );
             opal.Remotes.Should().HaveCount( 2, "There are 2 agents in this domain." );
             opal.Remotes.Should().AllSatisfy( r =>
             {
@@ -58,10 +57,11 @@ namespace CK.AppIdentity.Tests
         public async Task homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async ) );
-            await using var s = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
             {
                 c["FullName"] = "D/$P";
             } );
+            var s = running.ApplicationIdentityService;
             s.AllParties.Should().HaveCount( 0 );
 
             // This is the Agent "D/$P".

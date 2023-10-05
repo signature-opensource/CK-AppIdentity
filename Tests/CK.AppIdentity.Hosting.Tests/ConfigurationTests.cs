@@ -69,7 +69,7 @@ namespace CK.AppIdentity.Configuration.Tests
         public async Task Host_configuration_Async()
         {
             // The CoreApplicationIdentity can be tested only once (since it cannot be reset).
-            // Moreover, here, we sharing the GrandOutput.Default: building the host
+            // Moreover, here, we are sharing the GrandOutput.Default: building the host
             // reconfigures the GrandOutput.Default.
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( Host_configuration_Async ) );
 
