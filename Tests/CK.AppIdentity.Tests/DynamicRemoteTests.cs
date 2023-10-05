@@ -15,7 +15,7 @@ namespace CK.AppIdentity.Tests
         public async Task creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async ) );
-            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
             {
                 c["FullName"] = "OneCS-SaaS/$OneCS1";
             } );

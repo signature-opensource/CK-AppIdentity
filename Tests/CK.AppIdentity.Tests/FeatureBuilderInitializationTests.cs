@@ -19,7 +19,7 @@ namespace CK.AppIdentity.Tests
         public async Task without_feature_builders_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( without_feature_builders_Async ) );
-            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
             {
                 c["DomainName"] = "D";
                 c["EnvironmentName"] = "#Production";
@@ -179,10 +179,12 @@ namespace CK.AppIdentity.Tests
                                                   typeof( FC_A_3FeatureDriver ),
                                                   typeof( FD_B_2FeatureDriver ) };
             if( revert ) builderTypes.Reverse();
-            await using var runningContext = await TestHelper.CreateApplicationServiceAsync(
+            await using var runningContext = await TestHelper.CreateRunningAppIdentityServiceAsync(
                 c => c["FullName"] = "FakeDomain/$FakeApp",
                 services =>
                 {
+                    services.AddSingleton<ApplicationIdentityService>();
+                    services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
                     foreach( var t in builderTypes )
                     {
                         services.AddSingleton( t );

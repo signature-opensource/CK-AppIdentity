@@ -18,12 +18,12 @@ namespace CK
         /// Minimal application context with started <see cref="IHostedService"/> and 
         /// a completed <see cref="ApplicationIdentityService.InitializationTask"/>.
         /// </summary>
-        public sealed class MinimalRunningContext : IAsyncDisposable
+        public sealed class RunningAppIdentity : IAsyncDisposable
         {
             readonly ApplicationIdentityService _s;
             readonly ServiceProvider _provider;
 
-            internal MinimalRunningContext( ApplicationIdentityService s, ServiceProvider provider )
+            internal RunningAppIdentity( ApplicationIdentityService s, ServiceProvider provider )
             {
                 _s = s;
                 _provider = provider;
@@ -54,27 +54,41 @@ namespace CK
         }
 
         /// <summary>
-        /// Creates a <see cref="MinimalRunningContext"/> that must be disposed once done with it.
+        /// Creates a <see cref="RunningAppIdentity"/> that must be disposed once done with it.
+        /// <list type="bullet">
+        ///   <item>The configuration is always registered as a singleton in the services.</item>
+        ///   <item>
+        ///     When <paramref name="configureServices"/> is null, only the <see cref="ApplicationIdentityService"/>,
+        ///     the <see cref="IActivityMonitor"/> and <see cref="IParallelLogger"/> are registered.
+        ///   </item>
+        ///   <item>
+        ///     When a non null <paramref name="configureServices"/> is provided it must register all the services,
+        ///     including the required <see cref="ApplicationIdentityService"/>.
+        ///     <para>
+        ///     Beware of IHostedService registration (when not using automatic DI). It must be:
+        ///     <code>
+        ///     services.AddSingleton&lt;ApplicationIdentityService&gt;();
+        ///     services.AddSingleton&lt;IHostedService&gt;(sp =&gt; sp.GetRequiredService&lt;ApplicationIdentityService&gt;() );
+        ///     </code>
+        ///     </para>
+        ///   </item>
+        /// </list>
         /// <para>
-        /// This creates a minimal application context, with a registered <see cref="IActivityMonitor"/>
-        /// and <see cref="IParallelLogger"/> and all the <see cref="IHostedService"/> started.
+        /// All existing <see cref="IHostedService"/> are started.
         /// </para>
         /// </summary>
         /// <param name="helper">This test helper.</param>
         /// <param name="configuration">The configuration.</param>
-        /// <param name="configureServices">
-        /// Optional services (other than the identity service and the activity monitor)
-        /// to configure. <see cref="ApplicationIdentityFeatureDriver"/> must be explictly registered (as singletons).
-        /// </param>
+        /// <param name="configureServices">Null for minimal support otherwise the full configuration of services.</param>
         /// <param name="useTestAppIdentityStore">
         /// By default, preconfigures the <paramref name="configuration"/>["StoreRootPath"] to
         /// be "<see cref="IBasicTestHelper.TestProjectFolder"/>/CK-AppIdentity-Store".
         /// </param>
-        /// <returns>The started service.</returns>
-        public static Task<MinimalRunningContext> CreateApplicationServiceAsync( this IMonitorTestHelper helper,
-                                                                                 Action<MutableConfigurationSection> configuration,
-                                                                                 Action<IServiceCollection>? configureServices = null,
-                                                                                 bool useTestAppIdentityStore = true )
+        /// <returns>The running context.</returns>
+        public static Task<RunningAppIdentity> CreateRunningAppIdentityServiceAsync( this IMonitorTestHelper helper,
+                                                                                     Action<MutableConfigurationSection> configuration,
+                                                                                     Action<IServiceCollection>? configureServices = null,
+                                                                                     bool useTestAppIdentityStore = true )
         {
             Throw.CheckNotNullArgument( configuration );
             if( useTestAppIdentityStore )
@@ -89,37 +103,55 @@ namespace CK
             }
             var c = ApplicationIdentityServiceConfiguration.Create( helper.Monitor, configuration );
             Throw.DebugAssert( c != null );
-            return CreateApplicationServiceAsync( helper, c, configureServices );
+            return CreateRunningAppIdentityServiceAsync( helper, c, configureServices );
         }
 
         /// <summary>
-        /// Creates a <see cref="MinimalRunningContext"/> that must be disposed once done with it.
+        /// Creates a <see cref="RunningAppIdentity"/> that must be disposed once done with it.
+        /// <list type="bullet">
+        ///   <item>The configuration is always registered as a singleton in the services.</item>
+        ///   <item>
+        ///     When <paramref name="configureServices"/> is null, only the <see cref="ApplicationIdentityService"/>,
+        ///     the <see cref="IActivityMonitor"/> and <see cref="IParallelLogger"/> are registered.
+        ///   </item>
+        ///   <item>
+        ///     When a non null <paramref name="configureServices"/> is provided it must register all the services,
+        ///     including the required <see cref="ApplicationIdentityService"/>.
+        ///     <para>
+        ///     Beware of IHostedService registration (when not using automatic DI). It must be:
+        ///     <code>
+        ///     services.AddSingleton&lt;ApplicationIdentityService&gt;();
+        ///     services.AddSingleton&lt;IHostedService&gt;(sp =&gt; sp.GetRequiredService&lt;ApplicationIdentityService&gt;() );
+        ///     </code>
+        ///     </para>
+        ///   </item>
+        /// </list>
         /// <para>
-        /// This creates a minimal application context, with a registered <see cref="IActivityMonitor"/>
-        /// and <see cref="IParallelLogger"/> and all the <see cref="IHostedService"/> started.
+        /// All existing <see cref="IHostedService"/> are started.
         /// </para>
         /// </summary>
         /// <param name="helper">This test helper.</param>
         /// <param name="c">The configuration.</param>
-        /// <param name="configureServices">
-        /// Optional services (other than the identity service and the activity monitor)
-        /// to configure. <see cref="ApplicationIdentityFeatureDriver"/> must be explictly registered (as singletons).
-        /// </param>
-        /// <returns>The started service.</returns>
-        public static async Task<MinimalRunningContext> CreateApplicationServiceAsync( this IBasicTestHelper helper,
-                                                                                       ApplicationIdentityServiceConfiguration c,
-                                                                                       Action<IServiceCollection>? configureServices = null )
+        /// <param name="configureServices">Null for minimal support otherwise the full configuration of services.</param>
+        /// <returns>The running context.</returns>
+        public static async Task<RunningAppIdentity> CreateRunningAppIdentityServiceAsync( this IBasicTestHelper helper,
+                                                                                           ApplicationIdentityServiceConfiguration c,
+                                                                                           Action<IServiceCollection>? configureServices = null )
         {
             var serviceBuilder = new ServiceCollection();
             serviceBuilder.AddSingleton( c );
-            serviceBuilder.AddSingleton<ApplicationIdentityService>();
-            serviceBuilder.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
-
-            // Don't UseCKMonitoring here or the GrandOutput.Default will be reconfigured:
-            // only register the IActivityMonitor and its ParallelLogger.
-            serviceBuilder.AddScoped<IActivityMonitor, ActivityMonitor>();
-            serviceBuilder.AddScoped( sp => sp.GetRequiredService<IActivityMonitor>().ParallelLogger );
-            configureServices?.Invoke( serviceBuilder );
+            if( configureServices == null )
+            {
+                // Minimal configuration.
+                serviceBuilder.AddSingleton<ApplicationIdentityService>();
+                serviceBuilder.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+                serviceBuilder.AddScoped<IActivityMonitor, ActivityMonitor>();
+                serviceBuilder.AddScoped( sp => sp.GetRequiredService<IActivityMonitor>().ParallelLogger );
+            }
+            else
+            {
+                configureServices( serviceBuilder );
+            }
             var services = serviceBuilder.BuildServiceProvider();
             var s = services.GetRequiredService<ApplicationIdentityService>();
             // This is done by host.
@@ -129,7 +161,7 @@ namespace CK
             }
             // We wait for the FeatureBuildersInitialization task.
             await s.InitializationTask;
-            return new MinimalRunningContext( s, services );
+            return new RunningAppIdentity( s, services );
         }
     }
 }

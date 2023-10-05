@@ -14,7 +14,7 @@ namespace CK.AppIdentity.Tests
         public async Task with_tenant_domains_initialization_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( with_tenant_domains_initialization_Async ) );
-            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
             {
                 c["DomainName"] = "SaaSProduct";
                 c["PartyName"] = "SaaS1";
@@ -57,7 +57,7 @@ namespace CK.AppIdentity.Tests
         public async Task homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async()
         {
             using var gLog = TestHelper.Monitor.OpenInfo( nameof( homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async ) );
-            await using var running = await TestHelper.CreateApplicationServiceAsync( c =>
+            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
             {
                 c["FullName"] = "D/$P";
             } );
