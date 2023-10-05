@@ -76,13 +76,15 @@ namespace CK
                                                                                  Action<IServiceCollection>? configureServices = null,
                                                                                  bool useTestAppIdentityStore = true )
         {
+            Throw.CheckNotNullArgument( configuration );
             if( useTestAppIdentityStore )
             {
                 Throw.DebugAssert( nameof( ApplicationIdentityServiceConfiguration.StoreRootPath ) == "StoreRootPath" );
+                var prev = configuration;
                 configuration = c =>
                 {
                     c["StoreRootPath"] = helper.TestProjectFolder.AppendPart( "CK-AppIdentity-Store" );
-                    configuration( c );
+                    prev( c );
                 };
             }
             var c = ApplicationIdentityServiceConfiguration.Create( helper.Monitor, configuration );
@@ -111,6 +113,8 @@ namespace CK
             var serviceBuilder = new ServiceCollection();
             serviceBuilder.AddSingleton( c );
             serviceBuilder.AddSingleton<ApplicationIdentityService>();
+            serviceBuilder.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+
             // Don't UseCKMonitoring here or the GrandOutput.Default will be reconfigured:
             // only register the IActivityMonitor and its ParallelLogger.
             serviceBuilder.AddScoped<IActivityMonitor, ActivityMonitor>();
