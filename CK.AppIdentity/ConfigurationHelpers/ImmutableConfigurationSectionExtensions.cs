@@ -18,7 +18,7 @@ namespace CK.AppIdentity
         /// <param name="monitor">The monitor to use.</param>
         /// <param name="key">The configuration key.</param>
         /// <param name="reasonPhrase">The reason why this property must not be defined here.</param>
-        /// <returns>True on success (no configuration), false if the key exists..</returns>
+        /// <returns>True on success (no configuration), false if the key exists.</returns>
         public static bool CheckNotExist( this ImmutableConfigurationSection s, IActivityMonitor monitor, string key, string reasonPhrase )
         {
             if( s.TryGetSection( key ) != null )
@@ -27,6 +27,145 @@ namespace CK.AppIdentity
                 return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// Lookups a "true"/"false" value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <returns>The value or null.</returns>
+        public static bool? TryLookupBooleanValue( this ImmutableConfigurationSection s,
+                                                   IActivityMonitor monitor,
+                                                   string key )
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return null;
+            if( !bool.TryParse( a, out var value ) )
+            {
+                return WarnAndIgnore<bool>( s, monitor, key, "'true' or 'false'", a );
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Lookups an integer value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static int? TryLookupIntValue( this ImmutableConfigurationSection s,
+                                              IActivityMonitor monitor,
+                                              string key,
+                                              int min = 0,
+                                              int max = int.MaxValue )
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return null;
+            if( !int.TryParse( a, out var value ) )
+            {
+                return WarnAndIgnore<int>( s, monitor, key, "an integer", a );
+            }
+            if( value < min || value > max )
+            {
+                return WarnOutOfRangeAndIgnore<int>( s, monitor, key, value, min, max );
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Lookups a <see cref="TimeSpan"/> value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static TimeSpan? TryLookupTimeSpanValue( this ImmutableConfigurationSection s,
+                                                        IActivityMonitor monitor,
+                                                        string key,
+                                                        TimeSpan min,
+                                                        TimeSpan max )
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return null;
+            if( !TimeSpan.TryParse( a, out var value ) )
+            {
+                return WarnAndIgnore<TimeSpan>( s, monitor, key, "a TimeSpan", a );
+            }
+            if( value < min || value > max )
+            {
+                return WarnOutOfRangeAndIgnore<TimeSpan>( s, monitor, key, value, min, max );
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Lookups a floating number value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static double? TryLookupDoubleValue( this ImmutableConfigurationSection s,
+                                                    IActivityMonitor monitor,
+                                                    string key,
+                                                    double min = 0.0,
+                                                    double max = double.MaxValue )
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return null;
+            if( !double.TryParse( a, out var value ) )
+            {
+                return WarnAndIgnore<double>( s, monitor, key, "a number", a );
+            }
+            if( value < min || value > max )
+            {
+                return WarnOutOfRangeAndIgnore<double>( s, monitor, key, value, min, max );
+            }
+            return value;
+        }
+
+        static T? WarnOutOfRangeAndIgnore<T>( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, T value, T min, T max )
+        {
+            monitor.Warn( $"Invalid '{s.Path}:{key}': value '{value}' must be between '{min}' and '{max}'. Ignored." );
+            return default;
+        }
+
+        static T? WarnAndIgnore<T>( ImmutableConfigurationSection s,
+                                 IActivityMonitor monitor,
+                                 string key,
+                                 string expected,
+                                 string? a )
+        {
+            monitor.Warn( $"Unable to parse '{s.Path}:{key}' value, expected {expected} but got '{a}'. Ignored." );
+            return default;
         }
 
 
@@ -50,26 +189,16 @@ namespace CK.AppIdentity
             if( a == null ) return defaultValue;
             if( !bool.TryParse( a, out var value ) )
             {
-                return Warn( s, monitor, key, "'true' or 'false'", defaultValue, a );
+                return WarnWithDefault( s, monitor, key, "'true' or 'false'", defaultValue, a );
             }
             return value;
-        }
-
-        static T Warn<T>( ImmutableConfigurationSection s,
-                           IActivityMonitor monitor,
-                           string key,
-                           string expected,
-                           T defaultValue,
-                           string? a )
-        {
-            monitor.Warn( $"Unable to parse '{s.Path}:{key}' value, expected {expected} but got '{a}'. Using default '{defaultValue}'." );
-            return defaultValue;
         }
 
         /// <summary>
         /// Lookups an integer value in this section or above.
         /// <para>
-        /// If the value exists and cannot be parsed, emits a log warning and returns the <paramref name="defaultValue"/>.
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns the <paramref name="defaultValue"/>.
         /// </para>
         /// </summary>
         /// <param name="s">This section.</param>
@@ -86,7 +215,7 @@ namespace CK.AppIdentity
             if( a == null ) return defaultValue;
             if( !int.TryParse( a, out var value ) )
             {
-                return Warn( s, monitor, key, "an integer", defaultValue, a );
+                return WarnWithDefault( s, monitor, key, "an integer", defaultValue, a );
             }
             return value;
         }
@@ -94,26 +223,25 @@ namespace CK.AppIdentity
         /// <summary>
         /// Lookups a <see cref="TimeSpan"/> value in this section or above.
         /// <para>
-        /// If the value exists and cannot be parsed, emits a log warning and returns the <paramref name="defaultValue"/>.
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns the <paramref name="defaultValue"/>.
         /// </para>
         /// </summary>
         /// <param name="s">This section.</param>
         /// <param name="monitor">The monitor to use.</param>
         /// <param name="key">The configuration key.</param>
         /// <param name="defaultValue">Returned default value.</param>
-        /// <param name="allowNull">Allows "null" string to be returned as a null value (without warning).</param>
         /// <returns>The value.</returns>
         public static TimeSpan LookupTimeSpanValue( this ImmutableConfigurationSection s,
                                                     IActivityMonitor monitor,
                                                     string key,
-                                                    TimeSpan defaultValue,
-                                                    bool allowNull = false )
+                                                    TimeSpan defaultValue )
         {
             var a = s.TryLookupValue( key );
             if( a == null ) return defaultValue;
             if( !TimeSpan.TryParse( a, out var value ) )
             {
-                return Warn( s, monitor, key, "a TimeSpan", defaultValue, a );
+                return WarnWithDefault( s, monitor, key, "a TimeSpan", defaultValue, a );
             }
             return value;
         }
@@ -121,28 +249,38 @@ namespace CK.AppIdentity
         /// <summary>
         /// Lookups a <see cref="TimeSpan"/> value in this section or above.
         /// <para>
-        /// If the value exists and cannot be parsed, emits a log warning and returns the <paramref name="defaultValue"/>.
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns the <paramref name="defaultValue"/>.
         /// </para>
         /// </summary>
         /// <param name="s">This section.</param>
         /// <param name="monitor">The monitor to use.</param>
         /// <param name="key">The configuration key.</param>
         /// <param name="defaultValue">Returned default value.</param>
-        /// <param name="allowNull">Allows "null" string to be returned as a null value (without warning).</param>
         /// <returns>The value.</returns>
         public static double LookupDoubleValue( this ImmutableConfigurationSection s,
                                                 IActivityMonitor monitor,
                                                 string key,
-                                                double defaultValue = 0.0,
-                                                bool allowNull = false )
+                                                double defaultValue = 0.0 )
         {
             var a = s.TryLookupValue( key );
             if( a == null ) return defaultValue;
-            if( !Double.TryParse( a, out var value ) )
+            if( !double.TryParse( a, out var value ) )
             {
-                return Warn( s, monitor, key, "a float number", defaultValue, a );
+                return WarnWithDefault( s, monitor, key, "a float number", defaultValue, a );
             }
             return value;
+        }
+
+        static T WarnWithDefault<T>( ImmutableConfigurationSection s,
+                                     IActivityMonitor monitor,
+                                     string key,
+                                     string expected,
+                                     T defaultValue,
+                                     string? a )
+        {
+            monitor.Warn( $"Unable to parse '{s.Path}:{key}' value, expected {expected} but got '{a}'. Using default '{defaultValue}'." );
+            return defaultValue;
         }
 
         /// <summary>
