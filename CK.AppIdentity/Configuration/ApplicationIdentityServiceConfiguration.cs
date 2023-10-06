@@ -3,10 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks.Sources;
 
 namespace CK.AppIdentity
 {
@@ -18,7 +15,7 @@ namespace CK.AppIdentity
     /// and destroyed.
     /// </para>
     /// </summary>
-    public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentityPartyConfiguration
+    public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentityPartyConfiguration, ISingletonAutoService
     {
         readonly List<RemotePartyConfiguration> _remotes;
         readonly List<TenantDomainPartyConfiguration> _tenants;
