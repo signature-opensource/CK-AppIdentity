@@ -152,6 +152,31 @@ namespace CK.AppIdentity
             return value;
         }
 
+        /// <summary>
+        /// Lookups an enum value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <returns>The value or null.</returns>
+        public static T? TryLookupEnumValue<T>( this ImmutableConfigurationSection s,
+                                                IActivityMonitor monitor,
+                                                string key )
+            where T : struct, Enum
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return null;
+            if( !Enum.TryParse<T>( a, true, out var value ) )
+            {
+                return WarnAndIgnore<T>( s, monitor, key, $"a {typeof(T).Name} value", a );
+            }
+            return value;
+        }
+
         static T? WarnOutOfRangeAndIgnore<T>( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, T value, T min, T max )
         {
             monitor.Warn( $"Invalid '{s.Path}:{key}': value '{value}' must be between '{min}' and '{max}'. Ignored." );
@@ -159,10 +184,10 @@ namespace CK.AppIdentity
         }
 
         static T? WarnAndIgnore<T>( ImmutableConfigurationSection s,
-                                 IActivityMonitor monitor,
-                                 string key,
-                                 string expected,
-                                 string? a )
+                                    IActivityMonitor monitor,
+                                    string key,
+                                    string expected,
+                                    string? a )
         {
             monitor.Warn( $"Unable to parse '{s.Path}:{key}' value, expected {expected} but got '{a}'. Ignored." );
             return default;
@@ -268,6 +293,32 @@ namespace CK.AppIdentity
             if( !double.TryParse( a, out var value ) )
             {
                 return WarnWithDefault( s, monitor, key, "a float number", defaultValue, a );
+            }
+            return value;
+        }
+        /// <summary>
+        /// Lookups a <see cref="TimeSpan"/> value in this section or above.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns the <paramref name="defaultValue"/>.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="defaultValue">Returned default value.</param>
+        /// <returns>The value.</returns>
+        public static T? LookupEnumValue<T>( this ImmutableConfigurationSection s,
+                                             IActivityMonitor monitor,
+                                             string key,
+                                             T defaultValue )
+              where T : struct, Enum
+        {
+            var a = s.TryLookupValue( key );
+            if( a == null ) return defaultValue;
+            if( !Enum.TryParse<T>( a, true, out var value ) )
+            {
+                return WarnWithDefault( s, monitor, key, $"a {typeof(T).Name} value", defaultValue, a );
             }
             return value;
         }
