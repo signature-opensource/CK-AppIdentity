@@ -44,7 +44,29 @@ namespace CK.AppIdentity
                                                    IActivityMonitor monitor,
                                                    string key )
         {
-            var a = s.TryLookupValue( key );
+            return TryReadBoolean( s, monitor, key, s.TryLookupValue( key ) );
+        }
+
+        /// <summary>
+        /// Tries to get a "true"/"false" value in this section.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <returns>The value or null.</returns>
+        public static bool? TryGetBooleanValue( this ImmutableConfigurationSection s,
+                                                IActivityMonitor monitor,
+                                                string key )
+        {
+            return TryReadBoolean( s, monitor, key, s[key] );
+        }
+
+        private static bool? TryReadBoolean( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, string? a )
+        {
             if( a == null ) return null;
             if( !bool.TryParse( a, out var value ) )
             {
@@ -73,7 +95,34 @@ namespace CK.AppIdentity
                                               int min = 0,
                                               int max = int.MaxValue )
         {
-            var a = s.TryLookupValue( key );
+            return TryReadInt( s, monitor, key, min, max, s.TryLookupValue( key ) );
+        }
+
+        /// <summary>
+        /// Tries to get an integer value in this section.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static int? TryGetIntValue( this ImmutableConfigurationSection s,
+                                           IActivityMonitor monitor,
+                                           string key,
+                                           int min = 0,
+                                           int max = int.MaxValue )
+        {
+            return TryReadInt( s, monitor, key, min, max, s[key] );
+        }
+
+        private static int? TryReadInt( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, int min, int max, string? a )
+        {
             if( a == null ) return null;
             if( !int.TryParse( a, out var value ) )
             {
@@ -106,7 +155,34 @@ namespace CK.AppIdentity
                                                         TimeSpan min,
                                                         TimeSpan max )
         {
-            var a = s.TryLookupValue( key );
+            return TryReadTimeSpan( s, monitor, key, min, max, s.TryLookupValue( key ) );
+        }
+
+        /// <summary>
+        /// Tries to get a <see cref="TimeSpan"/> value in this section.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static TimeSpan? TryGetTimeSpanValue( this ImmutableConfigurationSection s,
+                                                     IActivityMonitor monitor,
+                                                     string key,
+                                                     TimeSpan min,
+                                                     TimeSpan max )
+        {
+            return TryReadTimeSpan( s, monitor, key, min, max, s[key] );
+        }
+
+        static TimeSpan? TryReadTimeSpan( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, TimeSpan min, TimeSpan max, string? a )
+        {
             if( a == null ) return null;
             if( !TimeSpan.TryParse( a, out var value ) )
             {
@@ -139,7 +215,34 @@ namespace CK.AppIdentity
                                                     double min = 0.0,
                                                     double max = double.MaxValue )
         {
-            var a = s.TryLookupValue( key );
+            return TryReadDouble( s, monitor, key, min, max, s.TryLookupValue( key ) );
+        }
+
+        /// <summary>
+        /// Tries to get a floating number value in this section.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed or falls outside
+        /// of the <paramref name="min"/>-<paramref name="max"/> range, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <param name="min">The minimal value to accept.</param>
+        /// <param name="max">The maximal value to accept.</param>
+        /// <returns>The value or null.</returns>
+        public static double? TryGetDoubleValue( this ImmutableConfigurationSection s,
+                                                 IActivityMonitor monitor,
+                                                 string key,
+                                                 double min = 0.0,
+                                                 double max = double.MaxValue )
+        {
+            return TryReadDouble( s, monitor, key, min, max, s[key] );
+        }
+
+        static double? TryReadDouble( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, double min, double max, string? a )
+        {
             if( a == null ) return null;
             if( !double.TryParse( a, out var value ) )
             {
@@ -168,11 +271,34 @@ namespace CK.AppIdentity
                                                 string key )
             where T : struct, Enum
         {
-            var a = s.TryLookupValue( key );
+            return TryReadEnum<T>( s, monitor, key, s.TryLookupValue( key ) );
+        }
+
+        /// <summary>
+        /// Tries to get an enum value in this section.
+        /// <para>
+        /// This never throws: if the value exists and cannot be parsed, emits a log warning
+        /// and returns null.
+        /// </para>
+        /// </summary>
+        /// <param name="s">This section.</param>
+        /// <param name="monitor">The monitor to use.</param>
+        /// <param name="key">The configuration key.</param>
+        /// <returns>The value or null.</returns>
+        public static T? TryGetEnumValue<T>( this ImmutableConfigurationSection s,
+                                             IActivityMonitor monitor,
+                                             string key )
+            where T : struct, Enum
+        {
+            return TryReadEnum<T>( s, monitor, key, s[key] );
+        }
+
+        static T? TryReadEnum<T>( ImmutableConfigurationSection s, IActivityMonitor monitor, string key, string? a ) where T : struct, Enum
+        {
             if( a == null ) return null;
             if( !Enum.TryParse<T>( a, true, out var value ) )
             {
-                return WarnAndIgnore<T>( s, monitor, key, $"a {typeof(T).Name} value", a );
+                return WarnAndIgnore<T>( s, monitor, key, $"a {typeof( T ).Name} value", a );
             }
             return value;
         }
@@ -272,7 +398,7 @@ namespace CK.AppIdentity
         }
 
         /// <summary>
-        /// Lookups a <see cref="TimeSpan"/> value in this section or above.
+        /// Lookups a float value in this section or above.
         /// <para>
         /// This never throws: if the value exists and cannot be parsed, emits a log warning
         /// and returns the <paramref name="defaultValue"/>.
@@ -296,8 +422,9 @@ namespace CK.AppIdentity
             }
             return value;
         }
+
         /// <summary>
-        /// Lookups a <see cref="TimeSpan"/> value in this section or above.
+        /// Lookups an enum value in this section or above.
         /// <para>
         /// This never throws: if the value exists and cannot be parsed, emits a log warning
         /// and returns the <paramref name="defaultValue"/>.
