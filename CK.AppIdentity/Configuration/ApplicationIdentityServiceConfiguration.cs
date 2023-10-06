@@ -15,7 +15,8 @@ namespace CK.AppIdentity
     /// and destroyed.
     /// </para>
     /// </summary>
-    public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentityPartyConfiguration, ISingletonAutoService
+    [SingletonService]
+    public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentityPartyConfiguration
     {
         readonly List<RemotePartyConfiguration> _remotes;
         readonly List<TenantDomainPartyConfiguration> _tenants;
