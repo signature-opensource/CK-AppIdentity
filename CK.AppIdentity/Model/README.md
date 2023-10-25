@@ -62,7 +62,7 @@ _Notes:_
 - From now on, we don't show the LogTower configuration. This is the same for every party
   (if we want to target the same LogTower).
 - We also don’t specify the EnvironementName anymore. This defaults to the IHostEnvironment.EnvironementName
-  (that defaults to "#Development")
+  (that defaults to "#Dev")
 
 The name of this new Party is the same as the DomainName: the "LaToulousaine/$LaToulousaine" Party is the "domain controller"
 of "LaToulousaine" domain:

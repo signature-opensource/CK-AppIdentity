@@ -118,7 +118,7 @@ namespace CK.AppIdentity
                                                                        IConfigurationSection configuration )
         {
             var env = hostEnvironment.EnvironmentName;
-            if( string.IsNullOrWhiteSpace( env ) )
+            if( string.IsNullOrWhiteSpace( env ) || env == "Development" )
             {
                 env = CoreApplicationIdentity.DefaultEnvironmentName;
             }
