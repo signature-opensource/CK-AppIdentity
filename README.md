@@ -2,7 +2,7 @@
 
 The goal of this library is to provide a minimal model of an application and its peers
 and to support extensibility thanks to simple "features" that can be associated to the
-identity objects.
+identity objects AND to minimize the "configuration mess".
 
 Application identity may be the only aspect that requires an explicit configuration.
 Any other aspects can have a default behavior, but the remote parties with whom an application

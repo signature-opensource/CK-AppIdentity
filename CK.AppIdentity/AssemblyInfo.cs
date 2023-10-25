@@ -1,0 +1,2 @@
+
+[assembly: CK.Setup.IsModelDependent]
