@@ -22,7 +22,7 @@ namespace CK.AppIdentity
             DisallowFeatures = existing.DisallowFeatures;
         }
 
-        InheritedConfigurationProps( IReadOnlySet<string> allowFeatures, IReadOnlySet<string> disallowFeatures )
+        public InheritedConfigurationProps( IReadOnlySet<string> allowFeatures, IReadOnlySet<string> disallowFeatures )
         {
             AllowFeatures = allowFeatures;
             DisallowFeatures = disallowFeatures;

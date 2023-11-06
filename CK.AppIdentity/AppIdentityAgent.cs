@@ -55,13 +55,19 @@ namespace CK.AppIdentity
             // We now use the builders that have been registered in the service: they
             // are necessarily topologically ordered by their dependencies so the calls
             // to InitializeAsync follows the ordering.
-            int count = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Count();
-            if( count != _service._builders.Count )
+            //
+            // Skipping the edge case 0 allows an empty service provider to be provided (for tests).
+            int expectedCount = _service._builders.Count;
+            if( expectedCount > 0 )
             {
-                var missing = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Except( _service._builders ).Select( b => b.GetType() );
-                monitor.Error( $"Found {count} AppIdentityFeatureBuilder but only {_service._builders.Count} have registered themselves." +
-                               $" Missing registration for: {missing.Select( t => t.ToCSharpName() ).Concatenate()}." );
-                return false;
+                int count = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Count();
+                if( count != _service._builders.Count )
+                {
+                    var missing = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Except( _service._builders ).Select( b => b.GetType() );
+                    monitor.Error( $"Found {count} AppIdentityFeatureBuilder but only {_service._builders.Count} have registered themselves." +
+                                   $" Missing registration for: {missing.Select( t => t.ToCSharpName() ).Concatenate()}." );
+                    return false;
+                }
             }
             return true;
         }

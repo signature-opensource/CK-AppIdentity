@@ -208,7 +208,6 @@ namespace CK.AppIdentity
             {
                 await d.OnShutdownOrDestroyedAsync( monitor, false );
             }
-
         }
 
         /// <summary>

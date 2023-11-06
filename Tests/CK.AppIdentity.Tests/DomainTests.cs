@@ -1,5 +1,6 @@
 using CK.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using System.Linq;
 using System.Threading.Tasks;
@@ -98,6 +99,18 @@ namespace CK.AppIdentity.Tests
             noWay.Should().BeNull( "Duplicate remote (from any other tenant) is not possible." );
         }
 
+        [Test]
+        public async Task with_empty_configuration_initialization_and_empty_services_Async()
+        {
+            using var gLog = TestHelper.Monitor.OpenInfo( nameof( with_empty_configuration_initialization_and_empty_services_Async ) );
+            var c = ApplicationIdentityServiceConfiguration.CreateEmpty();
+            var empty = new ApplicationIdentityService( c, new SimpleServiceContainer() );
+            // This does not throw.
+            empty.InitializationTask.IsCompleted.Should().BeFalse();
+            await ((IHostedService)empty).StartAsync( default );
+            await empty.InitializationTask;
+            await ((IHostedService)empty).StopAsync( default );
+        }
 
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 
 namespace CK.AppIdentity
@@ -36,6 +37,19 @@ namespace CK.AppIdentity
             _storeRootPath = store;
             _remotes = parties.Value.Remotes;
             _tenants = parties.Value.Tenants;
+        }
+
+        // Constructor for the empty.
+        ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
+                                                 string domainName,
+                                                 NormalizedPath fullName,
+                                                 NormalizedPath? storeRootPath,
+                                                 ref InheritedConfigurationProps inhProps )
+            : base( configuration, domainName, fullName, ref inhProps )
+        {
+            _storeRootPath = storeRootPath ?? DefaultStoreRootPath;
+            _remotes = new List<RemotePartyConfiguration>();
+            _tenants = new List<TenantDomainPartyConfiguration>();
         }
 
         /// <summary>
@@ -98,6 +112,36 @@ namespace CK.AppIdentity
                     _defaultStoreRootPath = p;
                 }
             }
+        }
+
+        /// <summary>
+        /// Creates an empty configuration.
+        /// <para>
+        /// Using this configuration for a <see cref="ApplicationIdentityService"/> allows dynamic remote parties
+        /// to be added (and destroyed) but prevents the <see cref="LocalParty"/> to be altered.
+        /// </para>
+        /// </summary>
+        /// <param name="domainName">Domain name.</param>
+        /// <param name="partyName">Party name.</param>
+        /// <param name="environmentName">Environment name.</param>
+        /// <param name="storeRootPath">Optional store root path. Defaults to <see cref="DefaultStoreRootPath"/>.</param>
+        /// <returns>An empty configuration.</returns>
+        public static ApplicationIdentityServiceConfiguration CreateEmpty( string domainName = CoreApplicationIdentity.DefaultDomainName,
+                                                                           string partyName = CoreApplicationIdentity.DefaultPartyName,
+                                                                           string environmentName = CoreApplicationIdentity.DefaultEnvironmentName,
+                                                                           NormalizedPath? storeRootPath = null )
+        {
+            CoreApplicationIdentity.IsValidDomainName( domainName );
+            CoreApplicationIdentity.IsValidPartyName( partyName );
+            CoreApplicationIdentity.IsValidPartyName( environmentName );
+            if( partyName[0] != '$' ) partyName = '$' + partyName;
+            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty );
+            var c = new MutableConfigurationSection( "CK-AppIdentity" );
+            return new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
+                                                                domainName,
+                                                                $"{domainName}/{partyName}/{environmentName}",
+                                                                storeRootPath ?? DefaultStoreRootPath,
+                                                                ref props );
         }
 
         /// <summary>
