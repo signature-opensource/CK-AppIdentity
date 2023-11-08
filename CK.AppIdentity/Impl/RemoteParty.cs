@@ -54,7 +54,7 @@ namespace CK.AppIdentity
         {
             if( Interlocked.CompareExchange( ref _isDestroyed, 1, 0 ) == 0 )
             {
-                _destroyTCS = new TaskCompletionSource();
+                _destroyTCS = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
                 if( isTop ) Owner.ApplicationIdentityService.Agent.OnDestroy( this );
                 return true;
             }

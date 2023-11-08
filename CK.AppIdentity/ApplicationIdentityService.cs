@@ -38,7 +38,7 @@ namespace CK.AppIdentity
         {
             Throw.CheckNotNullArgument( serviceProvider );
             _builders = new List<ApplicationIdentityFeatureDriver>();
-            _initialization = new TaskCompletionSource();
+            _initialization = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
             _systemClock = serviceProvider.GetService<ISystemClock>() ?? DefaultClock;
             _agent = new AppIdentityAgent( this, serviceProvider, _systemClock.HeatBeatPeriod );
             _heartbeat = new PerfectEventSender<int>();

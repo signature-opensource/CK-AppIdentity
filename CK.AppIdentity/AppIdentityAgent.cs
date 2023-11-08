@@ -127,7 +127,7 @@ namespace CK.AppIdentity
 
         internal Task<bool> InitializeDynamicPartiesAsync( AddedDynamicParties parties )
         {
-            var cts = new TaskCompletionSource<bool>();
+            var cts = new TaskCompletionSource<bool>( TaskCreationOptions.RunContinuationsAsynchronously );
             PushTypedJob( new InitializeDynamicPartiesJob( parties, cts ) );
             return cts.Task;
         }
