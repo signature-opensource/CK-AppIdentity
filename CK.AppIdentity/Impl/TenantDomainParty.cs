@@ -46,7 +46,7 @@ namespace CK.AppIdentity
             Throw.CheckState( _isDynamic );
             if( Interlocked.CompareExchange( ref _isDestroyed, 1, 0 ) == 0 )
             {
-                _destroyTCS = new TaskCompletionSource();
+                _destroyTCS = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
                 foreach( var r in _remotes )
                 {
                     // Use the CAS check on destroy to prevent any
