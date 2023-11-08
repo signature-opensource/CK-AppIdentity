@@ -55,13 +55,24 @@ namespace CK.AppIdentity
             // We now use the builders that have been registered in the service: they
             // are necessarily topologically ordered by their dependencies so the calls
             // to InitializeAsync follows the ordering.
-            int count = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Count();
-            if( count != _service._builders.Count )
+            // First, we test whether at least one IApplicationIdentityFeatureDriver is registered (the last one: this is how the
+            // .NET conformant DI works).
+            // We do this only to kindly handle tests whit empty services provider that don't handle IEnumerable (like the SimpleServiceContainer).
+            var lastRegistered = _serviceProvider.GetService( typeof(IApplicationIdentityFeatureDriver) );
+            if( lastRegistered == null )
             {
-                var missing = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Except( _service._builders ).Select( b => b.GetType() );
-                monitor.Error( $"Found {count} AppIdentityFeatureBuilder but only {_service._builders.Count} have registered themselves." +
-                               $" Missing registration for: {missing.Select( t => t.ToCSharpName() ).Concatenate()}." );
-                return false;
+                monitor.Warn( "No IApplicationIdentityFeatureDriver found in services. AppIdentity has no feature to manage." );
+            }
+            else
+            {
+                int count = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Count();
+                if( count != _service._builders.Count )
+                {
+                    var missing = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Except( _service._builders ).Select( b => b.GetType() );
+                    monitor.Error( $"Found {count} AppIdentityFeatureBuilder but only {_service._builders.Count} have registered themselves." +
+                                    $" Missing registration for: {missing.Select( t => t.ToCSharpName() ).Concatenate()}." );
+                    return false;
+                }
             }
             return true;
         }

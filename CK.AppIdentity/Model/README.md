@@ -138,4 +138,14 @@ Each application identity objects are bound to an immutable configuration.
 The `MutableConfigurationSection` acts as a builder for immutable configuration and hence is used to
 initialize dynamic parties.
 
+### Strictly checking the configuration (or not)
+A `StrictConfigurationMode` boolean property drives whether warnings must be considered as errors.
+This defaults to false only when environment name is "#Dev" (the default, non configured environment
+name) but can always be explicitly configured at the root configuration level.
+
+The goal is to be strict but some configuration may emit annoying warnings. The global approach
+here is to temporarily set the `StrictConfigurationMode` to false and to consider this annoying
+warning as a "bug" that must be fixed by emitting an Info instead.
+
+
 

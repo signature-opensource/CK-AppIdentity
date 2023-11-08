@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 
 namespace CK.AppIdentity
@@ -21,12 +22,14 @@ namespace CK.AppIdentity
         readonly List<RemotePartyConfiguration> _remotes;
         readonly List<TenantDomainPartyConfiguration> _tenants;
         readonly NormalizedPath _storeRootPath;
+        readonly bool _strictMode;
         static NormalizedPath _defaultStoreRootPath;
         static readonly object _defaultStoreRootPathLock = new object();
 
         ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
                                                  string domainName,
                                                  NormalizedPath fullName,
+                                                 bool strictMode,
                                                  string store,
                                                  ref ProcessedConfiguration? parties,
                                                  ref InheritedConfigurationProps inhProps )
@@ -36,6 +39,21 @@ namespace CK.AppIdentity
             _storeRootPath = store;
             _remotes = parties.Value.Remotes;
             _tenants = parties.Value.Tenants;
+            _strictMode = strictMode;
+        }
+
+        // Constructor for the empty.
+        ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
+                                                 string domainName,
+                                                 NormalizedPath fullName,
+                                                 NormalizedPath? storeRootPath,
+                                                 ref InheritedConfigurationProps inhProps )
+            : base( configuration, domainName, fullName, ref inhProps )
+        {
+            _storeRootPath = storeRootPath ?? DefaultStoreRootPath;
+            _remotes = new List<RemotePartyConfiguration>();
+            _tenants = new List<TenantDomainPartyConfiguration>();
+            _strictMode = EnvironmentName != CoreApplicationIdentity.DefaultEnvironmentName;
         }
 
         /// <summary>
@@ -47,6 +65,16 @@ namespace CK.AppIdentity
         /// Gets the tenant domains if any.
         /// </summary>
         public IReadOnlyCollection<TenantDomainPartyConfiguration> TenantDomains => _tenants;
+
+        /// <summary>
+        /// Gets whether this configuration must be strictly checked: warnings are considered errors.
+        /// <para>
+        /// This always defaults to true except when this EnvironmentName is "#Dev": we consider that
+        /// by default, in development, a configuration can have warnings but in any other environment
+        /// (typically in "#Production"), a configuration must be perfectly valid.
+        /// </para>
+        /// </summary>
+        public bool StrictConfigurationMode => _strictMode;
 
         /// <summary>
         /// Gets the file storage root path. Defaults to <see cref="DefaultStoreRootPath"/>.
@@ -101,6 +129,36 @@ namespace CK.AppIdentity
         }
 
         /// <summary>
+        /// Creates an empty configuration.
+        /// <para>
+        /// Using this configuration for a <see cref="ApplicationIdentityService"/> allows dynamic remote parties
+        /// to be added (and destroyed) but prevents the <see cref="LocalParty"/> to be altered.
+        /// </para>
+        /// </summary>
+        /// <param name="domainName">Domain name.</param>
+        /// <param name="partyName">Party name.</param>
+        /// <param name="environmentName">Environment name.</param>
+        /// <param name="storeRootPath">Optional store root path. Defaults to <see cref="DefaultStoreRootPath"/>.</param>
+        /// <returns>An empty configuration.</returns>
+        public static ApplicationIdentityServiceConfiguration CreateEmpty( string domainName = CoreApplicationIdentity.DefaultDomainName,
+                                                                           string partyName = CoreApplicationIdentity.DefaultPartyName,
+                                                                           string environmentName = CoreApplicationIdentity.DefaultEnvironmentName,
+                                                                           NormalizedPath? storeRootPath = null )
+        {
+            CoreApplicationIdentity.IsValidDomainName( domainName );
+            CoreApplicationIdentity.IsValidPartyName( partyName );
+            CoreApplicationIdentity.IsValidPartyName( environmentName );
+            if( partyName[0] != '$' ) partyName = '$' + partyName;
+            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty );
+            var c = new MutableConfigurationSection( "CK-AppIdentity" );
+            return new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
+                                                                domainName,
+                                                                $"{domainName}/{partyName}/{environmentName}",
+                                                                storeRootPath ?? DefaultStoreRootPath,
+                                                                ref props );
+        }
+
+        /// <summary>
         /// Tries to create an <see cref="ApplicationIdentityServiceConfiguration"/> instance from a <see cref="IConfigurationSection"/>
         /// and the <see cref="IHostEnvironment"/>: the <see cref="IHostEnvironment.ApplicationName"/> is the default party name
         /// and <see cref="IHostEnvironment.EnvironmentName"/> is the default environment name.
@@ -149,6 +207,51 @@ namespace CK.AppIdentity
             return Create( monitor, c );
         }
 
+        sealed class WarnTracker : IActivityMonitorClient, IDisposable
+        {
+            private readonly IActivityMonitorOutput _output;
+            int _warnCount;
+
+            public WarnTracker( IActivityMonitorOutput output )
+            {
+                _output = output;
+                output.RegisterClient( this );
+            }
+
+            public int WarnCount => _warnCount;
+
+            public void Dispose()
+            {
+                _output.UnregisterClient( this );
+            }
+
+            public void OnUnfilteredLog( ref ActivityMonitorLogData data )
+            {
+                if( data.MaskedLevel == LogLevel.Warn ) _warnCount++;
+            }
+
+            public void OnOpenGroup( IActivityLogGroup group )
+            {
+                if( group.Data.MaskedLevel == LogLevel.Warn ) _warnCount++;
+            }
+
+            public void OnGroupClosing( IActivityLogGroup group, ref List<ActivityLogGroupConclusion>? conclusions )
+            {
+            }
+
+            public void OnGroupClosed( IActivityLogGroup group, IReadOnlyList<ActivityLogGroupConclusion> conclusions )
+            {
+            }
+
+            public void OnTopicChanged( string newTopic, string? fileName, int lineNumber )
+            {
+            }
+
+            public void OnAutoTagsChanged( CKTrait newTrait )
+            {
+            }
+        }
+
         /// <summary>
         /// Tries to create an <see cref="ApplicationIdentityServiceConfiguration"/> instance from a <see cref="IConfigurationSection"/>.
         /// </summary>
@@ -168,10 +271,20 @@ namespace CK.AppIdentity
             using var gLog = monitor.OpenInfo( "Creating root ApplicationIdentityServiceConfiguration service." );
             var root = configuration as ImmutableConfigurationSection ?? new ImmutableConfigurationSection( configuration );
 
+            // ReadNames is strict.
             bool success = ReadNames( monitor, root,
                                       out var domainName, out var partyName, out var environmentName,
                                       defaultDomainName, defaultPartyName, defaultEnvironmentName )
                            & InheritedConfigurationProps.TryCreate( monitor, root, out var props );
+
+            Throw.DebugAssert( nameof( StrictConfigurationMode ) == "StrictConfigurationMode" );
+            bool strictMode =  environmentName != CoreApplicationIdentity.DefaultEnvironmentName;
+            var sStrict = root.TryLookupSection( "StrictConfigurationMode" );
+            if( sStrict != null && !bool.TryParse( sStrict.Value, out strictMode ) )
+            {
+                monitor.Error( $"StrictConfigurationMode, when defined, must be a 'true' or 'false' boolean." );
+                success = false;
+            }
 
             if( ReferenceEquals( domainName, "External" ) )
             {
@@ -179,6 +292,10 @@ namespace CK.AppIdentity
                 monitor.Error( $"Root domain name cannot be \"External\" or \"Undefined\". This name denotes an external system." );
                 success = false;
             }
+
+            monitor.MinimalFilter = monitor.MinimalFilter.Combine( LogFilter.Minimal );
+
+            var warnAsError = strictMode ? new WarnTracker( monitor.Output ) : null;
 
             // Always try to create the parties even if success is already false: this enables
             // configuration errors to be fixed at once.
@@ -189,13 +306,23 @@ namespace CK.AppIdentity
             var store = HandleStorePath( monitor, configuration );
             success &= store != null;
 
+            if( warnAsError != null )
+            {
+                warnAsError.Dispose();
+                if( warnAsError.WarnCount > 0 )
+                {
+                    monitor.Error( $"{warnAsError.WarnCount} warnings occurred and StrictConfigurationMode is true: no warning must be emitted." );
+                    success = false;
+                }
+            }
+
             if( !success )
             {
                 monitor.CloseGroup( "Failed." );
                 return null;
             }
             var fullName = partyName[0] == '$' ? $"{domainName}/{partyName}/{environmentName}" : $"{domainName}/${partyName}/{environmentName}";
-            return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, store!, ref parties, ref props );
+            return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, strictMode, store!, ref parties, ref props );
 
             static string? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
             {

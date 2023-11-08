@@ -167,6 +167,21 @@ namespace CK.AppIdentity
             }
         }
 
+        /// <summary>
+        /// Starts this identity service agent and returns the <see cref="InitializationTask"/>.
+        /// When the returned initialization task is successfully completed, all configured features are
+        /// initialized and available.
+        /// <para>
+        /// This can be called safely multiple times.
+        /// </para>
+        /// </summary>
+        /// <returns>The initialization task.</returns>
+        public Task StartAndInitializeAsync()
+        {
+            _agent.Start();
+            return _initialization.Task;
+        }
+
         Task IHostedService.StartAsync( CancellationToken cancellationToken )
         {
             if( !cancellationToken.IsCancellationRequested )
@@ -208,7 +223,6 @@ namespace CK.AppIdentity
             {
                 await d.OnShutdownOrDestroyedAsync( monitor, false );
             }
-
         }
 
         /// <summary>
