@@ -17,6 +17,7 @@ namespace CK.AppIdentity
         readonly ImmutableConfigurationSection _configuration;
         readonly IReadOnlySet<string> _disallowFeatures;
         readonly IReadOnlySet<string> _allowFeatures;
+        readonly AssemblyConfiguration _assemblyConfiguration;
         readonly string _domainName;
         readonly string _partyName;
         readonly string _environmentName;
@@ -38,6 +39,7 @@ namespace CK.AppIdentity
             _allowFeatures = props.AllowFeatures;
             _disallowFeatures = props.DisallowFeatures;
             _configuration = configuration;
+            _assemblyConfiguration = props.AssemblyConfiguration;
         }
 
         /// <summary>
@@ -76,6 +78,12 @@ namespace CK.AppIdentity
         /// No duplicate and no <see cref="DisallowFeatures"/> must appear in this set.
         /// </summary>
         public IReadOnlySet<string> AllowFeatures => _allowFeatures;
+
+        /// <summary>
+        /// Gets the <see cref="AssemblyConfiguration"/> that carries the external allowed assemblies
+        /// from which plugins can be looked up for this party.
+        /// </summary>
+        public AssemblyConfiguration AssemblyConfiguration => _assemblyConfiguration;
 
         /// <summary>
         /// Computes whether a features is allowed at this level based on <paramref name="isAllowedAbove"/>

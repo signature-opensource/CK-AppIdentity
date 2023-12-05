@@ -149,7 +149,7 @@ namespace CK.AppIdentity
             CoreApplicationIdentity.IsValidPartyName( partyName );
             CoreApplicationIdentity.IsValidPartyName( environmentName );
             if( partyName[0] != '$' ) partyName = '$' + partyName;
-            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty );
+            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty, AssemblyConfiguration.Empty );
             var c = new MutableConfigurationSection( "CK-AppIdentity" );
             return new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
                                                                 domainName,

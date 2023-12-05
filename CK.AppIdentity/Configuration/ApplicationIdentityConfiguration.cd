@@ -1,44 +1,34 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <ClassDiagram MajorVersion="1" MinorVersion="1">
-  <Class Name="CK.AppIdentity.ImmutableConfigurationSection" BaseTypeListCollapsed="true">
-    <Position X="5.5" Y="0.5" Width="3.25" />
-    <Members>
-      <Field Name="_children" Hidden="true" />
-      <Field Name="_key" Hidden="true" />
-      <Field Name="_lookupParent" Hidden="true" />
-      <Field Name="_path" Hidden="true" />
-      <Field Name="_value" Hidden="true" />
-      <Method Name="DoLookupAllSection" Hidden="true" />
-      <Method Name="Find" Hidden="true" />
-      <Method Name="IConfiguration.GetChildren" Hidden="true" />
-      <Method Name="IConfiguration.GetSection" Hidden="true" />
-    </Members>
-    <TypeIdentifier>
-      <HashCode>AFAQAAAAACCSACYGCACAACAEAAAIQAAABAAgAAAAABA=</HashCode>
-      <FileName>ConfigurationHelpers\ImmutableConfigurationSection.cs</FileName>
-    </TypeIdentifier>
-    <Lollipop Position="0.2" />
-  </Class>
   <Class Name="CK.AppIdentity.ApplicationIdentityServiceConfiguration">
-    <Position X="3.25" Y="4.75" Width="3" />
+    <Position X="3.25" Y="5.25" Width="3" />
     <Members>
       <Field Name="_defaultStoreRootPath" Hidden="true" />
       <Field Name="_defaultStoreRootPathLock" Hidden="true" />
       <Field Name="_remotes" Hidden="true" />
       <Field Name="_storeRootPath" Hidden="true" />
+      <Field Name="_strictMode" Hidden="true" />
       <Field Name="_tenants" Hidden="true" />
       <Method Name="ApplicationIdentityServiceConfiguration" Hidden="true" />
       <Method Name="Create" Hidden="true" />
       <Method Name="CreateParties" Hidden="true" />
       <Method Name="ReadParties" Hidden="true" />
     </Members>
+    <NestedTypes>
+      <Class Name="CK.AppIdentity.ApplicationIdentityServiceConfiguration.WarnTracker" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>Configuration\ApplicationIdentityServiceConfiguration.cs</NewMemberFileName>
+        </TypeIdentifier>
+        <Lollipop Position="0.2" />
+      </Class>
+    </NestedTypes>
     <TypeIdentifier>
-      <HashCode>AAIAAICAAgAACAAAAAAAAAAABAQAAUAAEAIAAAAAAAQ=</HashCode>
+      <HashCode>AAoQAICAAgAACgAAAAAAAAAABAQAAUAAEAIAAAAAAAQ=</HashCode>
       <FileName>Configuration\ApplicationIdentityServiceConfiguration.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="CK.AppIdentity.RemotePartyConfiguration">
-    <Position X="6.5" Y="4.75" Width="2.25" />
+    <Position X="6.5" Y="5.25" Width="2.25" />
     <Members>
       <Field Name="_address" Hidden="true" />
       <Method Name="RemotePartyConfiguration" Hidden="true" />
@@ -49,7 +39,7 @@
     </TypeIdentifier>
   </Class>
   <Class Name="CK.AppIdentity.ApplicationIdentityPartyConfiguration">
-    <Position X="2.25" Y="0.5" Width="2.75" />
+    <Position X="3.25" Y="0.5" Width="2.75" />
     <Members>
       <Field Name="_allowFeatures" Hidden="true" />
       <Field Name="_configuration" Hidden="true" />
@@ -77,12 +67,12 @@
       </Enum>
     </NestedTypes>
     <TypeIdentifier>
-      <HashCode>AAAgIABCIAAAEIAEAQAgAAIIgAAAAAQAgAmBAAgAAAA=</HashCode>
+      <HashCode>AAAgIABCIAAAEIAEAQAgAAIIgAAAAAQAgAmBAAgCAgA=</HashCode>
       <FileName>Configuration\ApplicationIdentityPartyConfiguration.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Class Name="CK.AppIdentity.TenantDomainPartyConfiguration">
-    <Position X="0.5" Y="4.75" Width="2.5" />
+    <Position X="0.5" Y="5.25" Width="2.5" />
     <Members>
       <Field Name="_remotes" Hidden="true" />
       <Method Name="TenantDomainPartyConfiguration" Hidden="true" />
@@ -91,6 +81,17 @@
       <HashCode>AAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAA=</HashCode>
       <FileName>Configuration\TenantDomainPartyConfiguration.cs</FileName>
     </TypeIdentifier>
+  </Class>
+  <Class Name="CK.Core.AssemblyConfiguration">
+    <Position X="0.5" Y="0.5" Width="2.25" />
+    <TypeIdentifier />
+  </Class>
+  <Class Name="CK.Core.ImmutableConfigurationSection">
+    <Position X="6.5" Y="0.5" Width="2.75" />
+    <Members>
+      <Method Name="GetReloadToken" Hidden="true" />
+    </Members>
+    <TypeIdentifier />
   </Class>
   <Font Name="Segoe UI" Size="9" />
 </ClassDiagram>
