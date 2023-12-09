@@ -64,7 +64,7 @@
     <TypeIdentifier />
   </Class>
   <Class Name="CK.AppIdentity.ApplicationIdentityConfiguration">
-    <Position X="3.25" Y="0.5" Width="2.75" />
+    <Position X="3.5" Y="0.5" Width="2.75" />
     <Members>
       <Field Name="_allowFeatures" Hidden="true" />
       <Field Name="_assemblyConfiguration" Hidden="true" />
@@ -82,7 +82,7 @@
     </TypeIdentifier>
   </Class>
   <Class Name="CK.AppIdentity.ApplicationIdentityPartyConfiguration">
-    <Position X="3.25" Y="2.5" Width="2.75" />
+    <Position X="3.5" Y="2.5" Width="2.75" />
     <Members>
       <Field Name="_domainName" Hidden="true" />
       <Field Name="_environmentName" Hidden="true" />
@@ -105,6 +105,19 @@
     <TypeIdentifier>
       <HashCode>AAAgIAAAAAAAEIAEAAAgAAIIAAAAAAQAAAiBAAgAAAA=</HashCode>
       <FileName>Configuration\ApplicationIdentityPartyConfiguration.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="CK.AppIdentity.ApplicationIdentityLocalConfiguration">
+    <Position X="0.5" Y="3.75" Width="2.75" />
+    <Members>
+      <Method Name="ApplicationIdentityLocalConfiguration" Hidden="true" />
+    </Members>
+    <Compartments>
+      <Compartment Name="Methods" Collapsed="true" />
+    </Compartments>
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Configuration\ApplicationIdentityLocalConfiguration.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Font Name="Segoe UI" Size="9" />
