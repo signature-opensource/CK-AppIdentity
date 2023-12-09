@@ -20,12 +20,14 @@ namespace CK.AppIdentity
     {
         private protected RemoteParty[] _remotes;
         internal readonly PerfectEventSender<IRemoteParty> _remotesChanged;
+        readonly ApplicationIdentityLocalConfiguration _localConfiguration;
         readonly FileStore _privateStore;
         // Changes in contained remotes are propagated to the root AllPartyChanged event.
         private protected readonly IBridge _remotesChangedBridge;
 
         internal LocalParty( ApplicationIdentityPartyConfiguration configuration,
                              IEnumerable<RemotePartyConfiguration> remotes,
+                             ApplicationIdentityLocalConfiguration localConfiguration,
                              bool isDynamic,
                              ApplicationIdentityService? appIdentityService )
             : base( configuration, appIdentityService )
@@ -39,6 +41,7 @@ namespace CK.AppIdentity
             var bridgeTarget = appIdentityService?._allPartyChanged ?? new PerfectEventSender<IOwnedParty>();
             _remotesChangedBridge = _remotesChanged.CreateBridge( bridgeTarget!, Unsafe.As<IOwnedParty> );
             _privateStore = new FileStore( SharedFileStore.FolderPath.AppendPart( "-Local" ) );
+            _localConfiguration = localConfiguration;
         }
 
         /// <inheritdoc />
@@ -46,6 +49,9 @@ namespace CK.AppIdentity
 
         /// <inheritdoc />
         public IReadOnlyCollection<IRemoteParty> Remotes => _remotes;
+
+        /// <inheritdoc />
+        public ApplicationIdentityLocalConfiguration LocalConfiguration => _localConfiguration;
 
         /// <inheritdoc />
         public IFileStore LocalFileStore => _privateStore;

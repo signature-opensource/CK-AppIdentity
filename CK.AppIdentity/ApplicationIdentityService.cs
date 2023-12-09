@@ -34,7 +34,7 @@ namespace CK.AppIdentity
         /// <param name="configuration">The configuration.</param>
         /// <param name="serviceProvider">The application service provider.</param>
         public ApplicationIdentityService( ApplicationIdentityServiceConfiguration configuration, IServiceProvider serviceProvider )
-            : base( configuration, configuration.Remotes, false, null )
+            : base( configuration, configuration.Remotes, configuration.LocalConfiguration, false, null )
         {
             Throw.CheckNotNullArgument( serviceProvider );
             _builders = new List<ApplicationIdentityFeatureDriver>();

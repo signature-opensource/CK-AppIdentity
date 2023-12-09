@@ -29,7 +29,7 @@ namespace CK.AppIdentity
         }
 
         /// <summary>
-        /// Gets whether this is an External party.
+        /// Gets whether this is an External party: this FullName is "External".
         /// </summary>
         public bool IsExternalParty => ReferenceEquals( FullName.Path, "External" );
 

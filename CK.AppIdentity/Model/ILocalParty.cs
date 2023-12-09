@@ -54,6 +54,11 @@ namespace CK.AppIdentity
         Task<IRemoteParty?> AddRemoteAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
 
         /// <summary>
+        /// Gets the "Local" configuration section.
+        /// </summary>
+        ApplicationIdentityLocalConfiguration LocalConfiguration { get; }
+
+        /// <summary>
         /// Gets the private local file store. This is the "-Local" directory inside this <see cref="IParty.SharedFileStore"/>.
         /// </summary>
         IFileStore LocalFileStore { get; }

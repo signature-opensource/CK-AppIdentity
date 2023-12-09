@@ -12,11 +12,14 @@ namespace CK.AppIdentity
     /// </summary>
     public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfiguration
     {
+        readonly ApplicationIdentityLocalConfiguration _localConfiguration;
+
         readonly List<RemotePartyConfiguration> _remotes;
 
         internal TenantDomainPartyConfiguration( ImmutableConfigurationSection configuration,
                                                  string domainName,
                                                  NormalizedPath fullName,
+                                                 ApplicationIdentityLocalConfiguration local,
                                                  List<RemotePartyConfiguration> remotes,
                                                  ref InheritedConfigurationProps props )
             : base( configuration, domainName, fullName, ref props )
@@ -24,6 +27,7 @@ namespace CK.AppIdentity
             Throw.DebugAssert( CoreApplicationIdentity.TryParseFullName( fullName.Path, out var d, out var p, out var e )
                           && d == domainName && p == fullName.Parts[^2] && e == fullName.LastPart
                           && p[0] == '$' && p.Substring(1) == fullName.Parts[^3] );
+            _localConfiguration = local;
             _remotes = remotes;
         }
 
@@ -33,5 +37,9 @@ namespace CK.AppIdentity
         /// </summary>
         public IReadOnlyCollection<RemotePartyConfiguration> Remotes => _remotes;
 
+        /// <summary>
+        /// Gets the "Local" condfiguration.
+        /// </summary>
+        public ApplicationIdentityLocalConfiguration LocalConfiguration => _localConfiguration;
     }
 }
