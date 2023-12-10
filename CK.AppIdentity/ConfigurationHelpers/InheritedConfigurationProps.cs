@@ -14,40 +14,56 @@ namespace CK.AppIdentity
     {
         public readonly IReadOnlySet<string> AllowFeatures;
         public readonly IReadOnlySet<string> DisallowFeatures;
+        public readonly AssemblyConfiguration AssemblyConfiguration;
         public readonly bool IsValid => AllowFeatures != null;
 
         public InheritedConfigurationProps( ApplicationIdentityPartyConfiguration existing )
         {
             AllowFeatures = existing.AllowFeatures;
             DisallowFeatures = existing.DisallowFeatures;
+            AssemblyConfiguration = existing.AssemblyConfiguration;
         }
 
-        public InheritedConfigurationProps( IReadOnlySet<string> allowFeatures, IReadOnlySet<string> disallowFeatures )
+        public InheritedConfigurationProps( IReadOnlySet<string> allowFeatures,
+                                            IReadOnlySet<string> disallowFeatures,
+                                            AssemblyConfiguration assemblyConfiguration )
         {
             AllowFeatures = allowFeatures;
             DisallowFeatures = disallowFeatures;
+            AssemblyConfiguration = assemblyConfiguration;
         }
 
         public static bool TryCreate( IActivityMonitor monitor, ImmutableConfigurationSection root, out InheritedConfigurationProps config )
         {
             if( TryReadAllowDisallowFeatures( monitor, root, out var allow, out var disallow ) )
             {
-                config = new InheritedConfigurationProps( allow, disallow );
-                return true;
+                var a = AssemblyConfiguration.Create( monitor, root );
+                if( a != null )
+                {
+                    config = new InheritedConfigurationProps( allow, disallow, a );
+                    return true;
+                }
             }
             config = default;
             return false;
         }
 
 
-        public static bool TryCreate( IActivityMonitor monitor, InheritedConfigurationProps parent, ImmutableConfigurationSection section, out InheritedConfigurationProps config )
+        public static bool TryCreate( IActivityMonitor monitor,
+                                      InheritedConfigurationProps parent,
+                                      ImmutableConfigurationSection section,
+                                      out InheritedConfigurationProps config )
         {
             if( TryReadAllowDisallowFeatures( monitor, section, out var allow, out var disallow ) && parent.IsValid )
             {
                 allow.AddRange( parent.AllowFeatures.Except( disallow ) );
                 disallow.AddRange( parent.DisallowFeatures.Except( allow ) );
-                config = new InheritedConfigurationProps(allow, disallow );
-                return true;
+                var a = parent.AssemblyConfiguration.Apply( monitor, section );
+                if( a != null )
+                {
+                    config = new InheritedConfigurationProps( allow, disallow, a );
+                    return true;
+                }
             }
             config = default;
             return false;

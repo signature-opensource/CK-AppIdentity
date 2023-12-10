@@ -16,6 +16,7 @@ namespace CK.AppIdentity
         internal TenantDomainParty( TenantDomainPartyConfiguration configuration, bool isDynamic, ApplicationIdentityService root )
             : base( configuration,
                     configuration.Remotes,
+                    configuration.LocalConfiguration,
                     isDynamic,
                     root )
         {

@@ -22,6 +22,7 @@ namespace CK.AppIdentity
         readonly List<RemotePartyConfiguration> _remotes;
         readonly List<TenantDomainPartyConfiguration> _tenants;
         readonly NormalizedPath _storeRootPath;
+        readonly ApplicationIdentityLocalConfiguration _localConfiguration;
         readonly bool _strictMode;
         static NormalizedPath _defaultStoreRootPath;
         static readonly object _defaultStoreRootPathLock = new object();
@@ -29,6 +30,7 @@ namespace CK.AppIdentity
         ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
                                                  string domainName,
                                                  NormalizedPath fullName,
+                                                 ApplicationIdentityLocalConfiguration localConfiguration,
                                                  bool strictMode,
                                                  string store,
                                                  ref ProcessedConfiguration? parties,
@@ -39,6 +41,7 @@ namespace CK.AppIdentity
             _storeRootPath = store;
             _remotes = parties.Value.Remotes;
             _tenants = parties.Value.Tenants;
+            _localConfiguration = localConfiguration;
             _strictMode = strictMode;
         }
 
@@ -54,6 +57,8 @@ namespace CK.AppIdentity
             _remotes = new List<RemotePartyConfiguration>();
             _tenants = new List<TenantDomainPartyConfiguration>();
             _strictMode = EnvironmentName != CoreApplicationIdentity.DefaultEnvironmentName;
+            var local = configuration.GetSection( "Local" );
+            _localConfiguration = new ApplicationIdentityLocalConfiguration( local, ref inhProps );
         }
 
         /// <summary>
@@ -75,6 +80,11 @@ namespace CK.AppIdentity
         /// </para>
         /// </summary>
         public bool StrictConfigurationMode => _strictMode;
+
+        /// <summary>
+        /// Gets the "Local" configuration section.
+        /// </summary>
+        public ApplicationIdentityLocalConfiguration LocalConfiguration => _localConfiguration;
 
         /// <summary>
         /// Gets the file storage root path. Defaults to <see cref="DefaultStoreRootPath"/>.
@@ -149,7 +159,7 @@ namespace CK.AppIdentity
             CoreApplicationIdentity.IsValidPartyName( partyName );
             CoreApplicationIdentity.IsValidPartyName( environmentName );
             if( partyName[0] != '$' ) partyName = '$' + partyName;
-            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty );
+            var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty, AssemblyConfiguration.Empty );
             var c = new MutableConfigurationSection( "CK-AppIdentity" );
             return new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
                                                                 domainName,
@@ -315,6 +325,8 @@ namespace CK.AppIdentity
                     success = false;
                 }
             }
+            // Success may become false if something fails in the local configuration.
+            var localConfig = CreateLocalConfiguration( monitor, root, ref props, ref success );
 
             if( !success )
             {
@@ -322,7 +334,7 @@ namespace CK.AppIdentity
                 return null;
             }
             var fullName = partyName[0] == '$' ? $"{domainName}/{partyName}/{environmentName}" : $"{domainName}/${partyName}/{environmentName}";
-            return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, strictMode, store!, ref parties, ref props );
+            return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, localConfig, strictMode, store!, ref parties, ref props );
 
             static string? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
             {
@@ -419,14 +431,14 @@ namespace CK.AppIdentity
             Throw.DebugAssert( fullNameIndex.Comparer == StringComparer.OrdinalIgnoreCase );
             if( nameSuccess )
             {
-                if (fullNameIndex.TryGetValue(fullName, out var exists))
+                if( fullNameIndex.TryGetValue( fullName, out var exists ) )
                 {
-                    monitor.Error($"Duplicate party definition '{configuration.Path}': '{fullName}' is already defined by '{exists.Path}'.");
+                    monitor.Error( $"Duplicate party definition '{configuration.Path}': '{fullName}' is already defined by '{exists.Path}'." );
                     success = false;
                 }
                 else
                 {
-                    fullNameIndex.Add(fullName, configuration);
+                    fullNameIndex.Add( fullName, configuration );
                 }
             }
             if( isDomain )
@@ -440,7 +452,9 @@ namespace CK.AppIdentity
                     // Adds the found tenant if there's no issue with its names.
                     if( nameSuccess )
                     {
-                        partyCollector.Tenants.Add( new TenantDomainPartyConfiguration( configuration, domainName, fullName, parties.Value.Remotes, ref props ) );
+                        // Success may become false if something fails in the local configuration.
+                        var localConfig = CreateLocalConfiguration( monitor, configuration, ref props, ref success );
+                        partyCollector.Tenants.Add( new TenantDomainPartyConfiguration( configuration, domainName, fullName, localConfig, parties.Value.Remotes, ref props ) );
                     }
                 }
                 else
@@ -458,6 +472,18 @@ namespace CK.AppIdentity
                 }
             }
             return success;
+        }
+
+        static ApplicationIdentityLocalConfiguration CreateLocalConfiguration( IActivityMonitor monitor,
+                                                                               ImmutableConfigurationSection configuration,
+                                                                               ref InheritedConfigurationProps props,
+                                                                               ref bool success )
+        {
+            // This creates an empty section if "Local" is not defined: this is exactly what we want.
+            var local = configuration.GetSection( "Local" );
+            success &= InheritedConfigurationProps.TryCreate( monitor, props, configuration, out var localProps );
+            var localConfig = new ApplicationIdentityLocalConfiguration( local, ref localProps );
+            return localConfig;
         }
     }
 }
