@@ -36,8 +36,9 @@ A simple application that interacts with 2 remote parties:
   "FullName": "AcmeCorp/$Trolley1/#Production",
   "Parties": [
    {
-     "PartyName": "$LogTower",
-     "Address": "148.54.11.18:3712"
+    "DomainName": "CentralHealth/Clients",
+    "PartyName": "LogTower",
+    "Address": "148.54.11.18:3712"
    },
    {
      "PartyName": "$SigBox",
@@ -48,14 +49,17 @@ A simple application that interacts with 2 remote parties:
 There should be no more than that: Trolley1 sends its logs to a LogTower and can initiate communications
 (see below) with the SigBox.
 
+The LogTower is not in the AcmeCorp domain but in the "CentralHealth/Clients" domain. The above example uses
+the explicit properties "DomainName" and "PartyName". We could have used the
+`"FullName": "CentralHealth/Clients/$LogTower"` here.
+
 The SigBox also sends its logs to the same LogTower and knows the Trolley1 but also the Trolley2 and the PickingStation.
 ```json
 {
   "FullName": "AcmeCorp/$SigBox/#Production",
   "Parties": [
   {
-    "DomainName": "CentralHealth/Clients",
-    "PartyName": "LogTower",
+    "FullName": "CentralHealth/Clients/$LogTower",
     "Address": "148.54.11.18:3712"
   },
   {
@@ -71,10 +75,6 @@ The SigBox also sends its logs to the same LogTower and knows the Trolley1 but a
 ```
 These 3 remotes have no Addresses: "AcmeCorp/$SigBox/#Production" is a server for these parties
 and this is enough for the SigBox, 2 trolleys and one picking station to work together.
-
-The LogTower is not in the AcmeCorp domain but in the "CentralHealth/Clients" domain. The above example uses
-the explicit properties "DomainName" and "PartyName". We could have used the
-`"FullName": "CentralHealth/Clients/$LogTower"` here.
 
 Now we want the SigBox to interact with a OneCS application (the supervision and operation portal).
 The OneCS application typically lives in the cloud. If the SigBox can be reached from the outside,
@@ -126,8 +126,11 @@ Below is the OneCS configuration:
   }]
 }
 ```
-If, for any reason, the SigBox cannot be reached from the outside (or if we prefer), then the configurations
-become:
+If, for any reason, the SigBox cannot be reached from the outside (typically because of a firewall), we simply
+change the place where the Address is defined. By moving the Address from the OneCS configuration to the SigBox,
+the box becomes the initiator (the Client) and OneCS becomes a listener (a Server) for the box.
+
+The configurations become:
 ```json
 {
   "FullName": "AcmeCorp/$AcmeCorp"
@@ -163,17 +166,17 @@ And:
 A **Tenant** is a subset of bigger system logically tied to some human concept like an organization or a "group
 or resources" for which data specific to the Tenant must be handled potentially by code specific to that Tenant.
 
-A multi-tenant application hosts one ore more Tenants, each being logically disjointed from the others. The Application
+A multi-tenant application hosts one or more Tenants, each being logically disjointed from the others. The Application
 identity models supports such Tenants definition through the **TenantDomain** concept. A TenantDomain is a Party
 of an application (just like a Remote Party is) but it is a Party that contains other Parties. Defining a **TenantDomain**
 is straightforward:
 - Its name follow the "controller domain" convention (its full name is like "BigCorp/$BigCorp" or "BigCorp/EN/$EN").
 - It has no Address:
-  - It can be somehow "virtual": no one will call it, it has no intrinsic capablity;
+  - It can be somehow "virtual": no one will call it, it has no intrinsic capability;
   - Or it can play an active part in the "domain it controls" and then it is necessarily a Server for its Remote Parties.
 
 The important point to understand here is that this structure is not recursive; it's not a tree structure. A Tenant
-is a simple group with a list of Remote Partys. Usually its Remote Parties have the same Domain as the Tenant's one, or
+is a simple group with a list of Remote Parties. Usually its Remote Parties have the same Domain as the Tenant's one, or
 are in a sub domain of the Tenant's Domain but this is not mandatory.
 
 The simplest TenantDomain definition is:
@@ -205,7 +208,7 @@ configuration root:
 However, one of the principles underlying the handling of these configurations is "inheritance": keys from
 a higher level can be applied "below". This inheritance factorizes information and secures the system (some
 components introduce the possibility of locking or limiting critical configurations, enabling dynamic sub-configuration
-"imports" to be accepted without risk). This is why thre is a "Local" configuration section:
+"imports" to be accepted without risk). This is why there is a "Local" configuration section:
 
 ```jsonc
 {
@@ -253,9 +256,9 @@ Inheritance is actually "generalized": Tenant can have recursive Parties (think 
 allows parts of a Tenant that share certain configuration aspects to be grouped together and these
 common configurations to be factored into a parent node.
 
-When the sections are anlyzed, recursive "Parties" sections are traversed and all "RemoteParty"
+When the sections are analyzed, recursive "Parties" sections are traversed and all "RemoteParty"
 are "flattened": the hierarchy applies only to configuration and key factorization/propagation,
-not to the structure of a Tenant itself: a Tenant is and remains a simple list of RemotePartys.
+not to the structure of a Tenant itself: a Tenant is and remains a simple list of Remote Parties.
 
 The above examples are in JSON. The actual configuration is provided by the .NET abstraction
 [IConfigurationSection](https://learn.microsoft.com/fr-fr/dotnet/api/microsoft.extensions.configuration.iconfigurationsection)
@@ -267,7 +270,7 @@ To manage this lower level of configuration (and guaranty its immutability), we 
 
 A `ImmutableConfigurationSection` is a `IConfigurationSection` that captures once for all the content and path of any other `IConfigurationSection`.
 
-Each application identity objects is bound and expose its immutable configuration section.
+Each application identity objects is bound and exposes its immutable configuration section.
 
 The `MutableConfigurationSection` acts as a builder for immutable configuration and hence is used to
 initialize dynamic parties.

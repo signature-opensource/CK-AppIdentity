@@ -40,7 +40,7 @@ Configuration then takes over via "Allow/DisallowFeatures", which control the fi
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which will give it the final result of the
   Allow/Disallow configurations for the given Party according to the configuration sections (up to the configuration root).
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they
-  throw, this is of couse handled). 
+  throw, this is of course handled). 
 - Teardown methods are not expected to fail. 
 
 The order in which driver methods are called respects the dependencies between drivers: if the driver in Feature "A" depends on
@@ -70,9 +70,8 @@ These different strategies are important. Some configuration keys should not be 
 should not be inheritable), while others should be, to facilitate system configuration.
 
 __Important:__ There is no namespace or other partitioning of names/keys: drivers who don't know each other can perfectly well use
-common keys... or should but don't. We didn't consider this to be an issue at this stage, in fact it was a strength of the system.
-We didn't consider this to be an issue at this stage, and even saw it as a strength of the system: the same configuration key
-can therefore impact several Features "naturally". 
+common keys... or should but don't. We didn't consider this to be an issue at this stage, and even saw it as a
+strength of the system: the same configuration key can therefore impact several Features "naturally". 
 
 ## The ServiceLocator anti-pattern?
 
@@ -100,7 +99,7 @@ public class FService : IAutoService
 }
 ```
 
-The developer can now inject the `FService` wher it needs to and call `DoSomething()` when he needs
+The developer can now inject the `FService` where it needs to and call `DoSomething()` when he needs
 it.
 
 This type of "**Feature as a Service**" can go one step further. For example, the "Server" Party for

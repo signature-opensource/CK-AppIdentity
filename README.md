@@ -6,13 +6,13 @@ identity objects AND to minimize the "configuration mess".
 
 Application identity may be the only aspect that requires an explicit configuration.
 Any other aspects can have a default behavior, but the remote parties with whom an application
-interact and how they interact can hardly exist without configuration.
+interacts and how they interact can hardly exist without configuration.
 
 The initial objects are defined by a standard [.NET configuration](https://learn.microsoft.com/en-us/dotnet/core/extensions/configuration)
 that is locked and cannot be changed during the application lifetime. Configured objects are immutable
 but one can dynamically define new objects and destroy dynamically defined objects. CK.AppIdentity
 relies on [CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/master/CK.Configuration/README.md)
-to handle .NET configurations objetcs.
+to handle .NET configurations objects.
 
 ## CK.AppIdentity
 Contains the core objects:

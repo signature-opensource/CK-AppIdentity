@@ -32,8 +32,8 @@ exploit them.
 
 These directories are automatically created and made available and are machine-dependent: by default, they are in the
 [Environment.SpecialFolder.LocalApplicationData](https://stackoverflow.com/a/9709394/190380)/CK-AppIdentity folder:
--	Sur Windows : C:\Users\username\AppData\Local\CK-AppIdentity
--	Sur Linux: /home/username/.local/share/CK-AppIdentity
+-	On Windows : C:\Users\username\AppData\Local\CK-AppIdentity
+-	On Linux: /home/username/.local/share/CK-AppIdentity
  
 This means that these directories are, in effect, shared by different applications using CK-AppIdentity on the same machine...
 And this is perfectly deliberate! It may seem surprising, but this choice allows :
@@ -73,7 +73,7 @@ public key of the Party "$Listener" (this comes from the CK.AppIdentity.KeyManag
 ## And here come the Features...
 
 These objects don't do more by themselves than being what they are. This can be seen as a "configurable
-structure" on which the "Features" come into play. Features can decorate any of these objects and carries
+structure" on which the "Features" come into play. Features can decorate any of these objects and carry
 the actual functionalities like managing the Key store of a Remote party, exposing the Google API of
 a Google external Remote, etc.
 
