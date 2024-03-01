@@ -21,7 +21,7 @@ The implementation is totally thread safe. A micro agent (the [`AppIdentityAgent
 handles the initialization, dynamic parties lifetime, setup and teardown of the features, and disposal
 of the whole identity service.
 
-__Note:__ The abstract base [`MicroAgent`](../MicroAgent.cs)] is publicly exposed as it can be reused
+__Note:__ The abstract base [`MicroAgent`](../MicroAgent.cs) is publicly exposed as it can be reused
 by (complex) feature implementations if needed.
 
 ## The FileStore
