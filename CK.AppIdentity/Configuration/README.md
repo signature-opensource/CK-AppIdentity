@@ -252,9 +252,9 @@ components and plugins specific to that Tenant:
 Here too, inheritance applies: the configuration keys in the definition of the Tenant itself apply
 to the entire section and its sub-sections.
 
-Inheritance is actually "generalized": Tenant can have recursive Parties (think "groups"): this
-allows parts of a Tenant that share certain configuration aspects to be grouped together and these
-common configurations to be factored into a parent node.
+Inheritance is actually "generalized": Tenant can have recursive `Parties` (think "groups"): this
+allows parts of a Tenant that share certain configuration aspects to be grouped together and these common
+configurations to be factored into a parent node.
 
 When the sections are analyzed, recursive "Parties" sections are traversed and all "RemoteParty"
 are "flattened": the hierarchy applies only to configuration and key factorization/propagation,
