@@ -31,10 +31,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CK.AppIdentity.Tests", "Tes
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Doc", "Doc", "{92AEB1AC-BF13-4223-B60A-D860DED791F7}"
 	ProjectSection(SolutionItems) = preProject
+		Doc\ApplicationIdentityConfiguration.png = Doc\ApplicationIdentityConfiguration.png
+		Doc\ApplicationIdentityModel.png = Doc\ApplicationIdentityModel.png
 		Doc\CK-AppIdentity.pptx = Doc\CK-AppIdentity.pptx
+		Doc\FeatureDriver.png = Doc\FeatureDriver.png
+		Doc\FileStore.png = Doc\FileStore.png
+		Doc\PartyFeature.png = Doc\PartyFeature.png
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CK.Testing.AppIdentity", "CK.Testing.AppIdentity\CK.Testing.AppIdentity.csproj", "{323A5E56-6FC4-4C04-AF2C-641FC0F4A914}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CK.Testing.AppIdentity", "CK.Testing.AppIdentity\CK.Testing.AppIdentity.csproj", "{323A5E56-6FC4-4C04-AF2C-641FC0F4A914}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

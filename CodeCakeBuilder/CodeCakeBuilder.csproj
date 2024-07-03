@@ -6,14 +6,13 @@
     <SignAssembly>false</SignAssembly>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <Nullable>annotations</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.Core" Version="17.0.2--0011-develop" />
+    <PackageReference Include="CK.Core" Version="19.0.1--0001-develop" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="NuGet.Credentials" Version="6.7.0" />
-    <PackageReference Include="SimpleGitVersion.Cake" Version="9.0.1--0000-develop" />
+    <PackageReference Include="SimpleGitVersion.Cake" Version="9.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
   <ItemGroup>

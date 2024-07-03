@@ -12,8 +12,8 @@
     <InheritanceLine Type="CK.AppIdentity.IParty" ManuallyRouted="true" FixedToPoint="true">
       <Path>
         <Point X="3.125" Y="3.978" />
-        <Point X="3.125" Y="4.543" />
-        <Point X="4.25" Y="4.543" />
+        <Point X="3.125" Y="4.625" />
+        <Point X="4.25" Y="4.625" />
       </Path>
     </InheritanceLine>
     <TypeIdentifier>
@@ -33,8 +33,8 @@
     <InheritanceLine Type="CK.AppIdentity.IParty" ManuallyRouted="true" FixedToPoint="true">
       <Path>
         <Point X="3.125" Y="3.978" />
-        <Point X="3.125" Y="4.5" />
-        <Point X="2" Y="4.5" />
+        <Point X="3.125" Y="4.625" />
+        <Point X="2" Y="4.625" />
       </Path>
     </InheritanceLine>
     <TypeIdentifier>
@@ -56,8 +56,8 @@
     </InheritanceLine>
     <InheritanceLine Type="CK.AppIdentity.ILocalParty" FixedFromPoint="true" FixedToPoint="true">
       <Path>
-        <Point X="4.25" Y="5.966" />
-        <Point X="3.125" Y="5.966" />
+        <Point X="4.25" Y="5.812" />
+        <Point X="3.125" Y="5.812" />
         <Point X="3.125" Y="6.75" />
       </Path>
     </InheritanceLine>

@@ -227,7 +227,7 @@ namespace CK.AppIdentity
                     {
                         using( _monitor.OpenInfo( $"Stopping {ToString()}." ) )
                         {
-                            // The heartbeat is disposed when sending the stop signal.
+                            // The heartbeat is disposed by SendStop (when sending the stop signal).
                             await OnStopAsync( _monitor ).ConfigureAwait( false );
                             if( _channel.Writer.TryWrite( null ) ) _channel.Writer.TryComplete();
                         }

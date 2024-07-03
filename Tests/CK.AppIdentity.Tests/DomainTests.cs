@@ -53,7 +53,6 @@ namespace CK.AppIdentity.Tests
             } );
         }
 
-
         [Test]
         public async Task homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async()
         {
