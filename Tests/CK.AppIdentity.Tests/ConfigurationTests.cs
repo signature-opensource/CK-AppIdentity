@@ -13,7 +13,6 @@ namespace CK.AppIdentity.Tests
         [Test]
         public void basic_agent_configuration()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( basic_agent_configuration ) );
             var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
             {
                 c["DomainName"] = "LaToulousaine/France/Albi";
@@ -59,7 +58,6 @@ namespace CK.AppIdentity.Tests
         [Test]
         public void tenant_domains_can_define_tenant_domains_but_they_are_lifted()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( tenant_domains_can_define_tenant_domains_but_they_are_lifted ) );
             var good = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
             {
                 c["FullName"] = "SaaSProduct/$SaaS1/#E";

@@ -20,7 +20,6 @@ namespace CK.AppIdentity.Configuration.Tests
         [Test]
         public void AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration_can_be_default()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration_can_be_default ) );
             var config = new MutableConfigurationSection( "FakePath" );
             var hostEnv = new HostingEnvironment()
             {
@@ -38,7 +37,6 @@ namespace CK.AppIdentity.Configuration.Tests
         [Test]
         public void AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration ) );
             var config = new MutableConfigurationSection( "FakePath" );
             var hostEnv = new HostingEnvironment()
             {
@@ -71,7 +69,6 @@ namespace CK.AppIdentity.Configuration.Tests
             // The CoreApplicationIdentity can be tested only once (since it cannot be reset).
             // Moreover, here, we are sharing the GrandOutput.Default: building the host
             // reconfigures the GrandOutput.Default.
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( Host_configuration_Async ) );
 
             // Let the handlers initialize their output folders.
             await Task.Delay( 200 );

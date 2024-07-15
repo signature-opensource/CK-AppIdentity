@@ -18,7 +18,6 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task without_feature_builders_Async()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( without_feature_builders_Async ) );
             await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
             {
                 c["DomainName"] = "D";
@@ -169,7 +168,6 @@ namespace CK.AppIdentity.Tests
         [TestCase( false )]
         public async Task feature_builders_initialization_follows_the_dependency_order_Async( bool revert )
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( feature_builders_initialization_follows_the_dependency_order_Async ) );
             CheckOrderFeatureDriver.Reset();
             var builderTypes = new List<Type>() { typeof( F1FeatureDriver ),
                                                   typeof( F2_1FeatureDriver ),
