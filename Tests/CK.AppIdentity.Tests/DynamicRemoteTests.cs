@@ -1,5 +1,8 @@
 using CK.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,13 +17,18 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async()
         {
-            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
-            {
-                c["FullName"] = "OneCS-SaaS/$OneCS1";
-            } );
-            var events = new List<string>();
-            var s = running.ApplicationIdentityService;
+            var config = new MutableConfigurationSection( "DontCare" );
+            config["FullName"] = "OneCS-SaaS/$OneCS1";
 
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+            using var app = builder.UseCKAppIdentity()
+                                   .Build();
+
+            await app.StartAsync();
+            var s = app.Services.GetRequiredService<ApplicationIdentityService>();
+
+            var events = new List<string>();
             s.AllPartyChanged.Sync += ( m, r ) =>
             {
                 bool appear = !r.IsDestroyed;

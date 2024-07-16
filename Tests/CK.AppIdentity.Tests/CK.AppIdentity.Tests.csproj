@@ -5,10 +5,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CK.Testing.Nunit" Version="0.0.0--04z8lly-develop" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="NUnit3TestAdapter" PrivateAssets="all" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\CK.Testing.AppIdentity\CK.Testing.AppIdentity.csproj" />
+    <ProjectReference Include="..\..\CK.AppIdentity.Hosting\CK.AppIdentity.Hosting.csproj" />
   </ItemGroup>
 </Project>

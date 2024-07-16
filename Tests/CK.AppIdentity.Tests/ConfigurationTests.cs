@@ -1,5 +1,8 @@
 using CK.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using NUnit.Framework;
 using System.Linq;
 using static CK.Testing.MonitorTestHelper;
@@ -70,7 +73,53 @@ namespace CK.AppIdentity.Tests
             Throw.DebugAssert( good != null );
             good.Remotes.Should().BeEmpty();
             good.TenantDomains.Should().HaveCount( 3 );
-            good.TenantDomains.Select( d => d.FullName.Path ).Should().BeEquivalentTo( new[] { "D1/$D1/#E", "D2/$D2/#E", "D3/$D3/#E" } );
+            good.TenantDomains.Select( d => d.FullName.Path ).Should().BeEquivalentTo( ["D1/$D1/#E", "D2/$D2/#E", "D3/$D3/#E"] );
+        }
+
+        [Test]
+        public void AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration_can_be_default()
+        {
+            var hostEnv = new HostingEnvironment()
+            {
+                ApplicationName = "HostApp",
+                EnvironmentName = "HostEnv",
+            };
+            var config = new MutableConfigurationSection( "EmptyConfig" );
+            var identityConfig = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, hostEnv, config );
+            Throw.DebugAssert( identityConfig != null );
+            identityConfig.DomainName.Should().Be( "Default" );
+            identityConfig.EnvironmentName.Should().Be( "#HostEnv" );
+            identityConfig.PartyName.Should().Be( "$HostApp" );
+            identityConfig.Remotes.Should().BeEmpty();
+        }
+
+        [Test]
+        public void AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration()
+        {
+            var hostEnv = new HostingEnvironment()
+            {
+                ApplicationName = "HostApp",
+                EnvironmentName = "HostEnv",
+            };
+            var config = new MutableConfigurationSection( "FakePath" );
+            config["CK-AppIdentity:DomainName"] = "OurDomain";
+            config["CK-AppIdentity:EnvironmentName"] = "#TestEnvironment";
+            config["CK-AppIdentity:PartyName"] = "MyApp";
+            config["CK-AppIdentity:Parties:0:PartyName"] = "Daddy";
+            config["CK-AppIdentity:Parties:0:Address"] = "http://x.x";
+            var identityConfig = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, hostEnv, config.GetRequiredSection( "CK-AppIdentity" ) );
+            Throw.DebugAssert( identityConfig != null );
+
+            identityConfig.DomainName.Should().Be( "OurDomain" );
+            identityConfig.EnvironmentName.Should().Be( "#TestEnvironment" );
+            identityConfig.PartyName.Should().Be( "$MyApp" );
+            identityConfig.Remotes.Should().HaveCount( 1 );
+            var remote = identityConfig.Remotes.Single();
+            Throw.DebugAssert( remote != null );
+            remote.PartyName.Should().Be( "$Daddy" );
+            remote.Address.Should().Be( "http://x.x" );
+            remote.DomainName.Should().Be( "OurDomain" );
+            remote.EnvironmentName.Should().Be( "#TestEnvironment" );
         }
 
     }

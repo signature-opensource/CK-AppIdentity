@@ -1,5 +1,8 @@
 using CK.Core;
+using CK.Testing;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using System.Linq;
@@ -14,26 +17,40 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task with_tenant_domains_initialization_Async()
         {
-            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
+            var config = new DynamicConfigurationSource();
+            using( config.StartBatch() )
             {
-                c["DomainName"] = "SaaSProduct";
-                c["PartyName"] = "SaaS1";
-                c["Parties:0:FullName"] = "AllInOneInc/$AllInOneInc";
-                c["Parties:0:Parties:0:PartyName"] = "ControlBox";
-                c["Parties:0:Parties:1:PartyName"] = "Hall1Wall";
-                c["Parties:0:Parties:2:PartyName"] = "Hall2Wall";
-                c["Parties:0:Parties:3:PartyName"] = "Hall1Trolley";
-                c["Parties:0:Parties:4:PartyName"] = "Hall2Trolley";
-                c["Parties:1:FullName"] = "OpalCorp/$OpalCorp";
-                c["Parties:1:Parties:0:PartyName"] = "ControlBox";
-                c["Parties:1:Parties:1:PartyName"] = "MeasureStation";
-            } );
-            running.ApplicationIdentityService.DomainName.Should().Be( "SaaSProduct" );
-            running.ApplicationIdentityService.EnvironmentName.Should().Be( "#Dev" );
-            running.ApplicationIdentityService.PartyName.Should().Be( "$SaaS1" );
-            running.ApplicationIdentityService.Parties.Should().HaveCount( 2 );
+                config["CK-AppIdentity:DomainName"] = "SaaSProduct";
+                config["CK-AppIdentity:PartyName"] = "SaaS1";
+                config["CK-AppIdentity:EnvironmentName"] = "Dev";
+                config["CK-AppIdentity:Parties:0:FullName"] = "AllInOneInc/$AllInOneInc";
+                config["CK-AppIdentity:Parties:0:Parties:0:PartyName"] = "ControlBox";
+                config["CK-AppIdentity:Parties:0:Parties:1:PartyName"] = "Hall1Wall";
+                config["CK-AppIdentity:Parties:0:Parties:2:PartyName"] = "Hall2Wall";
+                config["CK-AppIdentity:Parties:0:Parties:3:PartyName"] = "Hall1Trolley";
+                config["CK-AppIdentity:Parties:0:Parties:4:PartyName"] = "Hall2Trolley";
+                config["CK-AppIdentity:Parties:1:FullName"] = "OpalCorp/$OpalCorp";
+                config["CK-AppIdentity:Parties:1:Parties:0:PartyName"] = "ControlBox";
+                config["CK-AppIdentity:Parties:1:Parties:1:PartyName"] = "MeasureStation";
+            }
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            builder.Configuration.Sources.Add( config );
+            builder.Services.AddSingleton<ApplicationIdentityService>();
+            builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
 
-            var allInOne = running.ApplicationIdentityService.TenantDomains.Single( d => d.PartyName == "$AllInOneInc" );
+            using var app = builder.UseCKAppIdentity()
+                                   .Build();
+
+            await app.StartAsync();
+
+            var appIdentityService = app.Services.GetRequiredService<ApplicationIdentityService>();
+
+            appIdentityService.DomainName.Should().Be( "SaaSProductAAAAAAAA" );
+            appIdentityService.EnvironmentName.Should().Be( "#Dev" );
+            appIdentityService.PartyName.Should().Be( "$SaaS1" );
+            appIdentityService.Parties.Should().HaveCount( 2 );
+
+            var allInOne = appIdentityService.TenantDomains.Single( d => d.PartyName == "$AllInOneInc" );
             allInOne.Configuration.EnvironmentName.Should().Be( "#Dev" );
             allInOne.Remotes.Should().HaveCount( 5, "There are 5 agents in this group." );
             allInOne.Remotes.Should().AllSatisfy( r =>
@@ -42,7 +59,7 @@ namespace CK.AppIdentity.Tests
                 r.DomainName.Should().Be( "AllInOneInc" );
                 r.EnvironmentName.Should().Be( "#Dev" );
             } );
-            var opal = running.ApplicationIdentityService.TenantDomains.Single( p => p.PartyName == "$OpalCorp" );
+            var opal = appIdentityService.TenantDomains.Single( p => p.PartyName == "$OpalCorp" );
             opal.Remotes.Should().HaveCount( 2, "There are 2 agents in this domain." );
             opal.Remotes.Should().AllSatisfy( r =>
             {
@@ -55,11 +72,19 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task homonyms_are_disallowed_Parties_must_be_destroyed_before_being_added_Async()
         {
-            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
-            {
-                c["FullName"] = "D/$P";
-            } );
-            var s = running.ApplicationIdentityService;
+            var config = new MutableConfigurationSection( "DontCare" );
+            config["CK-AppIdentity:FullName"] = "D/$P";
+
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+            builder.Services.AddSingleton<ApplicationIdentityService>();
+            builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+            using var app = builder.UseCKAppIdentity()
+                                   .Build();
+
+            await app.StartAsync();
+
+            var s = app.Services.GetRequiredService<ApplicationIdentityService>();
             s.AllParties.Should().HaveCount( 0 );
 
             // This is the Agent "D/$P".
@@ -99,7 +124,6 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task with_empty_configuration_initialization_and_empty_services_Async()
         {
-            using var gLog = TestHelper.Monitor.OpenInfo( nameof( with_empty_configuration_initialization_and_empty_services_Async ) );
             var c = ApplicationIdentityServiceConfiguration.CreateEmpty();
             var empty = new ApplicationIdentityService( c, new SimpleServiceContainer() );
             // This does not throw.

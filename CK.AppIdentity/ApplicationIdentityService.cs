@@ -17,8 +17,12 @@ namespace CK.AppIdentity
 {
     /// <summary>
     /// Singleton hosted service that is the local party and the root collection of <see cref="IOwnedParty"/>.
+    /// <para>
+    /// When used in a standard <see cref="IHost"/>, we exploit the extended <see cref="IHostedLifecycleService"/> to
+    /// start/stop the micro-agent and setup/teardown features in parallel with other <see cref="IHostedService"/>.
+    /// </para>
     /// </summary>
-    public sealed partial class ApplicationIdentityService : LocalParty, IApplicationIdentityService, ISingletonAutoService, IHostedService, IAsyncDisposable
+    public sealed partial class ApplicationIdentityService : LocalParty, IApplicationIdentityService, ISingletonAutoService, IHostedLifecycleService, IAsyncDisposable
     {
         readonly AppIdentityAgent _agent;
         internal readonly List<ApplicationIdentityFeatureDriver> _builders;
@@ -182,7 +186,16 @@ namespace CK.AppIdentity
             return _initialization.Task;
         }
 
-        Task IHostedService.StartAsync( CancellationToken cancellationToken )
+        #region IHostedService
+
+        // StartingAsync is called first, let's start.
+        Task IHostedLifecycleService.StartingAsync( System.Threading.CancellationToken cancellationToken ) => DoStartAsync( cancellationToken );
+
+        // StartAsync is called next, let's start again (this enables psedo host code
+        // to use IHostedService.StartAsync transparently).
+        Task IHostedService.StartAsync( CancellationToken cancellationToken ) => DoStartAsync( cancellationToken );
+
+        Task DoStartAsync( CancellationToken cancellationToken )
         {
             if( !cancellationToken.IsCancellationRequested )
             {
@@ -193,11 +206,21 @@ namespace CK.AppIdentity
             return Task.CompletedTask;
         }
 
-        Task IHostedService.StopAsync( CancellationToken cancellationToken )
+        // Called last: this returns the initialization task.
+        Task IHostedLifecycleService.StartedAsync(System.Threading.CancellationToken cancellationToken) => _initialization.Task;
+
+        Task IHostedLifecycleService.StoppingAsync( CancellationToken cancellationToken ) => DoStopAsync();
+
+        Task IHostedService.StopAsync( CancellationToken cancellationToken ) => DoStopAsync();
+
+        Task DoStopAsync()
         {
             _agent.SendStop();
-            return _agent.RunningTask;
+            return Task.CompletedTask;
         }
+
+        Task IHostedLifecycleService.StoppedAsync(System.Threading.CancellationToken cancellationToken) => _agent.RunningTask;
+        #endregion
 
         /// <summary>
         /// Disposes this application identity service: this stops the micro agent.

@@ -173,7 +173,7 @@ namespace CK.AppIdentity
         /// and the <see cref="IHostEnvironment"/>: the <see cref="IHostEnvironment.ApplicationName"/> is the default party name
         /// and <see cref="IHostEnvironment.EnvironmentName"/> is the default environment name.
         /// <para>
-        /// If the configuration doesn't specify the "DomainName" (or defines the "FullName" of the party), "Default" domain name
+        /// If the configuration doesn't specify the "DomainName" (or doesn't define the "FullName" of the party), "Default" domain name
         /// is used.
         /// </para>
         /// </summary>

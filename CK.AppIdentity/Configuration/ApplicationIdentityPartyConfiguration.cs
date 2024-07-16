@@ -218,13 +218,12 @@ namespace CK.AppIdentity
                     if( !isValid )
                     {
                         monitor.Error( $"Invalid '{s.Path}:{k}'. It {_nameSyntaxes[(int)NameKind.Env]}" );
-                        name = "<error>";
-                        return false;
+                        return ErrorName( kind, out name );
                     }
                     if( kind == NameKind.Domain )
                     {
                         name = NormalizeDomainName( monitor, n );
-                        return name != "<error>";
+                        return name != "error";
                     }
                     name = n;
                 }
@@ -233,12 +232,17 @@ namespace CK.AppIdentity
                     if( defaultName == null )
                     {
                         monitor.Error( $"Configuration '{s.Path}:{k}' is required." );
-                        name = "<error>";
-                        return false;
+                        return ErrorName( kind, out name );
                     }
                     name = defaultName;
                 }
                 return true;
+
+                static bool ErrorName( NameKind kind, out string name )
+                {
+                    name = kind switch { NameKind.Party => "$error", NameKind.Env => "#error", _ => "error" };
+                    return false;
+                }
             }
 
             static string NormalizeDomainName( IActivityMonitor monitor, string domainName )
@@ -259,7 +263,7 @@ namespace CK.AppIdentity
                     if( domainName.Length > prefixLen && domainName[prefixLen] == '/' )
                     {
                         monitor.Error( $"Domain name cannot start with \"{prefix}\". This denotes an \"External\" system where domains don't apply." );
-                        return "<error>";
+                        return "error";
                     }
                     return "External";
                 }

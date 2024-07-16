@@ -28,7 +28,7 @@ namespace CK.AppIdentity
         readonly string _name;
         Task? _runningTask;
         RunningStatus _status;
-        int _heartbeatPeriod;
+        readonly int _heartbeatPeriod;
         int _heartbeatCount;
         int _heartbeatReentrantCount;
         bool _inHeartBeat;
@@ -170,7 +170,7 @@ namespace CK.AppIdentity
         {
             readonly T _arg;
             readonly object _action;
-            int _type;
+            readonly int _type;
 
             public Job( in T arg, Action<IActivityMonitor, T> action )
             {

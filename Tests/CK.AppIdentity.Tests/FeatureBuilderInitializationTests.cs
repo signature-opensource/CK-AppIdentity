@@ -1,5 +1,6 @@
 using CK.Core;
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
@@ -18,15 +19,21 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task without_feature_builders_Async()
         {
-            await using var running = await TestHelper.CreateRunningAppIdentityServiceAsync( c =>
-            {
-                c["DomainName"] = "D";
-                c["EnvironmentName"] = "#Production";
-                c["PartyName"] = "MyApp";
-                c["Parties:0:PartyName"] = "Remote1";
-                c["Parties:1:PartyName"] = "Remote2";
-            } );
-            var s = running.ApplicationIdentityService;
+
+            var config = new MutableConfigurationSection( "DontCare" );
+            config["DomainName"] = "D";
+            config["EnvironmentName"] = "#Production";
+            config["PartyName"] = "MyApp";
+            config["Parties:0:PartyName"] = "Remote1";
+            config["Parties:1:PartyName"] = "Remote2";
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+
+            using var app = builder.UseCKAppIdentity()
+                                   .Build();
+
+            await app.StartAsync();
+            var s = app.Services.GetRequiredService<ApplicationIdentityService>();
 
             s.DomainName.Should().Be( "D" );
             s.EnvironmentName.Should().Be( "#Production" );
@@ -177,27 +184,35 @@ namespace CK.AppIdentity.Tests
                                                   typeof( FC_A_3FeatureDriver ),
                                                   typeof( FD_B_2FeatureDriver ) };
             if( revert ) builderTypes.Reverse();
-            await using var runningContext = await TestHelper.CreateRunningAppIdentityServiceAsync(
-                c => c["FullName"] = "FakeDomain/$FakeApp",
-                services =>
-                {
-                    services.AddSingleton<ApplicationIdentityService>();
-                    services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
-                    foreach( var t in builderTypes )
-                    {
-                        services.AddSingleton( t );
-                        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
-                    }
-                } );
-            var services = runningContext.Services;
 
-            var f1 = services.GetRequiredService<F1FeatureDriver>();
-            var f2_1 = services.GetRequiredService<F2_1FeatureDriver>();
-            var f3_2 = services.GetRequiredService<F3_2FeatureDriver>();
-            var fA_1 = services.GetRequiredService<FA_1FeatureDriver>();
-            var fB_A = services.GetRequiredService<FB_AFeatureDriver>();
-            var fC_A_3 = services.GetRequiredService<FC_A_3FeatureDriver>();
-            var fD_B_2 = services.GetRequiredService<FD_B_2FeatureDriver>();
+
+
+            var config = new MutableConfigurationSection( "DontCare" );
+            config["FullName"] = "FakeDomain/$FakeApp";
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+
+            builder.Services.AddSingleton<ApplicationIdentityService>();
+            builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+            foreach( var t in builderTypes )
+            {
+                builder.Services.AddSingleton( t );
+                builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
+            }
+
+            using var app = builder.UseCKAppIdentity()
+                                   .Build();
+
+            await app.StartAsync();
+            var identityService = app.Services.GetRequiredService<ApplicationIdentityService>();
+
+            var f1 = app.Services.GetRequiredService<F1FeatureDriver>();
+            var f2_1 = app.Services.GetRequiredService<F2_1FeatureDriver>();
+            var f3_2 = app.Services.GetRequiredService<F3_2FeatureDriver>();
+            var fA_1 = app.Services.GetRequiredService<FA_1FeatureDriver>();
+            var fB_A = app.Services.GetRequiredService<FB_AFeatureDriver>();
+            var fC_A_3 = app.Services.GetRequiredService<FC_A_3FeatureDriver>();
+            var fD_B_2 = app.Services.GetRequiredService<FD_B_2FeatureDriver>();
             CheckOrderFeatureDriver._count.Should().Be( 7 );
 
             f1.FeatureName.Should().Be( "F1" );
@@ -216,7 +231,7 @@ namespace CK.AppIdentity.Tests
             fC_A_3.SetupOrder.Should().BeGreaterThan( fA_1.SetupOrder ).And.BeGreaterThan( f3_2.SetupOrder );
             fD_B_2.SetupOrder.Should().BeGreaterThan( fB_A.SetupOrder ).And.BeGreaterThan( f2_1.SetupOrder );
 
-            var r = await runningContext.ApplicationIdentityService.AddRemoteAsync( TestHelper.Monitor, c =>
+            var r = await identityService.AddRemoteAsync( TestHelper.Monitor, c =>
             {
                 c["PartyName"] = "SomeDynamicRemote";
             } );
@@ -228,7 +243,7 @@ namespace CK.AppIdentity.Tests
             CheckOrderFeatureDriver._dynamicTeardownCount.Should().Be( 7 );
             CheckOrderFeatureDriver._teardownCount.Should().Be( 0 );
 
-            await runningContext.ApplicationIdentityService.DisposeAsync();
+            await identityService.DisposeAsync();
             CheckOrderFeatureDriver._teardownCount.Should().Be( 7 );
         }
     }
