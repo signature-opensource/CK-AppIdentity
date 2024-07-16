@@ -22,7 +22,7 @@ namespace CK.AppIdentity.Tests
             {
                 config["CK-AppIdentity:DomainName"] = "SaaSProduct";
                 config["CK-AppIdentity:PartyName"] = "SaaS1";
-                config["CK-AppIdentity:EnvironmentName"] = "Dev";
+                config["CK-AppIdentity:EnvironmentName"] = "#Dev";
                 config["CK-AppIdentity:Parties:0:FullName"] = "AllInOneInc/$AllInOneInc";
                 config["CK-AppIdentity:Parties:0:Parties:0:PartyName"] = "ControlBox";
                 config["CK-AppIdentity:Parties:0:Parties:1:PartyName"] = "Hall1Wall";
@@ -38,14 +38,14 @@ namespace CK.AppIdentity.Tests
             builder.Services.AddSingleton<ApplicationIdentityService>();
             builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
 
-            using var app = builder.UseCKAppIdentity()
+            using var app = builder.AddApplicationIdentityServiceConfiguration()
                                    .Build();
 
             await app.StartAsync();
 
             var appIdentityService = app.Services.GetRequiredService<ApplicationIdentityService>();
 
-            appIdentityService.DomainName.Should().Be( "SaaSProductAAAAAAAA" );
+            appIdentityService.DomainName.Should().Be( "SaaSProduct" );
             appIdentityService.EnvironmentName.Should().Be( "#Dev" );
             appIdentityService.PartyName.Should().Be( "$SaaS1" );
             appIdentityService.Parties.Should().HaveCount( 2 );
@@ -79,7 +79,7 @@ namespace CK.AppIdentity.Tests
             builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
             builder.Services.AddSingleton<ApplicationIdentityService>();
             builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
-            using var app = builder.UseCKAppIdentity()
+            using var app = builder.AddApplicationIdentityServiceConfiguration()
                                    .Build();
 
             await app.StartAsync();

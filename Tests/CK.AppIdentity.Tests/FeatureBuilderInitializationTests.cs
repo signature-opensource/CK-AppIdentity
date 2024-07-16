@@ -19,17 +19,19 @@ namespace CK.AppIdentity.Tests
         [Test]
         public async Task without_feature_builders_Async()
         {
-
             var config = new MutableConfigurationSection( "DontCare" );
-            config["DomainName"] = "D";
-            config["EnvironmentName"] = "#Production";
-            config["PartyName"] = "MyApp";
-            config["Parties:0:PartyName"] = "Remote1";
-            config["Parties:1:PartyName"] = "Remote2";
+            var ckApp = config.GetMutableSection( "CK-AppIdentity" );
+            ckApp["DomainName"] = "D";
+            ckApp["EnvironmentName"] = "#Production";
+            ckApp["PartyName"] = "MyApp";
+            ckApp["Parties:0:PartyName"] = "Remote1";
+            ckApp["Parties:1:PartyName"] = "Remote2";
             var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
             builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+            builder.Services.AddSingleton<ApplicationIdentityService>();
+            builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
 
-            using var app = builder.UseCKAppIdentity()
+            using var app = builder.AddApplicationIdentityServiceConfiguration()
                                    .Build();
 
             await app.StartAsync();
@@ -191,7 +193,6 @@ namespace CK.AppIdentity.Tests
             config["FullName"] = "FakeDomain/$FakeApp";
             var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
             builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
-
             builder.Services.AddSingleton<ApplicationIdentityService>();
             builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
             foreach( var t in builderTypes )
@@ -200,7 +201,7 @@ namespace CK.AppIdentity.Tests
                 builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
             }
 
-            using var app = builder.UseCKAppIdentity()
+            using var app = builder.AddApplicationIdentityServiceConfiguration()
                                    .Build();
 
             await app.StartAsync();

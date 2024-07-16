@@ -11,20 +11,20 @@ namespace Microsoft.Extensions.Hosting
     public static class CKAppIdentityHostApplicationBuilderExtensions
     {
         /// <summary>
-        /// Initializes this application identity from "CK-AppIdentity" configuration section.
-        /// This injects a configured instance of <see cref="ApplicationIdentityServiceConfiguration"/> as
-        /// a singleton service in the DI container and initializes <see cref="CoreApplicationIdentity"/>.
+        /// Initializes a <see cref="ApplicationIdentityServiceConfiguration"/> from "CK-AppIdentity" configuration section.
+        /// The configured instance <see cref="ApplicationIdentityServiceConfiguration"/> is added to the <see cref="IHostApplicationBuilder.Services"/>
+        /// as a singleton service and <see cref="CoreApplicationIdentity"/> is initialized if possible.
         /// <para>
         /// This cannot be called multiple times: a <see cref="InvalidOperationException"/> is thrown.
         /// This differ from <see cref="HostApplicationBuilderMonitoringExtensions.UseCKMonitoring{T}(T)"/> that can reconfigure
-        /// the <see cref="CK.Monitoring.GrandOutput.Default"/>. This compiles and register a <see cref="ApplicationIdentityServiceConfiguration"/>
+        /// the <see cref="CK.Monitoring.GrandOutput.Default"/>. This builds and register a <see cref="ApplicationIdentityServiceConfiguration"/>
         /// based on the current <see cref="IHostApplicationBuilder.Configuration"/> once and only once.
         /// </para>
         /// </summary>
         /// <param name="builder">This application builder</param>
         /// <param name="contextDescriptor">Defaults to <see cref="Environment.CommandLine"/>.</param>
         /// <returns>This builder.</returns>
-        public static T UseCKAppIdentity<T>( this T builder, string? contextDescriptor = null ) where T : IHostApplicationBuilder
+        public static T AddApplicationIdentityServiceConfiguration<T>( this T builder, string? contextDescriptor = null ) where T : IHostApplicationBuilder
         {
             var tOnce = typeof( ApplicationIdentityServiceConfiguration );
             if( builder.Properties.ContainsKey( tOnce ) )

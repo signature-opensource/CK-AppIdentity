@@ -18,11 +18,13 @@ namespace CK.AppIdentity.Tests
         public async Task creating_and_destroying_dynamic_remote_or_tenants_raise_AllPartyChanged_event_Async()
         {
             var config = new MutableConfigurationSection( "DontCare" );
-            config["FullName"] = "OneCS-SaaS/$OneCS1";
+            config["CK-AppIdentity:FullName"] = "OneCS-SaaS/$OneCS1";
 
-            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+            var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true, EnvironmentName = Environments.Development } );
             builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
-            using var app = builder.UseCKAppIdentity()
+            builder.Services.AddSingleton<ApplicationIdentityService>();
+            builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+            using var app = builder.AddApplicationIdentityServiceConfiguration()
                                    .Build();
 
             await app.StartAsync();
