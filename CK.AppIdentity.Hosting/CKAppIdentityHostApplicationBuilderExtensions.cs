@@ -42,17 +42,21 @@ namespace Microsoft.Extensions.Hosting
                 return builder;
             }
             builder.Properties.Add( uniqueKey, contextDescriptor );
-            builder.AddAutoConfigureAAAAAA( ( monitor, builder ) =>
+            builder.AddAutoConfigure( DoConfigure );
+            return builder;
+
+            static void DoConfigure<T>( IActivityMonitor monitor, T builder ) where T : IHostApplicationBuilder
             {
                 var config = ApplicationIdentityServiceConfiguration.Create( monitor, builder.Environment, builder.Configuration.GetSection( "CK-AppIdentity" ) );
                 if( config != null )
                 {
+                    string contextDescriptor = (string)builder.Properties[typeof( ApplicationIdentityServiceConfiguration )];
                     if( CoreApplicationIdentity.TryConfigure( identity =>
                     {
                         identity.DomainName = config.DomainName;
                         identity.PartyName = config.PartyName;
                         identity.EnvironmentName = config.EnvironmentName;
-                        identity.ContextDescriptor = (string)builder.Properties[typeof( ApplicationIdentityServiceConfiguration )];
+                        identity.ContextDescriptor = contextDescriptor;
                     } ) )
                     {
                         CoreApplicationIdentity.Initialize();
@@ -63,9 +67,8 @@ namespace Microsoft.Extensions.Hosting
                         monitor.Warn( $"Unable to configure CoreApplicationIdentity since it is already initialized: '{CoreApplicationIdentity.Instance.FullName}'." );
                     }
                     builder.Services.AddSingleton( config );
-                } 
-            } );
-            return builder;
+                }
+            }
         }
     }
 }

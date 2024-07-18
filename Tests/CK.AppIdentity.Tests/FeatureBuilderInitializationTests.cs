@@ -32,7 +32,7 @@ namespace CK.AppIdentity.Tests
             builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
 
             using var app = builder.AddApplicationIdentityServiceConfiguration()
-                                   .Build();
+                                   .CKBuild();
 
             await app.StartAsync();
             var s = app.Services.GetRequiredService<ApplicationIdentityService>();
@@ -202,7 +202,7 @@ namespace CK.AppIdentity.Tests
             }
 
             using var app = builder.AddApplicationIdentityServiceConfiguration()
-                                   .Build();
+                                   .CKBuild();
 
             await app.StartAsync();
             var identityService = app.Services.GetRequiredService<ApplicationIdentityService>();
