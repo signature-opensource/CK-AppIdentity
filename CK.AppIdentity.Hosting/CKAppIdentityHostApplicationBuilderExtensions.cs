@@ -12,13 +12,10 @@ namespace Microsoft.Extensions.Hosting
     {
         /// <summary>
         /// Initializes a <see cref="ApplicationIdentityServiceConfiguration"/> from "CK-AppIdentity" configuration section.
-        /// The configured instance <see cref="ApplicationIdentityServiceConfiguration"/> is added to the <see cref="IHostApplicationBuilder.Services"/>
-        /// as a singleton service and <see cref="CoreApplicationIdentity"/> is initialized if possible.
+        /// The configured instance <see cref="ApplicationIdentityServiceConfiguration"/> will be added to the <see cref="IHostApplicationBuilder.Services"/>
+        /// as a singleton service and <see cref="CoreApplicationIdentity"/> will be initialized if possible by <see cref="HostApplicationBuilderMonitoringExtensions.ApplyAutoConfigure"/>.
         /// <para>
-        /// This cannot be called multiple times: a <see cref="InvalidOperationException"/> is thrown.
-        /// This differ from <see cref="HostApplicationBuilderMonitoringExtensions.UseCKMonitoring{T}(T)"/> that can reconfigure
-        /// the <see cref="CK.Monitoring.GrandOutput.Default"/>. This builds and register a <see cref="ApplicationIdentityServiceConfiguration"/>
-        /// based on the current <see cref="IHostApplicationBuilder.Configuration"/> once and only once.
+        /// This can called multiple times: the last <paramref name="contextDescriptor"/> wins.
         /// </para>
         /// </summary>
         /// <param name="builder">This application builder</param>
@@ -26,34 +23,48 @@ namespace Microsoft.Extensions.Hosting
         /// <returns>This builder.</returns>
         public static T AddApplicationIdentityServiceConfiguration<T>( this T builder, string? contextDescriptor = null ) where T : IHostApplicationBuilder
         {
-            var tOnce = typeof( ApplicationIdentityServiceConfiguration );
-            if( builder.Properties.ContainsKey( tOnce ) )
-            {
-                Throw.InvalidOperationException( "UseCKAppIdentity must be called only once." );
-            }
-            builder.Properties.Add( tOnce, tOnce );
-            var monitor = builder.GetBuilderMonitor();
-            var config = ApplicationIdentityServiceConfiguration.Create( monitor, builder.Environment, builder.Configuration.GetSection( "CK-AppIdentity" ) );
-            if( config != null )
-            {
+            // The default ContextDescriptor is the command line.
+            contextDescriptor ??= Environment.CommandLine;
 
-                if( CoreApplicationIdentity.TryConfigure( identity =>
+            var uniqueKey = typeof( ApplicationIdentityServiceConfiguration );
+            if( builder.Properties.TryGetValue( uniqueKey, out var existingCtx ) )
+            {
+                // Useless if CoreApplicationIdentity is already initialized.
+                if( !CoreApplicationIdentity.IsInitialized )
                 {
-                    identity.DomainName = config.DomainName;
-                    identity.PartyName = config.PartyName;
-                    identity.EnvironmentName = config.EnvironmentName;
-                    identity.ContextDescriptor = contextDescriptor ?? Environment.CommandLine;
-                } ) )
-                {
-                    CoreApplicationIdentity.Initialize();
-                    monitor.Trace( $"CoreApplicationIdentity initialized: '{CoreApplicationIdentity.Instance.FullName}'." );
+                    var exists = (string)existingCtx;
+                    if( exists != contextDescriptor )
+                    {
+                        builder.GetBuilderMonitor().Info( $"Change identity ContextDescriptor from '{exists}' to '{contextDescriptor}'." );
+                    }
+                    builder.Properties[uniqueKey] = contextDescriptor;
                 }
-                else
-                {
-                    monitor.Warn( $"Unable to configure CoreApplicationIdentity since it is already initialized: '{CoreApplicationIdentity.Instance.FullName}'." );
-                }
-                builder.Services.AddSingleton( config );
+                return builder;
             }
+            builder.Properties.Add( uniqueKey, contextDescriptor );
+            builder.AddAutoConfigureAAAAAA( ( monitor, builder ) =>
+            {
+                var config = ApplicationIdentityServiceConfiguration.Create( monitor, builder.Environment, builder.Configuration.GetSection( "CK-AppIdentity" ) );
+                if( config != null )
+                {
+                    if( CoreApplicationIdentity.TryConfigure( identity =>
+                    {
+                        identity.DomainName = config.DomainName;
+                        identity.PartyName = config.PartyName;
+                        identity.EnvironmentName = config.EnvironmentName;
+                        identity.ContextDescriptor = (string)builder.Properties[typeof( ApplicationIdentityServiceConfiguration )];
+                    } ) )
+                    {
+                        CoreApplicationIdentity.Initialize();
+                        monitor.Trace( $"CoreApplicationIdentity initialized: '{CoreApplicationIdentity.Instance.FullName}' (ContextDescriptor: '{contextDescriptor}')." );
+                    }
+                    else
+                    {
+                        monitor.Warn( $"Unable to configure CoreApplicationIdentity since it is already initialized: '{CoreApplicationIdentity.Instance.FullName}'." );
+                    }
+                    builder.Services.AddSingleton( config );
+                } 
+            } );
             return builder;
         }
     }
