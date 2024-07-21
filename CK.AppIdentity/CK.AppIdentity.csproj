@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
-    <PackageReference Include="CK.Configuration" Version="0.0.0--04zdxpy-develop" />
-    <PackageReference Include="CK.PerfectEvent" Version="0.0.0--04zdxpy-develop" />
+    <PackageReference Include="CK.Configuration" Version="0.0.0--04zi8x2-develop" />
+    <PackageReference Include="CK.PerfectEvent" Version="0.0.0--04zi8x3-develop" />
   </ItemGroup>
 </Project>
