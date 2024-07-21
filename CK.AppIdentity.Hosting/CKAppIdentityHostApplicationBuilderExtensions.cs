@@ -45,7 +45,7 @@ namespace Microsoft.Extensions.Hosting
             builder.AddAutoConfigure( DoConfigure );
             return builder;
 
-            static void DoConfigure<T>( IActivityMonitor monitor, T builder ) where T : IHostApplicationBuilder
+            static void DoConfigure( IActivityMonitor monitor, T builder )
             {
                 var config = ApplicationIdentityServiceConfiguration.Create( monitor, builder.Environment, builder.Configuration.GetSection( "CK-AppIdentity" ) );
                 if( config != null )
