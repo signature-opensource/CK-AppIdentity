@@ -1,10 +1,9 @@
 using CK.Core;
 using System.Threading.Tasks;
 
-namespace CK.AppIdentity
+namespace CK.AppIdentity;
+
+interface IOwnedPartyInternal : IOwnedParty
 {
-    interface IOwnedPartyInternal : IOwnedParty
-    {
-        new LocalParty Owner { get; }
-    }
+    new LocalParty Owner { get; }
 }
