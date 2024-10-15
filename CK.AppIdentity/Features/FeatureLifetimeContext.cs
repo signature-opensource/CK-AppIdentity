@@ -35,14 +35,15 @@ public sealed class FeatureLifetimeContext
     /// Gets the remotes that are concerned by the current operation, skipping any intermediate <see cref="TenantDomainParty"/>.
     /// <list type="bullet">
     ///   <item>
-    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupAsync(FeatureLifetimeContext)"/> and <see cref="ApplicationIdentityFeatureDriver.TeardownAsync(FeatureLifetimeContext)"/>
+    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupAsync(FeatureLifetimeContext)">SetupAsync</see> and
+    ///   <see cref="ApplicationIdentityFeatureDriver.TeardownAsync(FeatureLifetimeContext)">TeardownAsync</see>
     ///   these are the <see cref="IApplicationIdentityService.AllRemotes"/>.
     ///   </item>
     ///   <item>
-    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)"/>) and
-    ///   <see cref="ApplicationIdentityFeatureDriver.TeardownDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)"/>
-    ///   this is the <see cref="IOwnedParty"/> if it is a <see cref="RemoteParty"/>, or its content if it is a <see cref="TenantDomainParty"/>
-    ///   (<see cref="ILocalParty.Remotes"/>).
+    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)">SetupDynamicRemoteAsync</see> and
+    ///   <see cref="ApplicationIdentityFeatureDriver.TeardownDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)">TeardownDynamicRemoteAsync</see>
+    ///   this is the <see cref="IOwnedParty"/> itself if it is a <see cref="RemoteParty"/>, or its <see cref="ILocalParty.Remotes">remotes</see>
+    ///   if it is a <see cref="TenantDomainParty"/>.
     ///   </item>
     /// </list>
     /// Nothing prevents to associate features to a <see cref="ITenantDomainParty"/>: this helper ease the case where features must be
@@ -55,8 +56,34 @@ public sealed class FeatureLifetimeContext
         {
             null => _agent.ApplicationIdentityService.AllRemotes,
             TenantDomainParty g => g.Remotes,
-            RemoteParty p => new[] { p },
+            RemoteParty p => [p],
             _ => Throw.NotSupportedException<IEnumerable<IRemoteParty>>()
+        };
+    }
+
+    /// <summary>
+    /// Gets the local parties that are concerned by the current operation.
+    /// <list type="bullet">
+    ///   <item>
+    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupAsync(FeatureLifetimeContext)">SetupAsync</see> and
+    ///   <see cref="ApplicationIdentityFeatureDriver.TeardownAsync(FeatureLifetimeContext)">TeardownAsync</see>
+    ///   these are the <see cref="ApplicationIdentityService"/> followed by its <see cref="IApplicationIdentityService.TenantDomains"/>.
+    ///   </item>
+    ///   <item>
+    ///   For <see cref="ApplicationIdentityFeatureDriver.SetupDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)">SetupDynamicRemoteAsync</see> and
+    ///   <see cref="ApplicationIdentityFeatureDriver.TeardownDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)">TeardownDynamicRemoteAsync</see>
+    ///   this is the <see cref="IOwnedParty"/> itself if it is a <see cref="TenantDomainParty"/>, or is empty if it is a <see cref="IRemoteParty"/>.</see>.
+    ///   </item>
+    /// </summary>
+    /// <returns>The set of local parties to consider for the current operation.</returns>
+    public IEnumerable<ILocalParty> GetAllLocals()
+    {
+        return _targetParty switch
+        {
+            null => ((IEnumerable<ILocalParty>)_agent.ApplicationIdentityService.TenantDomains).Prepend( _agent.ApplicationIdentityService ),
+            TenantDomainParty g => [g],
+            RemoteParty => [],
+            _ => Throw.NotSupportedException<IEnumerable<ILocalParty>>()
         };
     }
 
