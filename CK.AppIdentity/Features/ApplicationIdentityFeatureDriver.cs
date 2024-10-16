@@ -76,6 +76,9 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// Must do whatever is required to register features into any <see cref="IParty.Features"/>
     /// of <see cref="IApplicationIdentityService.AllParties"/>.
     /// <para>
+    /// The 2 helpers <see cref="FeatureLifetimeContext.GetAllRemotes()"/> and <see cref="FeatureLifetimeContext.GetAllLocals()"/> can be useful.
+    /// </para>
+    /// <para>
     /// The <see cref="ApplicationIdentityService"/> property is available as well as helpers to know if this feature is allowed on
     /// a party (see <see cref="IsAllowedFeature(IParty)"/>).
     /// </para>
@@ -88,8 +91,15 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     internal protected abstract Task<bool> SetupAsync( FeatureLifetimeContext context );
 
     /// <summary>
-    /// Must do whatever is required to register features into <see cref="ApplicationIdentityParty.Features"/> for the party and any
-    /// <see cref="ILocalParty.Remotes"/> if the party is a <see cref="TenantDomainParty"/>.
+    /// Must do whatever is required to register features into <see cref="ApplicationIdentityParty.Features"/> for the <paramref name="party"/>
+    /// and any <see cref="ILocalParty.Remotes"/> if the party is a <see cref="TenantDomainParty"/>.
+    /// <para>
+    /// The 2 helpers <see cref="FeatureLifetimeContext.GetAllRemotes()"/> and <see cref="FeatureLifetimeContext.GetAllLocals()"/> can be useful.
+    /// </para>
+    /// <para>
+    /// The <see cref="ApplicationIdentityService"/> property is available as well as helpers to know if this feature is allowed on
+    /// a party (see <see cref="IsAllowedFeature(IParty)"/>).
+    /// </para>
     /// <para>
     /// This is called in the same order as this driver has been instantiated: any dependent feature drivers have been initialized.
     /// </para>
