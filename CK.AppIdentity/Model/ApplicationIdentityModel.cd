@@ -47,18 +47,18 @@
   </Interface>
   <Interface Name="CK.AppIdentity.ITenantDomainParty">
     <Position X="2.25" Y="6.75" Width="1.75" />
-    <InheritanceLine Type="CK.AppIdentity.IOwnedParty" ManuallyRouted="true" FixedFromPoint="true">
+    <InheritanceLine Type="CK.AppIdentity.IOwnedParty" ManuallyRouted="true" FixedFromPoint="true" FixedToPoint="true">
       <Path>
         <Point X="2" Y="5.812" />
-        <Point X="3.125" Y="5.812" />
-        <Point X="3.125" Y="6.75" />
+        <Point X="2.938" Y="5.812" />
+        <Point X="2.938" Y="6.75" />
       </Path>
     </InheritanceLine>
     <InheritanceLine Type="CK.AppIdentity.ILocalParty" FixedFromPoint="true" FixedToPoint="true">
       <Path>
         <Point X="4.25" Y="5.812" />
-        <Point X="3.125" Y="5.812" />
-        <Point X="3.125" Y="6.75" />
+        <Point X="3.25" Y="5.812" />
+        <Point X="3.25" Y="6.75" />
       </Path>
     </InheritanceLine>
     <AssociationLine Name="Owner" Type="CK.AppIdentity.IApplicationIdentityService" FixedFromPoint="true" FixedToPoint="true">
