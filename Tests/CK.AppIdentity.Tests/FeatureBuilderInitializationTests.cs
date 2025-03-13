@@ -1,5 +1,5 @@
 using CK.Core;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -37,25 +37,25 @@ public class FeatureBuilderInitializationTests
         await app.StartAsync();
         var s = app.Services.GetRequiredService<ApplicationIdentityService>();
 
-        s.DomainName.Should().Be( "D" );
-        s.EnvironmentName.Should().Be( "#Production" );
-        s.PartyName.Should().Be( "$MyApp" );
-        s.Features.Should().BeEmpty();
+        s.DomainName.ShouldBe( "D" );
+        s.EnvironmentName.ShouldBe( "#Production" );
+        s.PartyName.ShouldBe( "$MyApp" );
+        s.Features.ShouldBeEmpty();
 
-        s.Parties.Should().HaveCount( 2 );
+        s.Parties.Count().ShouldBe( 2 );
         var r1 = s.Remotes.Single( r => r.PartyName == "$Remote1" );
-        r1.IsDynamic.Should().BeFalse();
-        r1.Address.Should().BeNull();
-        r1.DomainName.Should().Be( "D" );
-        r1.EnvironmentName.Should().Be( "#Production" );
-        r1.Features.Should().BeEmpty();
+        r1.IsDynamic.ShouldBeFalse();
+        r1.Address.ShouldBeNull();
+        r1.DomainName.ShouldBe( "D" );
+        r1.EnvironmentName.ShouldBe( "#Production" );
+        r1.Features.ShouldBeEmpty();
 
         var r2 = s.Remotes.Single( r => r.PartyName == "$Remote2" );
-        r2.IsDynamic.Should().BeFalse();
-        r2.Address.Should().BeNull();
-        r2.DomainName.Should().Be( "D" );
-        r2.EnvironmentName.Should().Be( "#Production" );
-        r2.Features.Should().BeEmpty();
+        r2.IsDynamic.ShouldBeFalse();
+        r2.Address.ShouldBeNull();
+        r2.DomainName.ShouldBe( "D" );
+        r2.EnvironmentName.ShouldBe( "#Production" );
+        r2.Features.ShouldBeEmpty();
 
     }
 
@@ -96,7 +96,7 @@ public class FeatureBuilderInitializationTests
         {
             _dynamicSetupCount++;
             context.Monitor.Trace( $"SetupDynamic {GetType().Name} ({SetupOrder})." );
-            context.Memory.GetValueOrDefault( "DynamicSetupOrder", 0 ).Should().Be( SetupOrder );
+            context.Memory.GetValueOrDefault( "DynamicSetupOrder", 0 ).ShouldBe( SetupOrder );
             context.Memory["DynamicSetupOrder"] = SetupOrder + 1;
             return Task.FromResult( true );
         }
@@ -106,7 +106,7 @@ public class FeatureBuilderInitializationTests
             _dynamicTeardownCount++;
             context.Monitor.Trace( $"TeardownDynamic {GetType().Name} ({SetupOrder})." );
             int revertOrder = _currentSetupOrder - SetupOrder - 1;
-            context.Memory.GetValueOrDefault( "DynamicTeardownOrder", 0 ).Should().Be( revertOrder );
+            context.Memory.GetValueOrDefault( "DynamicTeardownOrder", 0 ).ShouldBe( revertOrder );
             // Next expected value.
             context.Memory["DynamicTeardownOrder"] = revertOrder + 1;
             return Task.CompletedTask;
@@ -117,7 +117,7 @@ public class FeatureBuilderInitializationTests
             _teardownCount++;
             context.Monitor.Trace( $"Teardown {GetType().Name} ({SetupOrder})." );
             int revertOrder = _currentSetupOrder - SetupOrder - 1;
-            context.Memory.GetValueOrDefault( "TeardownOrder", 0 ).Should().Be( revertOrder );
+            context.Memory.GetValueOrDefault( "TeardownOrder", 0 ).ShouldBe( revertOrder );
             // Next expected value.
             context.Memory["TeardownOrder"] = revertOrder + 1;
             return Task.CompletedTask;
@@ -214,37 +214,37 @@ public class FeatureBuilderInitializationTests
         var fB_A = app.Services.GetRequiredService<FB_AFeatureDriver>();
         var fC_A_3 = app.Services.GetRequiredService<FC_A_3FeatureDriver>();
         var fD_B_2 = app.Services.GetRequiredService<FD_B_2FeatureDriver>();
-        CheckOrderFeatureDriver._count.Should().Be( 7 );
+        CheckOrderFeatureDriver._count.ShouldBe( 7 );
 
-        f1.FeatureName.Should().Be( "F1" );
-        f2_1.FeatureName.Should().Be( "F2_1" );
-        f3_2.FeatureName.Should().Be( "F3_2" );
-        fA_1.FeatureName.Should().Be( "FA_1" );
-        fB_A.FeatureName.Should().Be( "FB_A" );
-        fC_A_3.FeatureName.Should().Be( "FC_A_3" );
-        fD_B_2.FeatureName.Should().Be( "FD_B_2" );
+        f1.FeatureName.ShouldBe( "F1" );
+        f2_1.FeatureName.ShouldBe( "F2_1" );
+        f3_2.FeatureName.ShouldBe( "F3_2" );
+        fA_1.FeatureName.ShouldBe( "FA_1" );
+        fB_A.FeatureName.ShouldBe( "FB_A" );
+        fC_A_3.FeatureName.ShouldBe( "FC_A_3" );
+        fD_B_2.FeatureName.ShouldBe( "FD_B_2" );
 
-        f1.SetupOrder.Should().Be( 0 );
-        f2_1.SetupOrder.Should().BeGreaterThan( f1.SetupOrder );
-        f3_2.SetupOrder.Should().BeGreaterThan( f2_1.SetupOrder );
-        fA_1.SetupOrder.Should().BeGreaterThan( f1.SetupOrder );
-        fB_A.SetupOrder.Should().BeGreaterThan( fA_1.SetupOrder );
-        fC_A_3.SetupOrder.Should().BeGreaterThan( fA_1.SetupOrder ).And.BeGreaterThan( f3_2.SetupOrder );
-        fD_B_2.SetupOrder.Should().BeGreaterThan( fB_A.SetupOrder ).And.BeGreaterThan( f2_1.SetupOrder );
+        f1.SetupOrder.ShouldBe( 0 );
+        f2_1.SetupOrder.ShouldBeGreaterThan( f1.SetupOrder );
+        f3_2.SetupOrder.ShouldBeGreaterThan( f2_1.SetupOrder );
+        fA_1.SetupOrder.ShouldBeGreaterThan( f1.SetupOrder );
+        fB_A.SetupOrder.ShouldBeGreaterThan( fA_1.SetupOrder );
+        fC_A_3.SetupOrder.ShouldBeGreaterThan( Math.Max( fA_1.SetupOrder, f3_2.SetupOrder ) );
+        fD_B_2.SetupOrder.ShouldBeGreaterThan( Math.Max( fB_A.SetupOrder, f2_1.SetupOrder ) );
 
         var r = await identityService.AddRemoteAsync( TestHelper.Monitor, c =>
         {
             c["PartyName"] = "SomeDynamicRemote";
         } );
         Throw.DebugAssert( r != null );
-        CheckOrderFeatureDriver._dynamicSetupCount.Should().Be( 7 );
-        CheckOrderFeatureDriver._dynamicTeardownCount.Should().Be( 0 );
+        CheckOrderFeatureDriver._dynamicSetupCount.ShouldBe( 7 );
+        CheckOrderFeatureDriver._dynamicTeardownCount.ShouldBe( 0 );
 
         await r.DestroyAsync();
-        CheckOrderFeatureDriver._dynamicTeardownCount.Should().Be( 7 );
-        CheckOrderFeatureDriver._teardownCount.Should().Be( 0 );
+        CheckOrderFeatureDriver._dynamicTeardownCount.ShouldBe( 7 );
+        CheckOrderFeatureDriver._teardownCount.ShouldBe( 0 );
 
         await identityService.DisposeAsync();
-        CheckOrderFeatureDriver._teardownCount.Should().Be( 7 );
+        CheckOrderFeatureDriver._teardownCount.ShouldBe( 7 );
     }
 }
