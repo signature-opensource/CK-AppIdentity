@@ -1,6 +1,6 @@
 using CK.Core;
 using CK.Testing;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -45,28 +45,28 @@ public class DomainTests
 
         var appIdentityService = app.Services.GetRequiredService<ApplicationIdentityService>();
 
-        appIdentityService.DomainName.Should().Be( "SaaSProduct" );
-        appIdentityService.EnvironmentName.Should().Be( "#Dev" );
-        appIdentityService.PartyName.Should().Be( "$SaaS1" );
-        appIdentityService.Parties.Should().HaveCount( 2 );
+        appIdentityService.DomainName.ShouldBe( "SaaSProduct" );
+        appIdentityService.EnvironmentName.ShouldBe( "#Dev" );
+        appIdentityService.PartyName.ShouldBe( "$SaaS1" );
+        appIdentityService.Parties.Count().ShouldBe( 2 );
 
         var allInOne = appIdentityService.TenantDomains.Single( d => d.PartyName == "$AllInOneInc" );
-        allInOne.Configuration.EnvironmentName.Should().Be( "#Dev" );
-        allInOne.Remotes.Should().HaveCount( 5, "There are 5 agents in this group." );
-        allInOne.Remotes.Should().AllSatisfy( r =>
+        allInOne.Configuration.EnvironmentName.ShouldBe( "#Dev" );
+        allInOne.Remotes.Count.ShouldBe( 5, "There are 5 agents in this group." );
+        foreach( var r in allInOne.Remotes )
         {
-            new[] { "$ControlBox", "$Hall1Wall", "$Hall2Wall", "$Hall1Trolley", "$Hall2Trolley" }.Should().Contain( r.PartyName );
-            r.DomainName.Should().Be( "AllInOneInc" );
-            r.EnvironmentName.Should().Be( "#Dev" );
-        } );
+            new[] { "$ControlBox", "$Hall1Wall", "$Hall2Wall", "$Hall1Trolley", "$Hall2Trolley" }.ShouldContain( r.PartyName );
+            r.DomainName.ShouldBe( "AllInOneInc" );
+            r.EnvironmentName.ShouldBe( "#Dev" );
+        }
         var opal = appIdentityService.TenantDomains.Single( p => p.PartyName == "$OpalCorp" );
-        opal.Remotes.Should().HaveCount( 2, "There are 2 agents in this domain." );
-        opal.Remotes.Should().AllSatisfy( r =>
+        opal.Remotes.Count.ShouldBe( 2, "There are 2 agents in this domain." );
+        foreach( var r in opal.Remotes )
         {
-            new[] { "$ControlBox", "$MeasureStation" }.Should().Contain( r.PartyName );
-            r.DomainName.Should().Be( "OpalCorp" );
-            r.EnvironmentName.Should().Be( "#Dev" );
-        } );
+            new[] { "$ControlBox", "$MeasureStation" }.ShouldContain( r.PartyName );
+            r.DomainName.ShouldBe( "OpalCorp" );
+            r.EnvironmentName.ShouldBe( "#Dev" );
+        };
     }
 
     [Test]
@@ -85,40 +85,40 @@ public class DomainTests
         await app.StartAsync();
 
         var s = app.Services.GetRequiredService<ApplicationIdentityService>();
-        s.AllParties.Should().HaveCount( 0 );
+        s.AllParties.Count().ShouldBe( 0 );
 
         // This is the Agent "D/$P".
         IOwnedParty? noWay = await s.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D/$P" );
-        noWay.Should().BeNull();
+        noWay.ShouldBeNull();
 
-        (await s.AddRemoteAsync( TestHelper.Monitor, s => s["PartyName"] = "$P1" )).Should().NotBeNull();
+        (await s.AddRemoteAsync( TestHelper.Monitor, s => s["PartyName"] = "$P1" )).ShouldNotBeNull();
 
         noWay = await s.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D/$P" );
-        noWay.Should().BeNull( "Adding a Party that is the application is not possible." );
+        noWay.ShouldBeNull( "Adding a Party that is the application is not possible." );
 
         // Adding a Tenant D1.
         var d1 = await s.AddTenantDomainAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$D1" );
         Throw.DebugAssert( d1 != null );
 
         noWay = await s.AddTenantDomainAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$D1" );
-        noWay.Should().BeNull( "Duplicate tenant." );
+        noWay.ShouldBeNull( "Duplicate tenant." );
 
         noWay = await d1.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D/$P" );
-        noWay.Should().BeNull();
+        noWay.ShouldBeNull();
 
         var p1 = await d1.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$P1" );
-        noWay.Should().BeNull( "Adding a Party that is the application is not possible (in the tenant)." );
+        noWay.ShouldBeNull( "Adding a Party that is the application is not possible (in the tenant)." );
 
         noWay = await d1.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$P1" );
-        noWay.Should().BeNull( "Duplicate remote (in the defining tenant) is obviously not possible." );
+        noWay.ShouldBeNull( "Duplicate remote (in the defining tenant) is obviously not possible." );
         noWay = await s.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$P1" );
-        noWay.Should().BeNull( "Duplicate remote (in the application) is not possible." );
+        noWay.ShouldBeNull( "Duplicate remote (in the application) is not possible." );
 
         // Adding a Tenant D2.
         var d2 = await s.AddTenantDomainAsync( TestHelper.Monitor, s => s["FullName"] = "D2/$D2" );
         Throw.DebugAssert( d2 != null );
         noWay = await d2.AddRemoteAsync( TestHelper.Monitor, s => s["FullName"] = "D1/$P1" );
-        noWay.Should().BeNull( "Duplicate remote (from any other tenant) is not possible." );
+        noWay.ShouldBeNull( "Duplicate remote (from any other tenant) is not possible." );
     }
 
     [Test]
@@ -127,7 +127,7 @@ public class DomainTests
         var c = ApplicationIdentityServiceConfiguration.CreateEmpty();
         var empty = new ApplicationIdentityService( c, new SimpleServiceContainer() );
         // This does not throw.
-        empty.InitializationTask.IsCompleted.Should().BeFalse();
+        empty.InitializationTask.IsCompleted.ShouldBeFalse();
         await ((IHostedService)empty).StartAsync( default );
         await empty.InitializationTask;
         await ((IHostedService)empty).StopAsync( default );
