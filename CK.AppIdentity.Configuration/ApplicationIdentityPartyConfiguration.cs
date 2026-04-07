@@ -55,9 +55,21 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     /// </summary>
     public NormalizedPath FullName => _fullName;
 
-    internal readonly record struct ProcessedConfiguration( List<TenantDomainPartyConfiguration> Tenants, List<RemotePartyConfiguration> Remotes )
+    /// <summary>
+    /// Defines the result of the <see cref="CreateDynamicRemoteConfiguration(IActivityMonitor, Action{MutableConfigurationSection})"/> method.
+    /// </summary>
+    /// <param name="Tenants">The list of tenant configurations.</param>
+    /// <param name="Remotes">The list of remote configurations.</param>
+    public readonly record struct ProcessedConfiguration( List<TenantDomainPartyConfiguration> Tenants, List<RemotePartyConfiguration> Remotes )
     {
+        /// <summary>
+        /// The total count of parties (remotes and tenants) in the configuration.
+        /// </summary>
         public int Count => Tenants.Count + Remotes.Count;
+
+        /// <summary>
+        /// Gets all the parties (remotes and tenants) in the configuration.
+        /// </summary>
         public IEnumerable<ApplicationIdentityPartyConfiguration> Parties => ((IEnumerable<ApplicationIdentityPartyConfiguration>)Remotes).Concat( Tenants );
     }
 
@@ -68,14 +80,14 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The dynamic configurator.</param>
     /// <returns>One or more party configuration or null if an error occurred.</returns>
-    internal ProcessedConfiguration? CreateDynamicRemoteConfiguration( IActivityMonitor monitor,
+    public ProcessedConfiguration? CreateDynamicRemoteConfiguration( IActivityMonitor monitor,
                                                                        Action<MutableConfigurationSection> configuration )
     {
         // Anchors the new mutable section below this section: lookups apply.
-        // 
+        //
         // The "Remotes:X" levels are useless. We don't need these because these slots don't carry any
         // information other than the "collection" (array) and the "index" that we totally ignore.
-        // 
+        //
         var anchor = Configuration;
         var remotes = new MutableConfigurationSection( anchor );
         var c = remotes.GetMutableSection( "Dynamic" );

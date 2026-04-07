@@ -2,7 +2,7 @@ using CK.Core;
 using NUnit.Framework;
 using static CK.Testing.MonitorTestHelper;
 
-namespace CK.AppIdentity.Configuration.Tests;
+namespace CK.AppIdentity.Tests;
 
 [SetUpFixture]
 public class TestHelperSetupDefaultStorePath
