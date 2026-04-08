@@ -3,9 +3,9 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.Abstractions" Version="28.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
-    <PackageReference Include="CK.Configuration" Version="0.10.2" />
-    <PackageReference Include="CK.PerfectEvent" Version="26.0.2" />
+    <PackageReference Include="CK.PerfectEvent" Version="26.0.3--0005-develop" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CK.AppIdentity.Configuration\CK.AppIdentity.Configuration.csproj" />
   </ItemGroup>
 </Project>

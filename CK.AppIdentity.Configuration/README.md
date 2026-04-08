@@ -30,7 +30,7 @@ In the following examples, Parties are defined statically, in the initial config
 parties and cannot be destroyed.
 
 ### Standard ones
-A simple application that interacts with 2 remote parties: 
+A simple application that interacts with 2 remote parties:
 ```json
 {
   "FullName": "AcmeCorp/$Trolley1/#Production",
@@ -217,7 +217,7 @@ components introduce the possibility of locking or limiting critical configurati
   // can be entered here.
   "Local": {
      // This is where the local application can be configured.
-  }, 
+  },
   "Parties": [
    {
      "PartyName": "$Box",
@@ -233,13 +233,13 @@ components and plugins specific to that Tenant:
   "FullName": "Test/$SaaSApp",
   "Local": {
      // This is where the local application can be configured.
-  }, 
+  },
   "Parties": [
    {
      "FullName": "Tenant1/$Tenant1",
      "Local": {
         // Here comes the local configuration of Tenant1.
-     }, 
+     },
      "Parties": [
       {
         "PartyName": "$Box"
@@ -291,7 +291,7 @@ strict mode can be set back to true.
 ### The Configuration model
 A `ImmutableConfigurationSection` successfully analyzed results in muliple objects described below:
 
-![Configuration objects class diagram](../../Doc/ApplicationIdentityConfiguration.png)
+![Configuration objects class diagram](../Doc/ApplicationIdentityConfiguration.png)
 
 This model shows the 3 main types of identity objects:
 - **ApplicationIdentity** is the root object.
@@ -300,7 +300,7 @@ This model shows the 3 main types of identity objects:
 - All configurations are issued and expose their `ImmutableConfigurationSection` configuration and
   a `AssemblyConfiguration` that captures possible "plugins/dynamic extension" assemblies.
 
-Based on these configuration objects, the ["runtime" model](../Model/README.md) is initialized.
+Based on these configuration objects, the ["runtime" model](../CK.AppIdentity/Model/README.md) is initialized.
 
 
 
