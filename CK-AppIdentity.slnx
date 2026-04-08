@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="appveyor.yml" />
+    <File Path="Directory.Build.props" />
+    <File Path="NuGet.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Solution Items/Doc/">
+    <File Path="Doc/ApplicationIdentityConfiguration.png" />
+    <File Path="Doc/ApplicationIdentityModel.png" />
+    <File Path="Doc/CK-AppIdentity.pptx" />
+    <File Path="Doc/FeatureDriver.png" />
+    <File Path="Doc/FileStore.png" />
+    <File Path="Doc/PartyFeature.png" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <File Path="Tests/TestHelper.config" />
+    <Project Path="Tests/CK.AppIdentity.Tests/CK.AppIdentity.Tests.csproj" />
+  </Folder>
+  <Project Path="CK.AppIdentity.Configuration/CK.AppIdentity.Configuration.csproj" />
+  <Project Path="CK.AppIdentity.Hosting/CK.AppIdentity.Hosting.csproj" />
+  <Project Path="CK.AppIdentity/CK.AppIdentity.csproj" />
+</Solution>
