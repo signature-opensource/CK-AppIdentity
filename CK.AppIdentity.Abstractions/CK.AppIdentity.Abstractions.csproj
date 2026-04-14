@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <IsPackable>true</IsPackable>
+        <Nullable>enable</Nullable>
+        <RootNamespace>CK.AppIdentity</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CK.PerfectEvent" Version="26.0.3--0005-develop" />
+    </ItemGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\CK.AppIdentity.Configuration\CK.AppIdentity.Configuration.csproj" />
+    </ItemGroup>
+    
+</Project>
