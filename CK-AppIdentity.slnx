@@ -19,6 +19,7 @@
     <File Path="Tests/TestHelper.config" />
     <Project Path="Tests/CK.AppIdentity.Tests/CK.AppIdentity.Tests.csproj" />
   </Folder>
+  <Project Path="CK.AppIdentity.Abstractions/CK.AppIdentity.Abstractions.csproj" />
   <Project Path="CK.AppIdentity.Configuration/CK.AppIdentity.Configuration.csproj" />
   <Project Path="CK.AppIdentity.Hosting/CK.AppIdentity.Hosting.csproj" />
   <Project Path="CK.AppIdentity/CK.AppIdentity.csproj" />

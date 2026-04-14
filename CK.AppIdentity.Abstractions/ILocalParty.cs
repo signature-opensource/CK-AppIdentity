@@ -15,7 +15,7 @@ public interface ILocalParty : IParty
     /// <summary>
     /// Raised whenever a new party appears or disappears in this <see cref="Remotes"/>.
     /// <para>
-    /// By subscribing to this event on the root <see cref="ApplicationIdentityService"/>, one can track any structural
+    /// By subscribing to this event on the root <see cref="IApplicationIdentityService"/>, one can track any structural
     /// change of the whole identity system.
     /// </para>
     /// </summary>

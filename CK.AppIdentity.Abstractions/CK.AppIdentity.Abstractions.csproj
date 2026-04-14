@@ -8,9 +8,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CK.Abstractions" Version="29.0.0--ci.9" />
-        <PackageReference Include="CK.Configuration" Version="0.11.0--ci.11" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.14" />
+        <PackageReference Include="CK.PerfectEvent" Version="27.0.0--ci.11" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CK.AppIdentity.Configuration\CK.AppIdentity.Configuration.csproj" />
     </ItemGroup>
 
 </Project>

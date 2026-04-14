@@ -22,7 +22,7 @@ namespace CK.AppIdentity;
 /// start/stop the micro-agent and setup/teardown features in parallel with other <see cref="IHostedService"/>.
 /// </para>
 /// </summary>
-public sealed partial class ApplicationIdentityService : LocalParty, IApplicationIdentityService, ISingletonAutoService, IHostedLifecycleService, IAsyncDisposable
+public sealed partial class ApplicationIdentityService : LocalParty, IApplicationIdentityService, IHostedLifecycleService, IAsyncDisposable
 {
     readonly AppIdentityAgent _agent;
     internal readonly List<ApplicationIdentityFeatureDriver> _builders;

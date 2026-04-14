@@ -26,7 +26,7 @@ public interface IParty
     /// <summary>
     /// Gets the root application identity service.
     /// </summary>
-    ApplicationIdentityService ApplicationIdentityService { get; }
+    IApplicationIdentityService ApplicationIdentityService { get; }
 
     /// <summary>
     /// Gets the domain name.

@@ -15,7 +15,7 @@ public interface IFileStore
     /// <summary>
     /// Gets the trash bin path.
     /// <para>
-    /// Old trashed files are deleted when <see cref="ApplicationIdentityService"/> is disposed
+    /// Old trashed files are deleted when <see cref="IApplicationIdentityService"/> is disposed
     /// (or the application properly shuts down) or when the party is destroyed.
     /// </para>
     /// </summary>
