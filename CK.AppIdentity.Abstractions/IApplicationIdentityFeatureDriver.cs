@@ -3,7 +3,7 @@ using CK.Core;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// Multiple interface service of <see cref="ApplicationIdentityFeatureDriver"/>
+/// Multiple interface service of <c>"ApplicationIdentityFeatureDriver"</c>
 /// that is the only base class to use to implement a feature driver.
 /// </summary>
 [IsMultiple]

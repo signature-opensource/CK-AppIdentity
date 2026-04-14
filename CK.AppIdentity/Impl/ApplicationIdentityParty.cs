@@ -29,7 +29,9 @@ public abstract class ApplicationIdentityParty : IParty
         _sharedStore = new FileStore( ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ) );
     }
 
-    /// <inheritdoc />
+    IApplicationIdentityService IParty.ApplicationIdentityService => _appIdentityService;
+
+    /// <inheritdoc cref="IParty.ApplicationIdentityService"/>
     public ApplicationIdentityService ApplicationIdentityService => _appIdentityService;
 
     /// <inheritdoc />

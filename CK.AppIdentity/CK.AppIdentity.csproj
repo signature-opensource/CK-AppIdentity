@@ -1,11 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.PerfectEvent" Version="27.0.0--ci.11" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\CK.AppIdentity.Configuration\CK.AppIdentity.Configuration.csproj" />
+    <ProjectReference Include="..\CK.AppIdentity.Abstractions\CK.AppIdentity.Abstractions.csproj" />
   </ItemGroup>
 </Project>

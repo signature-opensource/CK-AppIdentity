@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// A owned party belongs to the root <see cref="ApplicationIdentityService"/> or to a <see cref="ITenantDomainParty"/>.
+/// A owned party belongs to the root <see cref="IApplicationIdentityService"/> or to a <see cref="ITenantDomainParty"/>.
 /// It can be a <see cref="IRemoteParty"/> or a <see cref="ITenantDomainParty"/>.
 /// <para>
 /// A owned party can be destroyed if it has been dynamically created.

@@ -11,7 +11,7 @@ namespace CK.AppIdentity;
 /// <summary>
 /// Root of the identity model. Contains all the identity objects.
 /// </summary>
-public interface IApplicationIdentityService : ILocalParty
+public interface IApplicationIdentityService : ILocalParty, ISingletonAutoService
 {
     /// <summary>
     /// Gets the <see cref="ApplicationIdentityServiceConfiguration"/> object.
@@ -37,7 +37,7 @@ public interface IApplicationIdentityService : ILocalParty
     IReadOnlyCollection<ITenantDomainParty> TenantDomains { get; }
 
     /// <summary>
-    /// Gets a concatenation of the <see cref="LocalParty.Remotes"/> directly owned by this application
+    /// Gets a concatenation of the <see cref="ILocalParty.Remotes"/> directly owned by this application
     /// and the <see cref="TenantDomains"/>.
     /// <para>
     /// This is a snapshot of the parties: while enumerating <see cref="IOwnedParty.IsDestroyed"/> may be
@@ -47,7 +47,7 @@ public interface IApplicationIdentityService : ILocalParty
     IEnumerable<IOwnedParty> Parties { get; }
 
     /// <summary>
-    /// Gets the <see cref="LocalParty.Remotes"/> directly owned by this application, and all remotes of the <see cref="TenantDomains"/>
+    /// Gets the <see cref="ILocalParty.Remotes"/> directly owned by this application, and all remotes of the <see cref="TenantDomains"/>
     /// recursively (depth-first traversal).
     /// <para>
     /// This is a snapshot of the parties: while enumerating <see cref="IOwnedParty.IsDestroyed"/> may be
@@ -57,7 +57,7 @@ public interface IApplicationIdentityService : ILocalParty
     IEnumerable<IRemoteParty> AllRemotes { get; }
 
     /// <summary>
-    /// Gets the complete set of parties: the <see cref="LocalParty.Remotes"/> owned by this application and
+    /// Gets the complete set of parties: the <see cref="ILocalParty.Remotes"/> owned by this application and
     /// the <see cref="TenantDomains"/> with their Remotes (depth-first traversal).
     /// <para>
     /// This is a snapshot of the parties: while enumerating <see cref="IOwnedParty.IsDestroyed"/> may be
@@ -84,7 +84,7 @@ public interface IApplicationIdentityService : ILocalParty
     /// <summary>
     /// Raises an approximative 1 second, non reentrant, heart beat signal.
     /// <para>
-    /// The period can be changed by using a specialized <see cref="ApplicationIdentityService.ISystemClock"/>.
+    /// The period can be changed by using a specialized <see cref="IApplicationIdentityService.SystemClock"/>.
     /// </para>
     /// </summary>
     PerfectEvent<int> Heartbeat { get; }
