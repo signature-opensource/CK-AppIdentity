@@ -1,36 +1,27 @@
 # CK-AppIdentity
 
-The goal of this library is to provide a minimal model of an application and its peers
-and to support extensibility thanks to simple "features" that can be associated to the
-identity objects AND to minimize the "configuration mess".
+[![Licence](https://img.shields.io/github/license/signature-opensource/CK-AppIdentity.svg)](LICENSE)
 
-Application identity may be the only aspect that requires an explicit configuration.
-Any other aspects can have a default behavior, but the remote parties with whom an application
-interacts and how they interact can hardly exist without configuration.
+A minimal model of an application and its peers, extensible through "features" attached to the identity
+objects, designed to minimize the configuration mess.
 
-The initial objects are defined by a standard [.NET configuration](https://learn.microsoft.com/en-us/dotnet/core/extensions/configuration)
-that is locked and cannot be changed during the application lifetime. Configured objects are immutable
-but one can dynamically define new objects and destroy dynamically defined objects. CK.AppIdentity
-relies on [CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/master/CK.Configuration/README.md)
-to handle .NET configurations objects.
+Application identity may be the only aspect that requires an explicit configuration. Any other aspect
+can have a default behavior, but the remote parties an application interacts with, and how it interacts
+with them, can hardly exist without configuration.
 
-## CK.AppIdentity
-Contains the core objects:
-- AppIdentityService is the root type. It is a singleton service that carries the 
-  application identity and the remote parties.
-- The [ApplicationIdentityFeatureDriver](CK.AppIdentity/Features/ApplicationIdentityFeatureDriver.cs) is the base class
-  to implement in order to manage features on the Application identity objects.
+| Package | Description | Latest stable |
+|---------|-------------|---------------|
+| [CK.AppIdentity.Configuration](CK.AppIdentity.Configuration/README.md) | What you write in `appsettings.json`, and the immutable objects it is analyzed into. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.Configuration.svg?label=CK.AppIdentity.Configuration)](https://www.nuget.org/packages/CK.AppIdentity.Configuration/) |
+| [CK.AppIdentity.Abstractions](CK.AppIdentity.Abstractions/README.md) | The running model: `IParty` and its four specializations, and the `IFileStore` every party gets. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.Abstractions.svg?label=CK.AppIdentity.Abstractions)](https://www.nuget.org/packages/CK.AppIdentity.Abstractions/) |
+| [CK.AppIdentity](CK.AppIdentity/README.md) | The implementation: the hosted `ApplicationIdentityService`, the party lifetime, and the feature drivers. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.svg?label=CK.AppIdentity)](https://www.nuget.org/packages/CK.AppIdentity/) |
+| [CK.AppIdentity.Hosting](CK.AppIdentity.Hosting/README.md) | One extension method that reads the `"CK-AppIdentity"` section and initializes `CoreApplicationIdentity`. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.Hosting.svg?label=CK.AppIdentity.Hosting)](https://www.nuget.org/packages/CK.AppIdentity.Hosting/) |
 
-To understand this package, please read (in this order):
-1. [Application identity model configuration](CK.AppIdentity/Configuration/README.md) introduces
-   Application Identity through its configuration.
-2. [Application identity model](CK.AppIdentity/Model/README.md) describes the Application Identity
-   objects built from their configurations.
-3. [The Features](CK.AppIdentity/Features/README.md) eventually presents the real meat of identity objects.
+Read them in that order, which is also the dependency order: `CK.AppIdentity.Abstractions` references
+`CK.AppIdentity.Configuration`, not the reverse. The configuration comes first because the model is
+built from it and nothing else - an identity object exists because a configuration section described
+it, or because it was added dynamically at runtime through the same configuration shape.
 
-## CK.AppIdentity.Hosting
-This small library implements initialization of the identity configuration. It provides
-a single extension method to `IHostBuilder` that injects a configured instance of `ApplicationIdentityServiceConfiguration`
-as a singleton service in the DI container and initializes `CK.Core.CoreApplicationIdentity`.
-
-
+The initial objects are locked once the application starts and cannot change during its lifetime. New
+objects can be defined dynamically and destroyed, but what was configured is immutable.
+[CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/master/CK.Configuration/README.md)
+provides the `ImmutableConfigurationSection` that guarantees it.

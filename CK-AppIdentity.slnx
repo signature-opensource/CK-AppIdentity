@@ -8,11 +8,8 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/Solution Items/Doc/">
-    <File Path="Doc/ApplicationIdentityConfiguration.png" />
-    <File Path="Doc/ApplicationIdentityModel.png" />
     <File Path="Doc/CK-AppIdentity.pptx" />
     <File Path="Doc/FeatureDriver.png" />
-    <File Path="Doc/FileStore.png" />
     <File Path="Doc/PartyFeature.png" />
   </Folder>
   <Folder Name="/Tests/">

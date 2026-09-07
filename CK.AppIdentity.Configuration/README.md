@@ -291,7 +291,57 @@ strict mode can be set back to true.
 ### The Configuration model
 A `ImmutableConfigurationSection` successfully analyzed results in muliple objects described below:
 
-![Configuration objects class diagram](../Doc/ApplicationIdentityConfiguration.png)
+```mermaid
+classDiagram
+    class ApplicationIdentityConfiguration {
+        +ImmutableConfigurationSection Configuration
+        +AssemblyConfiguration AssemblyConfiguration
+        +IReadOnlySet~string~ AllowFeatures
+        +IReadOnlySet~string~ DisallowFeatures
+        +IsAllowedFeature(string, bool) bool
+    }
+    class ApplicationIdentityPartyConfiguration {
+        +string DomainName
+        +string PartyName
+        +string EnvironmentName
+        +NormalizedPath FullName
+        +CreateDynamicRemoteConfiguration(...) ProcessedConfiguration?
+    }
+    class ApplicationIdentityServiceConfiguration {
+        +IReadOnlyCollection~RemotePartyConfiguration~ Remotes
+        +IReadOnlyCollection~TenantDomainPartyConfiguration~ TenantDomains
+        +ApplicationIdentityLocalConfiguration LocalConfiguration
+        +bool StrictConfigurationMode
+        +NormalizedPath StoreRootPath
+        +Create(...) ApplicationIdentityServiceConfiguration?
+        +CreateEmpty(...) ApplicationIdentityServiceConfiguration
+    }
+    class TenantDomainPartyConfiguration {
+        +IReadOnlyCollection~RemotePartyConfiguration~ Remotes
+        +ApplicationIdentityLocalConfiguration LocalConfiguration
+    }
+    class RemotePartyConfiguration {
+        +string? Address
+        +bool IsExternalParty
+    }
+    class ApplicationIdentityLocalConfiguration {
+    }
+    ApplicationIdentityConfiguration <|-- ApplicationIdentityPartyConfiguration
+    ApplicationIdentityConfiguration <|-- ApplicationIdentityLocalConfiguration
+    ApplicationIdentityPartyConfiguration <|-- ApplicationIdentityServiceConfiguration
+    ApplicationIdentityPartyConfiguration <|-- TenantDomainPartyConfiguration
+    ApplicationIdentityPartyConfiguration <|-- RemotePartyConfiguration
+    ApplicationIdentityServiceConfiguration o-- RemotePartyConfiguration : Remotes
+    ApplicationIdentityServiceConfiguration o-- TenantDomainPartyConfiguration : TenantDomains
+    TenantDomainPartyConfiguration o-- RemotePartyConfiguration : Remotes
+    ApplicationIdentityServiceConfiguration o-- ApplicationIdentityLocalConfiguration : LocalConfiguration
+    TenantDomainPartyConfiguration o-- ApplicationIdentityLocalConfiguration : LocalConfiguration
+```
+
+Two things the diagram makes plain. `ApplicationIdentityLocalConfiguration` is **not** a party
+configuration - it derives straight from the base, which is why a `"Local"` section carries settings
+and not an identity. And `AllowFeatures` / `DisallowFeatures` / `AssemblyConfiguration` sit on the base
+class, so they exist at every level and are what the inheritance described above actually propagates.
 
 This model shows the 3 main types of identity objects:
 - **ApplicationIdentity** is the root object.
@@ -300,7 +350,7 @@ This model shows the 3 main types of identity objects:
 - All configurations are issued and expose their `ImmutableConfigurationSection` configuration and
   a `AssemblyConfiguration` that captures possible "plugins/dynamic extension" assemblies.
 
-Based on these configuration objects, the ["runtime" model](../CK.AppIdentity/Model/README.md) is initialized.
+Based on these configuration objects, the ["runtime" model](../CK.AppIdentity.Abstractions/README.md) is initialized.
 
 
 

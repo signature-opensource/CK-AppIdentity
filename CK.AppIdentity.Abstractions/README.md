@@ -1,7 +1,7 @@
 # Application identity model
 
 This 'running" model is built from the immutable `ApplicationIdentityServiceConfiguration` 
-(you should first read the [Application identity model configuration](../Configuration/README.md)
+(you should first read the [Application identity model configuration](../CK.AppIdentity.Configuration/README.md)
 documentation before this one).
 
 The resulting `IApplicationIdentityService` obtained is a "nearly" immutable object: configured Parties
@@ -10,18 +10,96 @@ immutable and, in the case of a `ITenantDomainParty` can also be extended by dyn
 
 ## The model
 
-![Application identity class diagram](../../Doc/ApplicationIdentityModel.png)
+```mermaid
+classDiagram
+    class IParty {
+        <<interface>>
+        +ApplicationIdentityPartyConfiguration Configuration
+        +IApplicationIdentityService ApplicationIdentityService
+        +string DomainName
+        +string PartyName
+        +string EnvironmentName
+        +NormalizedPath FullName
+        +IFileStore SharedFileStore
+        +IEnumerable~object~ Features
+        +AddFeature(object feature)
+        +GetFeature~T~() T
+        +GetRequiredFeature~T~() T
+    }
+    class IOwnedParty {
+        <<interface>>
+        +ILocalParty Owner
+        +bool IsDynamic
+        +bool IsDestroyed
+        +SetDestroyed() bool
+        +DestroyAsync() Task
+    }
+    class ILocalParty {
+        <<interface>>
+        +ApplicationIdentityLocalConfiguration LocalConfiguration
+        +IFileStore LocalFileStore
+        +IReadOnlyCollection~IRemoteParty~ Remotes
+        +PerfectEvent~IRemoteParty~ RemotesChanged
+        +AddRemoteAsync(...) Task
+        +AddMultipleRemotesAsync(...) Task
+    }
+    class IRemoteParty {
+        <<interface>>
+        +RemotePartyConfiguration Configuration
+        +string? Address
+        +bool IsExternalParty
+    }
+    class ITenantDomainParty {
+        <<interface>>
+        +TenantDomainPartyConfiguration Configuration
+        +IApplicationIdentityService Owner
+    }
+    class IApplicationIdentityService {
+        <<interface>>
+        +ApplicationIdentityServiceConfiguration Configuration
+        +IReadOnlyCollection~ITenantDomainParty~ TenantDomains
+        +IEnumerable~IOwnedParty~ Parties
+        +IEnumerable~IRemoteParty~ AllRemotes
+        +IEnumerable~IOwnedParty~ AllParties
+        +Task InitializationTask
+        +ISystemClock SystemClock
+        +PerfectEvent~int~ Heartbeat
+        +PerfectEvent~IOwnedParty~ AllPartyChanged
+        +AddPartiesAsync(...) Task
+        +AddTenantDomainAsync(...) Task
+    }
+    class IFileStore {
+        <<interface>>
+        +NormalizedPath FolderPath
+        +NormalizedPath TrashBinPath
+        +TryTrash(...) bool
+    }
+    IParty <|-- IOwnedParty
+    IParty <|-- ILocalParty
+    IOwnedParty <|-- IRemoteParty
+    IOwnedParty <|-- ITenantDomainParty
+    ILocalParty <|-- ITenantDomainParty
+    ILocalParty <|-- IApplicationIdentityService
+    IParty o-- IFileStore : SharedFileStore
+    ILocalParty o-- IFileStore : LocalFileStore
+    ILocalParty o-- IRemoteParty : Remotes
+    IApplicationIdentityService o-- ITenantDomainParty : TenantDomains
+```
+
+`ITenantDomainParty` is the only type that is both owned and local: it belongs to the service **and**
+holds remotes of its own. `IApplicationIdentityService` is local but owned by nobody, and it is an
+`ISingletonAutoService`, so it is resolved rather than constructed.
 
 This model is "totally typed", there is no need for any property to be cast into a more precise
 type (this is why the 3 fundamental objects that are `IRemoteParty`, `ITenantDomainParty`
 and `IApplicationIdentityService` all expose their respective `RemotePartyConfiguration`,
 `TenantDomainPartyConfiguration` and `ApplicationIdentityServiceConfiguration` Configuration property.
 
-The implementation is totally thread safe. A micro agent (the [`AppIdentityAgent`](../AppIdentityAgent.cs))
+The implementation is totally thread safe. A micro agent (the [`AppIdentityAgent`](../CK.AppIdentity/AppIdentityAgent.cs))
 handles the initialization, dynamic parties lifetime, setup and teardown of the features, and disposal
 of the whole identity service.
 
-__Note:__ The abstract base [`MicroAgent`](../MicroAgent.cs) is publicly exposed as it can be reused
+__Note:__ The abstract base [`MicroAgent`](../CK.AppIdentity/MicroAgent.cs) is publicly exposed as it can be reused
 by (complex) feature implementations if needed.
 
 ## The FileStore
@@ -43,7 +121,7 @@ And this is perfectly deliberate! It may seem surprising, but this choice allows
   application recycling and other artifacts). It doesn't matter how it's positioned on the file system: host (exe) applications
   can be moved freely.
 - The ability to move Tenants between different hosts, whether they're on the same machine or transferred to another host: all
-  application data for a local Tenant must be stored in its LocalFileStrore.
+  application data for a local Tenant must be stored in its LocalFileStore.
 
 This requires applications using CK-AppIdentity to use this directory as the root of all their "application data".
 
@@ -54,7 +132,7 @@ Typically, this is where you'll find a Remote's public keys.
 If different local applications (different processes) interact with the same remote, then the work of obtaining public keys
 will be "mutualized": this directory is a cache that **can be updated by any of the local applications** as they interact with it.
 
-Each LocalParty exposes a **LocalFileStrore**: this space is dedicated to information that is (and should be) of interest only to
+Each LocalParty exposes a **LocalFileStore**: this space is dedicated to information that is (and should be) of interest only to
 the local Party. 
 
 In theory, it doesn't matter how these directories are structured on the file system (hash codes could be used, for example).
@@ -65,7 +143,17 @@ by the $PartyName: this directory is the **SharedFileStore**.
 The **LocalFileStore** is inside the **SharedFileStore** of the Party: it is the "*-Local*" folder. This results in a rather readable structure.
 Here's a very simple example (from a unit test, which explains why we're not in %LOCALAPPDATA%) with two Parties in the same "Test" domain.
 
-![A Test FolderStore](../../Doc/FileStore.png)
+```
+TestStore/
+└── #Dev/                                                 <- the environment is the first level
+    └── Test/                                             <- then the Domain and its path
+        ├── $Listener/                                    <- SharedFileStore of Test/$Listener
+        │   ├── -Local/                                   <- its LocalFileStore
+        │   │   └── Keys/
+        │   └── Identity.2024-02-19 12h18.04.3929728.public
+        └── $Sender/                                      <- SharedFileStore of Test/$Sender
+            └── -Local/
+```
 
 The presence of "-Local" in the 2 Party directories indicates that they both run on the same machine. The ".public" file is the
 public key of the Party "$Listener" (this comes from the CK.AppIdentity.KeyManagement feature).
@@ -77,5 +165,5 @@ structure" on which the "Features" come into play. Features can decorate any of 
 the actual functionalities like managing the Key store of a Remote party, exposing the Google API of
 a Google external Remote, etc.
 
-Features are described [here](../Features/README.md).
+Features are described [here](../CK.AppIdentity/Features/README.md).
 
