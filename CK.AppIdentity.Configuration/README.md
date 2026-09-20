@@ -83,7 +83,7 @@ we just need to declare the new OneCS remote on the SigBox.
 _Notes:_
 - From now on, we don't show the LogTower configuration. This is the same for every party
   (if we want to target the same LogTower).
-- We also don’t specify the EnvironementName anymore. This defaults to the IHostEnvironment.EnvironementName
+- We also don’t specify the EnvironmentName anymore. This defaults to the IHostEnvironment.EnvironementName
   (that defaults to "#Dev")
 
 The name of this new Party is the same as the DomainName: **"AcmeCorp/$AcmeCorp"**.
@@ -185,7 +185,7 @@ The simplest TenantDomain definition is:
   "FullName": "AcmeCorp/$AcmeCorp"
 }
 ```
-It is initially empty but dynamic remotes can be programatically added to it.
+It is initially empty but dynamic remotes can be programmatically added to it.
 
 Because each Tenant has its own dedicated configuration space, it can contain configuration keys that can apply (by
 "inheritance") to its Remotes (and only to its Remotes).
@@ -289,7 +289,7 @@ strict mode can be set back to true.
 
 
 ### The Configuration model
-A `ImmutableConfigurationSection` successfully analyzed results in muliple objects described below:
+A `ImmutableConfigurationSection` successfully analyzed results in multiple objects described below:
 
 ```mermaid
 classDiagram
