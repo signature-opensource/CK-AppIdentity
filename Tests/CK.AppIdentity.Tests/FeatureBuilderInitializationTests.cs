@@ -1,13 +1,17 @@
 using CK.Core;
-using Shouldly;
+using CK.Monitoring;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Testing.Platform.Configurations;
 using NUnit.Framework;
+using Shouldly;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using static CK.Core.ActivityMonitor;
 using static CK.Testing.MonitorTestHelper;
 
 namespace CK.AppIdentity.Tests;
@@ -247,4 +251,78 @@ public class FeatureBuilderInitializationTests
         await identityService.DisposeAsync();
         CheckOrderFeatureDriver._teardownCount.ShouldBe( 7 );
     }
+
+    [Test]
+    [CancelAfter( 1000 )]
+    public async Task duplicate_feature_builders_registration_error_detection_Async( CancellationToken cancellation )
+    {
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" ).ShouldNotBeNull();
+        var services = new ServiceCollection();
+        services.AddSingleton( c );
+        services.AddSingleton<ApplicationIdentityService>();
+        services.AddSingleton( typeof( F1FeatureDriver ) );
+        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( F1FeatureDriver ) ) );
+        await Should.NotThrowAsync( () =>
+        {
+            var sp = services.BuildServiceProvider();
+            var s = sp.GetRequiredService<ApplicationIdentityService>();
+            _ = ((IHostedService)s).StartAsync( cancellation );
+            return s.InitializationTask.WaitAsync( cancellation );
+        } );
+
+        services.AddSingleton( typeof( F1FeatureDriver ) );
+        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( F1FeatureDriver ) ) );
+
+        using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
+        {
+            await Should.ThrowAsync<Exception>( () =>
+            {
+                var sp = services.BuildServiceProvider();
+                var s = sp.GetRequiredService<ApplicationIdentityService>();
+                _ = ((IHostedService)s).StartAsync( cancellation );
+                return s.InitializationTask.WaitAsync( cancellation );
+            } );
+            logs.ExtractCurrentTexts().ShouldContain( """
+                Found duplicated service registration for: 'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.F1FeatureDriver' (2 registrations).
+                AppIdentityFeatureBuilder are singletons, they must be registered only once. If you cannot find the duplicate site(s),
+                use the (unfortunately costly) TryAddSingleton instead of AddSingleton registration. 
+                """ );
+        }
+    }
+
+
+    class Alien : IApplicationIdentityFeatureDriver
+    {
+        public string FeatureName => "NoWay";
+
+        public bool IsRootAllowed => false;
+    }
+
+    [Test]
+    [CancelAfter( 1000 )]
+    public async Task alien_implementation_feature_builders_registration_error_detection_Async( CancellationToken cancellation )
+    {
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" ).ShouldNotBeNull();
+        var services = new ServiceCollection();
+        services.AddSingleton( c );
+        services.AddSingleton<ApplicationIdentityService>();
+        services.AddSingleton( typeof( Alien ) );
+        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( Alien ) ) );
+
+        using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
+        {
+            await Should.ThrowAsync<Exception>( () =>
+            {
+                var sp = services.BuildServiceProvider();
+                var s = sp.GetRequiredService<ApplicationIdentityService>();
+                _ = ((IHostedService)s).StartAsync( cancellation );
+                return s.InitializationTask.WaitAsync( cancellation );
+            } );
+            logs.ExtractCurrentTexts().ShouldContain( """
+                IAppIdentityFeatureBuilder type 'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.Alien' must inherit from CK.AppIdentity.ApplicationIdentityFeatureDriver base class.
+                """ );
+        }
+
+    }
+
 }

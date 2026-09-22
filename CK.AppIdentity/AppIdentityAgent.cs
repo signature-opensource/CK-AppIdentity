@@ -65,12 +65,28 @@ public sealed class AppIdentityAgent : MicroAgent
         }
         else
         {
-            int count = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Count();
-            if( count != _service._builders.Count )
+            var drivers = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().ToList();
+            Throw.CheckState( "There cannot be less IApplicationIdentityFeatureDriver service registrations than base AppIdentityFeatureBuilder ctor calls.",
+                              drivers.Count >= _service._builders.Count );
+            // But there can be more for 2 different reasons:
+            //  - Multiple manual registrations (when CK AutoDI is not used) can lead to duplicated singleton type (because AddSingleton
+            //    has been instead of TryAddSingleton).
+            //  - IApplicationIdentityFeatureDriver NOT implemented by the AppIdentityFeatureBuilder base class.
+            if( drivers.Count > _service._builders.Count )
             {
-                var missing = _serviceProvider.GetServices<IApplicationIdentityFeatureDriver>().Except( _service._builders ).Select( b => b.GetType() );
-                monitor.Error( $"Found {count} AppIdentityFeatureBuilder but only {_service._builders.Count} have registered themselves." +
-                                $" Missing registration for: {missing.Select( t => t.ToCSharpName() ).Concatenate()}." );
+                var aliens = drivers.RemoveWhereAndReturnsRemoved( s => s is not ApplicationIdentityFeatureDriver ).ToList();
+                if( aliens.Count > 0 )
+                {
+                    monitor.Error( $"IAppIdentityFeatureBuilder type '{aliens.Select( s => s.GetType().ToCSharpName() ).Concatenate( "', '")}' must inherit from CK.AppIdentity.ApplicationIdentityFeatureDriver base class." );
+                    return false;
+                }
+                var duplicates = drivers.GroupBy( Util.FuncIdentity ).Where( g => g.Count() >= 2 ).ToList();
+
+                monitor.Error( $"""
+                    Found duplicated service registration for: {duplicates.Select( g => $"'{g.Key.GetType().ToCSharpName()}' ({g.Count()} registrations)" ).Concatenate()}.
+                    AppIdentityFeatureBuilder are singletons, they must be registered only once. If you cannot find the duplicate site(s),
+                    use the (unfortunately costly) TryAddSingleton instead of AddSingleton registration. 
+                    """ );
                 return false;
             }
         }
