@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CK.PerfectEvent" Version="27.0.6" />
+        <PackageReference Include="CK.PerfectEvent" Version="28.0.0--ci.1" />
     </ItemGroup>
 
     <ItemGroup>
