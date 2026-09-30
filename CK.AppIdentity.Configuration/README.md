@@ -297,52 +297,7 @@ strict mode can be set back to true.
 ### The Configuration model
 A `ImmutableConfigurationSection` successfully analyzed results in multiple objects described below:
 
-```mermaid
-classDiagram
-    class ApplicationIdentityConfiguration {
-        +ImmutableConfigurationSection Configuration
-        +AssemblyConfiguration AssemblyConfiguration
-        +IReadOnlySet~string~ AllowFeatures
-        +IReadOnlySet~string~ DisallowFeatures
-        +IsAllowedFeature(string, bool) bool
-    }
-    class ApplicationIdentityPartyConfiguration {
-        +string DomainName
-        +string PartyName
-        +string EnvironmentName
-        +NormalizedPath FullName
-        +CreateDynamicRemoteConfiguration(...) ProcessedConfiguration?
-    }
-    class ApplicationIdentityServiceConfiguration {
-        +IReadOnlyCollection~RemotePartyConfiguration~ Remotes
-        +IReadOnlyCollection~TenantDomainPartyConfiguration~ TenantDomains
-        +ApplicationIdentityLocalConfiguration LocalConfiguration
-        +bool StrictConfigurationMode
-        +NormalizedPath StoreRootPath
-        +Create(...) ApplicationIdentityServiceConfiguration?
-        +CreateEmpty(...) ApplicationIdentityServiceConfiguration
-    }
-    class TenantDomainPartyConfiguration {
-        +IReadOnlyCollection~RemotePartyConfiguration~ Remotes
-        +ApplicationIdentityLocalConfiguration LocalConfiguration
-    }
-    class RemotePartyConfiguration {
-        +string? Address
-        +bool IsExternalParty
-    }
-    class ApplicationIdentityLocalConfiguration {
-    }
-    ApplicationIdentityConfiguration <|-- ApplicationIdentityPartyConfiguration
-    ApplicationIdentityConfiguration <|-- ApplicationIdentityLocalConfiguration
-    ApplicationIdentityPartyConfiguration <|-- ApplicationIdentityServiceConfiguration
-    ApplicationIdentityPartyConfiguration <|-- TenantDomainPartyConfiguration
-    ApplicationIdentityPartyConfiguration <|-- RemotePartyConfiguration
-    ApplicationIdentityServiceConfiguration o-- RemotePartyConfiguration : Remotes
-    ApplicationIdentityServiceConfiguration o-- TenantDomainPartyConfiguration : TenantDomains
-    TenantDomainPartyConfiguration o-- RemotePartyConfiguration : Remotes
-    ApplicationIdentityServiceConfiguration o-- ApplicationIdentityLocalConfiguration : LocalConfiguration
-    TenantDomainPartyConfiguration o-- ApplicationIdentityLocalConfiguration : LocalConfiguration
-```
+![Application Identity Configuration](docs/ApplicationIdentityConfiguration.png)
 
 Two things the diagram makes plain. `ApplicationIdentityLocalConfiguration` is **not** a party
 configuration - it derives straight from the base, which is why a `"Local"` section carries settings
