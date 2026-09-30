@@ -18,20 +18,23 @@ public sealed partial class ApplicationIdentityService
         /// Gets the heart beat period in milliseconds.
         /// Defaults to 1000 ms (1 second that is the maximum).
         /// Must be between 20 and 1000.
+        /// <para>
+        /// When 0, the <see cref="AppIdentityAgent"/> doesn't allocate any timer.
+        /// </para>
         /// </summary>
-        int HeatBeatPeriod { get; }
+        int HeartBeatPeriod { get; }
     }
 
     sealed class NoSystemClock : ISystemClock
     {
         public DateTime UtcNow => DateTime.UtcNow;
 
-        public int HeatBeatPeriod => 1000;
+        public int HeartBeatPeriod => 1000;
     }
 
     /// <summary>
     /// Gets a default clock directly bound to <see cref="DateTime.UtcNow"/>
-    /// with a 1 second (1000 ms) <see cref="ISystemClock.HeatBeatPeriod"/>.
+    /// with a 1 second (1000 ms) <see cref="ISystemClock.HeartBeatPeriod"/>.
     /// </summary>
     public static readonly ISystemClock DefaultClock = new NoSystemClock();
 }

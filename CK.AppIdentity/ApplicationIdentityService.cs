@@ -44,7 +44,7 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         _builders = new List<ApplicationIdentityFeatureDriver>();
         _initialization = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
         _systemClock = serviceProvider.GetService<ISystemClock>() ?? DefaultClock;
-        _agent = new AppIdentityAgent( this, serviceProvider, _systemClock.HeatBeatPeriod );
+        _agent = new AppIdentityAgent( this, serviceProvider, _systemClock.HeartBeatPeriod );
         _heartbeat = new PerfectEventSender<int>();
         _allPartyChanged = (PerfectEventSender<IOwnedParty>)_remotesChangedBridge.Target;
         _domains = configuration.TenantDomains.Select( c => new TenantDomainParty( c, false, this ) ).ToArray();
