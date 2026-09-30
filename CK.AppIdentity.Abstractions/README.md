@@ -66,6 +66,11 @@ However, we believe that these stores should be easy to understand. In practice,
 "#Prod", etc.) should form the first level. Then, naturally, we exploit the Domain and its potentially hierarchical path, followed
 by the $PartyName: this directory is the **SharedFileStore**.
 
+Because the SharedFileStore path is derived from the Party's FullName, FullNames are unique regardless of the case:
+two Parties whose names differ only by case cannot coexist, so they can never share the same directory on a case
+insensitive file system (typically Windows). Once this is guaranteed, the `IParty.FullName` (a `NormalizedPath`) can
+safely be compared with its ordinal (case sensitive) equality.
+
 The **LocalFileStore** is inside the **SharedFileStore** of the Party: it is the "*-Local*" folder. This results in a rather readable structure.
 Here's a very simple example (from a unit test, which explains why we're not in %LOCALAPPDATA%) with two Parties in the same "Test" domain.
 

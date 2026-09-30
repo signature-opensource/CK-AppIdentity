@@ -45,6 +45,16 @@ public interface IParty
 
     /// <summary>
     /// Gets the full name of this party.
+    /// <para>
+    /// The full name identifies the party: it is unique regardless of the case (<see cref="System.StringComparer.OrdinalIgnoreCase"/>).
+    /// Two parties whose full names differ only by case cannot coexist (this is stricter than
+    /// <see cref="CoreApplicationIdentity"/> that only states that the <see cref="CoreApplicationIdentity.DomainName"/> is case sensitive):
+    /// this notably avoids <see cref="SharedFileStore"/> clashes on case insensitive file systems.
+    /// </para>
+    /// <para>
+    /// Thanks to this, comparing full names with the <see cref="NormalizedPath"/> equality (that uses <see cref="System.StringComparer.Ordinal"/>)
+    /// is safe.
+    /// </para>
     /// </summary>
     NormalizedPath FullName { get; }
 

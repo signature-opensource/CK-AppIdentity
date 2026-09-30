@@ -26,6 +26,12 @@ An application identity is a triple: DomainName, PartyName, EnvironementName tha
 This is a functional but lonely application. Dynamic parties can then be added to it at runtime and
 subsequently destroyed.
 
+The FullName identifies a Party: it must be unique **regardless of the case**. "AcmeCorp/$Trolley1/#Production" and
+"acmecorp/$trolley1/#production" denote the same Party, so a configuration that defines both is invalid, and a dynamic
+party whose name differs only by case from an existing one is rejected. This is stricter than CoreApplicationIdentity
+(which only states that the DomainName is case sensitive) and avoids clashes between the Parties' file stores on
+case insensitive file systems (see [The FileStore](../CK.AppIdentity.Abstractions/README.md#the-filestore)).
+
 In the following examples, Parties are defined statically, in the initial configuration: these are not dynamic
 parties and cannot be destroyed.
 
