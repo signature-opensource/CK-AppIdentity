@@ -45,7 +45,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     }
 
     /// <inheritdoc />
-    public PerfectEvent<IRemoteParty> RemotesChanged => _remotesChanged.PerfectEvent;
+    public PerfectEvent<IRemoteParty> AnyRemoteChanged => _remotesChanged.PerfectEvent;
 
     /// <inheritdoc />
     public IReadOnlyCollection<IRemoteParty> Remotes => _remotes;

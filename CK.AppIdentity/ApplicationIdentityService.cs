@@ -64,7 +64,7 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     public new ApplicationIdentityServiceConfiguration Configuration => Unsafe.As<ApplicationIdentityServiceConfiguration>( _configuration );
 
     /// <inheritdoc />
-    public PerfectEvent<IOwnedParty> AllPartyChanged => _allPartyChanged.PerfectEvent;
+    public PerfectEvent<IOwnedParty> AnyPartyChanged => _allPartyChanged.PerfectEvent;
 
     /// <inheritdoc />
     public IReadOnlyCollection<ITenantDomainParty> TenantDomains => _domains;

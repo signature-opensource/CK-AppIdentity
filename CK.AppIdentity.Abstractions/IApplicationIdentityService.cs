@@ -25,7 +25,7 @@ public interface IApplicationIdentityService : ILocalParty, ISingletonAutoServic
     /// change of the whole identity system.
     /// </para>
     /// </summary>
-    PerfectEvent<IOwnedParty> AllPartyChanged { get; }
+    PerfectEvent<IOwnedParty> AnyPartyChanged { get; }
 
     /// <summary>
     /// Gets the tenant domains that this application hosts.

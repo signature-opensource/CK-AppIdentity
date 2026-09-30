@@ -31,7 +31,7 @@ public class DynamicRemoteTests
         var s = app.Services.GetRequiredService<ApplicationIdentityService>();
 
         var events = new List<string>();
-        s.AllPartyChanged.Sync += ( m, r ) =>
+        s.AnyPartyChanged.Sync += ( m, r ) =>
         {
             bool appear = !r.IsDestroyed;
             string msg;

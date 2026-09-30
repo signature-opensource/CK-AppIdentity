@@ -16,10 +16,11 @@ public interface ILocalParty : IParty
     /// Raised whenever a new party appears or disappears in this <see cref="Remotes"/>.
     /// <para>
     /// By subscribing to this event on the root <see cref="IApplicationIdentityService"/>, one can track any structural
-    /// change of the whole identity system.
+    /// change of the whole identity system except new or destroyed <see cref="ITenantDomainParty"/>: use
+    /// <see cref="IApplicationIdentityService.AnyPartyChanged"/> to track tenant domains.
     /// </para>
     /// </summary>
-    PerfectEvent<IRemoteParty> RemotesChanged { get; }
+    PerfectEvent<IRemoteParty> AnyRemoteChanged { get; }
 
     /// <summary>
     /// Gets the remote parties.

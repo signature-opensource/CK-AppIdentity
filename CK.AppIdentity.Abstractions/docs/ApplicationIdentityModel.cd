@@ -18,7 +18,7 @@
       </Path>
     </InheritanceLine>
     <TypeIdentifier>
-      <HashCode>AQAAAAAAAgAAAAAAAAQABAAAAAAAAAAAAAACAgAAAAA=</HashCode>
+      <HashCode>AAAAAIAAAgAAAAAAAAQABAAAAAAAAAAAAAACAgAAAAA=</HashCode>
       <FileName>ILocalParty.cs</FileName>
     </TypeIdentifier>
   </Interface>
@@ -39,6 +39,11 @@
         <Point X="1.25" Y="4.75" />
       </Path>
     </InheritanceLine>
+    <AssociationLine Name="Owner" Type="CK.AppIdentity.ILocalParty">
+      <MemberNameLabel ManuallyPlaced="true">
+        <Position X="1.51" Y="0.068" />
+      </MemberNameLabel>
+    </AssociationLine>
     <TypeIdentifier>
       <HashCode>ACAABACAAAAAAAAQAAAAAIAAAAAAAAAAAAAAAAAAAAA=</HashCode>
       <FileName>IOwnedParty.cs</FileName>
@@ -84,7 +89,7 @@
   <Interface Name="CK.AppIdentity.IApplicationIdentityService">
     <Position X="4.25" Y="7.5" Width="2.25" />
     <TypeIdentifier>
-      <HashCode>AAEAAQQAAAAIAAACAAAAAQAABAEAAAAAgCAACAAAAAA=</HashCode>
+      <HashCode>AAEAQAQAAAAIAAACAAAAAQAABAEAAAAAgCAACAAAAAA=</HashCode>
       <FileName>IApplicationIdentityService.cs</FileName>
     </TypeIdentifier>
   </Interface>

@@ -26,7 +26,7 @@ public interface IOwnedParty : IParty
     bool IsDynamic { get; }
 
     /// <summary>
-    /// Gets whether this remote has been removed from the root <see cref="IApplicationIdentityService"/>.
+    /// Gets whether this remote has been destroyed.
     /// </summary>
     bool IsDestroyed { get; }
 
