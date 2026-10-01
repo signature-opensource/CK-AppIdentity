@@ -35,7 +35,10 @@ public interface IFileStore
     /// <summary>
     /// Gets the trash bin path.
     /// <para>
-    /// Trashed files are currently kept forever: the trash bin housekeeping is not implemented yet.
+    /// Trashed files are deleted once they are older than <see cref="ApplicationIdentityServiceConfiguration.TrashBinRetention"/>
+    /// (7 days by default): the trash bins are purged when the service starts, every 6 hours, when it shuts down and when
+    /// a party is destroyed. A trashed file is named with its UTC trash time ("yyyyMMddTHHmmssZ-guid.ext") and a ".binInfo"
+    /// file beside it contains its original path (relative to <see cref="FolderPath"/>).
     /// </para>
     /// </summary>
     NormalizedPath TrashBinPath { get; }
@@ -43,6 +46,9 @@ public interface IFileStore
     /// <summary>
     /// Tries to move a file that must be in <see cref="FolderPath"/> to the <see cref="TrashBinPath"/>.
     /// This returns true (no error) if the file doesn't exist.
+    /// <para>
+    /// Secrets (private keys, passwords, etc.) should not be kept in a trash bin: use <paramref name="immediateDelete"/>.
+    /// </para>
     /// <para>
     /// The <paramref name="fullPath"/> must follow the path rules of the store (see <see cref="IFileStore"/>),
     /// otherwise an <see cref="ArgumentException"/> is thrown.

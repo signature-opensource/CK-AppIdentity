@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 
@@ -25,6 +26,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     readonly StoreFileSystem _storeFileSystem;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly bool _strictMode;
+    TimeSpan _trashBinRetention = DefaultTrashBinRetention;
     // A string (not a NormalizedPath struct) so that it is read and written atomically.
     static string? _defaultStoreRootPath;
     static readonly object _defaultStoreRootPathLock = new object();
@@ -126,6 +128,24 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     public bool IsPrivateStore => _storeFileSystem.IsPrivate;
 
     internal StoreFileSystem StoreFileSystem => _storeFileSystem;
+
+    /// <summary>
+    /// The default <see cref="TrashBinRetention"/> is 7 days.
+    /// </summary>
+    public static readonly TimeSpan DefaultTrashBinRetention = TimeSpan.FromDays( 7 );
+
+    /// <summary>
+    /// Gets how long trashed files (see <c>IFileStore.TryTrash</c>) are kept in the trash bins.
+    /// Defaults to <see cref="DefaultTrashBinRetention"/> (7 days). It is configured by "TrashBinRetention"
+    /// (a <see cref="TimeSpan"/> like "7.00:00:00" or "12:00:00"); 0 deletes the trashed files at the next purge.
+    /// <para>
+    /// The trash bins are purged when the service starts, every 6 hours, when it shuts down and when a party is destroyed.
+    /// </para>
+    /// <para>
+    /// The trash bins may contain trashed trust anchors or keys: this should be kept short.
+    /// </para>
+    /// </summary>
+    public TimeSpan TrashBinRetention => _trashBinRetention;
 
     /// <summary>
     /// Gets or sets the default store path that is by default "<see cref="Environment.SpecialFolder.LocalApplicationData"/>/CK-AppIdentity".
@@ -345,6 +365,15 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var store = HandleStorePath( monitor, configuration );
         success &= store != null;
 
+        var trashBinRetention = DefaultTrashBinRetention;
+        var sRetention = root[nameof( TrashBinRetention )];
+        if( sRetention != null
+            && (!TimeSpan.TryParse( sRetention, CultureInfo.InvariantCulture, out trashBinRetention ) || trashBinRetention < TimeSpan.Zero) )
+        {
+            monitor.Error( $"Invalid '{root.Path}:{nameof( TrashBinRetention )}': '{sRetention}' must be a positive TimeSpan (like \"7.00:00:00\" for 7 days)." );
+            success = false;
+        }
+
         // Success may become false if something fails in the local configuration.
         var localConfig = CreateLocalConfiguration( monitor, root, ref props, ref success );
 
@@ -354,7 +383,10 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             monitor.CloseGroup( "Failed." );
             return null;
         }
-        return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, localConfig, strictMode, store!, ref parties, ref props );
+        return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, localConfig, strictMode, store!, ref parties, ref props )
+        {
+            _trashBinRetention = trashBinRetention
+        };
 
         static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
         {

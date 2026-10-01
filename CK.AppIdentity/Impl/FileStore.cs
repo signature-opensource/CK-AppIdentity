@@ -1,5 +1,6 @@
 using CK.Core;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,12 +43,14 @@ sealed class FileStore : IFileStore
         CheckPath( fullPath, allowFolderPath: false );
         if( !File.Exists( fullPath ) ) return true;
         if( immediateDelete ) return TryDelete( logger, fullPath );
-        var targetPath = $"{_binPath.Path}/{Guid.NewGuid()}{Path.GetExtension( fullPath.Path )}";
+        // The trash time is in the name: the moved file keeps its last write time and the .binInfo
+        // may be missing (crash between the move and its write).
+        var targetPath = $"{_binPath.Path}/{DateTime.UtcNow.ToString( TrashTimeFormat, CultureInfo.InvariantCulture )}-{Guid.NewGuid():N}{Path.GetExtension( fullPath.Path )}";
         try
         {
             _fileSystem.CreateDirectory( _binPath );
             File.Move( fullPath, targetPath );
-            using var info = new StreamWriter( _fileSystem.OpenWrite( targetPath + ".binInfo", FileMode.Create, FileShare.None, FileOptions.None ) );
+            using var info = new StreamWriter( _fileSystem.OpenWrite( targetPath + BinInfoExtension, FileMode.Create, FileShare.None, FileOptions.None ) );
             info.Write( fullPath.RemovePrefix( _folderPath ) );
             return true;
         }
@@ -183,9 +186,78 @@ sealed class FileStore : IFileStore
         }
     }
 
-    internal void OnShutdownOrDestroyed( IActivityMonitor monitor, bool isDestroyed )
+    const string TrashTimeFormat = "yyyyMMdd'T'HHmmss'Z'";
+    const string BinInfoExtension = ".binInfo";
+
+    /// <summary>
+    /// Deletes the trashed files that have been trashed before <paramref name="olderThanUtc"/> and the orphan
+    /// .binInfo files. This never throws: errors are logged as warnings. Deleting is idempotent: concurrent
+    /// purges of the same (shared) trash bin are harmless.
+    /// </summary>
+    /// <param name="logger">The logger to use.</param>
+    /// <param name="olderThanUtc">The trash time limit.</param>
+    /// <returns>The number of deleted trashed files.</returns>
+    internal int PurgeTrashBin( IActivityLineEmitter logger, DateTime olderThanUtc )
     {
-        // TODO: $TrashBin housekeeping.
+        int count = 0;
+        try
+        {
+            if( !Directory.Exists( _binPath ) ) return 0;
+            foreach( var f in Directory.EnumerateFiles( _binPath ) )
+            {
+                if( f.EndsWith( BinInfoExtension, StringComparison.Ordinal ) )
+                {
+                    // Orphan .binInfo: its trashed file has been deleted.
+                    if( !File.Exists( f.Substring( 0, f.Length - BinInfoExtension.Length ) ) ) TryDeleteTrash( logger, f );
+                    continue;
+                }
+                if( GetTrashTimeUtc( f ) < olderThanUtc && TryDeleteTrash( logger, f ) )
+                {
+                    ++count;
+                    TryDeleteTrash( logger, f + BinInfoExtension );
+                }
+            }
+        }
+        catch( Exception ex )
+        {
+            logger.Warn( $"While purging trash bin '{_binPath}'.", ex );
+        }
+        return count;
+
+        static DateTime GetTrashTimeUtc( string path )
+        {
+            var name = Path.GetFileName( path.AsSpan() );
+            if( name.Length > TrashTimeLength
+                && name[TrashTimeLength] == '-'
+                && DateTime.TryParseExact( name.Slice( 0, TrashTimeLength ),
+                                           TrashTimeFormat,
+                                           CultureInfo.InvariantCulture,
+                                           DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                                           out var trashTime ) )
+            {
+                return trashTime;
+            }
+            // Files trashed before the trash time was in the name: the .binInfo is written when the file is trashed.
+            var binInfo = path + BinInfoExtension;
+            return File.GetLastWriteTimeUtc( File.Exists( binInfo ) ? binInfo : path );
+        }
+
+        static bool TryDeleteTrash( IActivityLineEmitter logger, string path )
+        {
+            try
+            {
+                File.Delete( path );
+                return true;
+            }
+            catch( Exception ex )
+            {
+                logger.Warn( $"Unable to delete trashed file '{path}'.", ex );
+                return false;
+            }
+        }
     }
+
+    // "yyyyMMddTHHmmssZ".
+    const int TrashTimeLength = 16;
 
 }

@@ -18,6 +18,9 @@ public sealed class AppIdentityAgent : MicroAgent
 {
     readonly ApplicationIdentityService _service;
     readonly IServiceProvider _serviceProvider;
+    // The trash bins are purged at start and then regularly (from the heartbeat).
+    static readonly TimeSpan _trashPurgePeriod = TimeSpan.FromHours( 6 );
+    DateTime _nextTrashPurgeUtc;
 
     internal AppIdentityAgent( ApplicationIdentityService service, IServiceProvider serviceProvider, int heartBeatPeriod )
         : base( $"ApplicationIdentityService Agent for '{service}'", heartBeatPeriod )
@@ -150,12 +153,27 @@ public sealed class AppIdentityAgent : MicroAgent
             {
                 error = ex;
             }
+            // The trash bins are purged once the features are set up: setup errors are not related.
+            PurgeTrashBins( monitor );
             if( error == null ) _service._initialization.TrySetResult();
             else
             {
                 _service._initialization.TrySetException( error );
                 monitor.CloseGroup( "Failed." );
             }
+        }
+    }
+
+    void PurgeTrashBins( IActivityMonitor monitor )
+    {
+        _nextTrashPurgeUtc = DateTime.UtcNow + _trashPurgePeriod;
+        try
+        {
+            _service.PurgeAllTrashBins( monitor );
+        }
+        catch( Exception ex )
+        {
+            monitor.Warn( "While purging the trash bins.", ex );
         }
     }
 
@@ -179,6 +197,7 @@ public sealed class AppIdentityAgent : MicroAgent
     /// <returns>The awaitable.</returns>
     protected override Task OnHeartbeatAsync( IActivityMonitor monitor, int callCount )
     {
+        if( DateTime.UtcNow >= _nextTrashPurgeUtc ) PurgeTrashBins( monitor );
         // Not using SafeRaiseAsync: exceptions are caught by the MicroAgent.
         return _service._heartbeat.RaiseAsync( monitor, callCount );
     }

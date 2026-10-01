@@ -60,6 +60,27 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
 
     internal AppIdentityAgent Agent => _agent;
 
+    /// <summary>
+    /// Gets the trash time before which trashed files are deleted.
+    /// The trash time is the actual time (the file system's one), not the <see cref="SystemClock"/>.
+    /// </summary>
+    internal DateTime TrashBinLimitUtc => DateTime.UtcNow - Configuration.TrashBinRetention;
+
+    /// <summary>
+    /// Purges the trash bins of all the parties (including this root one).
+    /// </summary>
+    /// <param name="monitor">The agent's monitor.</param>
+    internal void PurgeAllTrashBins( IActivityMonitor monitor )
+    {
+        var limit = TrashBinLimitUtc;
+        int count = PurgeTrashBins( monitor, limit );
+        foreach( var p in AllParties )
+        {
+            count += Unsafe.As<ApplicationIdentityParty>( p ).PurgeTrashBins( monitor, limit );
+        }
+        if( count > 0 ) monitor.Info( $"{count} trashed files older than {Configuration.TrashBinRetention} have been deleted." );
+    }
+
     /// <inheritdoc />
     public new ApplicationIdentityServiceConfiguration Configuration => Unsafe.As<ApplicationIdentityServiceConfiguration>( _configuration );
 

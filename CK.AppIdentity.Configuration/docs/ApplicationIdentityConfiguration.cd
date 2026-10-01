@@ -10,24 +10,19 @@
       <Field Name="_storeFileSystem" Hidden="true" />
       <Field Name="_strictMode" Hidden="true" />
       <Field Name="_tenants" Hidden="true" />
+      <Field Name="_trashBinRetention" Hidden="true" />
       <Method Name="ApplicationIdentityServiceConfiguration" Hidden="true" />
       <Method Name="CreateLocalConfiguration" Hidden="true" />
       <Method Name="CreateParties" Hidden="true" />
+      <Field Name="DefaultRootDomainName" Hidden="true" />
+      <Field Name="DefaultTrashBinRetention" Hidden="true" />
       <Method Name="ReadParties" Hidden="true" />
       <Property Name="StoreFileSystem" Hidden="true" />
     </Members>
-    <NestedTypes>
-      <Class Name="CK.AppIdentity.ApplicationIdentityServiceConfiguration.WarnTracker" Collapsed="true">
-        <TypeIdentifier>
-          <NewMemberFileName>Configuration\ApplicationIdentityServiceConfiguration.cs</NewMemberFileName>
-        </TypeIdentifier>
-        <Lollipop Position="0.2" />
-      </Class>
-    </NestedTypes>
     <AssociationLine Name="Remotes" Type="CK.AppIdentity.RemotePartyConfiguration" FixedFromPoint="true" FixedToPoint="true">
       <Path>
-        <Point X="3.5" Y="7.688" />
-        <Point X="7.062" Y="7.688" />
+        <Point X="3.5" Y="7.75" />
+        <Point X="7.062" Y="7.75" />
         <Point X="7.062" Y="6.675" />
       </Path>
       <MemberNameLabel ManuallyPlaced="true" ManuallySized="true">
@@ -36,16 +31,16 @@
     </AssociationLine>
     <AssociationLine Name="TenantDomains" Type="CK.AppIdentity.TenantDomainPartyConfiguration" FixedFromPoint="true" FixedToPoint="true">
       <Path>
-        <Point X="3.5" Y="6.75" />
-        <Point X="4.471" Y="6.75" />
+        <Point X="3.5" Y="6.812" />
+        <Point X="4.471" Y="6.812" />
         <Point X="4.471" Y="6.483" />
       </Path>
       <MemberNameLabel ManuallyPlaced="true" ManuallySized="true">
-        <Position X="-0.331" Y="0.352" Height="0.182" Width="1.229" />
+        <Position X="-0.298" Y="0.385" Height="0.182" Width="1.229" />
       </MemberNameLabel>
     </AssociationLine>
     <TypeIdentifier>
-      <HashCode>BAoQAIGAAgQACgAAAAAABAAABARAAUAAEAIAABAAAAA=</HashCode>
+      <HashCode>BAoQAIGAAgQADgAAAAAEBAAABARAAUAAECIAEBAAAAA=</HashCode>
       <FileName>ApplicationIdentityServiceConfiguration.cs</FileName>
     </TypeIdentifier>
     <ShowAsCollectionAssociation>
@@ -133,6 +128,7 @@
       <Field Name="_partyName" Hidden="true" />
       <Method Name="ApplicationIdentityPartyConfiguration" Hidden="true" />
       <Method Name="CreateDynamicRemoteConfiguration" Hidden="true" />
+      <Field Name="ExternalDomainName" Hidden="true" />
       <Method Name="ReadNames" Hidden="true" />
       <Method Name="ToString" Hidden="true" />
     </Members>
@@ -144,7 +140,7 @@
       </Enum>
     </NestedTypes>
     <TypeIdentifier>
-      <HashCode>AAAgIAAAAAAAEIAEAAAgAAIIAAAAAAQAAAiBAAgAAAA=</HashCode>
+      <HashCode>AAAgIBAAAAAAEIAEAAAgAAIIAAAAAAQAAAiBAAgAAAA=</HashCode>
       <FileName>ApplicationIdentityPartyConfiguration.cs</FileName>
     </TypeIdentifier>
   </Class>

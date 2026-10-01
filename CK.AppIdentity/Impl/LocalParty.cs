@@ -127,6 +127,11 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
 
     internal PerfectEventSender<IRemoteParty> RemotesChangedSender => _remotesChanged;
 
+    internal override int PurgeTrashBins( IActivityLineEmitter logger, DateTime olderThanUtc )
+    {
+        return base.PurgeTrashBins( logger, olderThanUtc ) + _privateStore.PurgeTrashBin( logger, olderThanUtc );
+    }
+
     internal async Task OnDestroyedRemoteAsync( IActivityMonitor monitor, RemoteParty p )
     {
         Util.InterlockedRemove( ref _remotes, p );
@@ -145,7 +150,6 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     internal override async ValueTask OnShutdownOrDestroyedAsync( IActivityMonitor monitor, bool isDestroyed )
     {
         await base.OnShutdownOrDestroyedAsync( monitor, isDestroyed ).ConfigureAwait( false );
-        _privateStore.OnShutdownOrDestroyed( monitor, isDestroyed );
         Throw.DebugAssert( !isDestroyed || _remotes.Length == 0, "The ApplicationIdentityService is never destroyed, only shut down. " +
                                                             "Destroying applies only for the TenantDomainParty and its has already cleared the _remotes list." );
         foreach( var r in _remotes )

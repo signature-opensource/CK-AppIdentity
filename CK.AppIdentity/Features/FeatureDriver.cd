@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <ClassDiagram MajorVersion="1" MinorVersion="1" MembersFormat="FullSignature">
   <Comment CommentText="[IsMultiple]">
-    <Position X="3.382" Y="0.825" Height="0.291" Width="0.858" />
+    <Position X="3.699" Y="0.817" Height="0.291" Width="0.858" />
   </Comment>
   <Class Name="CK.AppIdentity.ApplicationIdentityFeatureDriver">
-    <Position X="0.5" Y="2.25" Width="5.5" />
+    <Position X="0.75" Y="2.5" Width="5.5" />
     <Members>
       <Field Name="_featureName" Hidden="true" />
       <Field Name="_isRootAllowed" Hidden="true" />
@@ -18,11 +18,8 @@
     <Lollipop Position="0.2" />
   </Class>
   <Interface Name="CK.AppIdentity.IApplicationIdentityFeatureDriver">
-    <Position X="2" Y="0.5" Width="2.5" />
-    <TypeIdentifier>
-      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAgAAAAACAAAAAAAAAAAAA=</HashCode>
-      <FileName>Features\IApplicationIdentityFeatureDriver.cs</FileName>
-    </TypeIdentifier>
+    <Position X="2.25" Y="0.5" Width="2.5" />
+    <TypeIdentifier />
   </Interface>
   <Font Name="Segoe UI" Size="9" />
 </ClassDiagram>

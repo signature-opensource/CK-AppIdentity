@@ -81,9 +81,19 @@ public abstract class ApplicationIdentityParty : IParty
     /// <param name="isDestroyed">This party is being destroyed.</param>
     internal virtual ValueTask OnShutdownOrDestroyedAsync( IActivityMonitor monitor, bool isDestroyed )
     {
-        _sharedStore.OnShutdownOrDestroyed( monitor, isDestroyed );
+        // The trash bins are purged with the retention, even when this party is destroyed: its folder is
+        // shared by the applications that use the same store and the party may still be alive in them.
+        PurgeTrashBins( monitor, _appIdentityService.TrashBinLimitUtc );
         return ValueTask.CompletedTask;
     }
+
+    /// <summary>
+    /// Purges the trash bins of this party's stores.
+    /// </summary>
+    /// <param name="logger">The logger to use.</param>
+    /// <param name="olderThanUtc">The trash time limit.</param>
+    /// <returns>The number of deleted trashed files.</returns>
+    internal virtual int PurgeTrashBins( IActivityLineEmitter logger, DateTime olderThanUtc ) => _sharedStore.PurgeTrashBin( logger, olderThanUtc );
 
     /// <inheritdoc cref="IParty.ToString"/>
     public override string ToString() => FullName;

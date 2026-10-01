@@ -47,6 +47,12 @@ public interface IOwnedParty : IParty
     /// This task always completes: when the service is stopped, the party has been shut down with it and the
     /// task completes immediately.
     /// </para>
+    /// <para>
+    /// The party's <see cref="IParty.SharedFileStore"/> folder is kept: it is shared by the applications that use the same
+    /// store (the party may still be alive in them) and it holds the party's pinned identity, that must outlive the destruction
+    /// (like a "known_hosts" entry): adding the party again finds it. Only its trash bin is purged
+    /// (see <see cref="ApplicationIdentityServiceConfiguration.TrashBinRetention"/>).
+    /// </para>
     /// </summary>
     /// <returns>The awaitable.</returns>
     Task DestroyAsync();
