@@ -46,7 +46,8 @@ fs_type() {
 
 source_fs="$(fs_type "$source_dir")"
 case "$source_fs" in
-    v9fs|9p|drvfs|fuseblk|nfs|cifs|smb2)
+    # BusyBox's stat (Alpine) reports a WSL Windows drive as UNKNOWN: copying is always safe.
+    v9fs|9p|drvfs|fuseblk|nfs|cifs|smb2|UNKNOWN)
         work_dir="${work_dir:-$HOME/src/CK-AppIdentity}" ;;
 esac
 

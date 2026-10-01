@@ -33,13 +33,17 @@ Options:
 
 | Option | |
 |---|---|
+| `-Linux alpine-minimal` | Tests on Alpine (musl, BusyBox, no ICU: the .NET globalization is invariant) in the `CK-UnixTests-alpine-minimal` distribution, created from the Alpine mini root file system (about 4 MB). The default is `ubuntu` (glibc). |
 | `-Reset` | Deletes the distribution and creates it again. |
 | `-Provision` | Provisions again even if nothing changed. |
 | `-Filter FullyQualifiedName~FileStore` | A `dotnet test --filter` expression. |
 | `-TestArguments '--x','y'` | Additional `dotnet test` arguments (from a PowerShell session only: `powershell -File` can't pass an array). |
 | `-Distribution <name>` / `-UbuntuRelease <codename>` | Another distribution name or Ubuntu release. |
 
-To remove everything: `wsl --unregister CK-UnixTests` and delete `%LOCALAPPDATA%\CK-UnixTests`.
+The results of a distribution are in `Tests/Unix/.results/<distribution>/`.
+
+To remove everything: `wsl --unregister CK-UnixTests` (and `CK-UnixTests-alpine-minimal`) and delete
+`%LOCALAPPDATA%\CK-UnixTests`.
 
 ## On Linux or macOS
 
@@ -48,7 +52,7 @@ Tests/Unix/run-tests.sh
 ```
 
 The .NET SDK required by `global.json`, `rsync` and (for the cross-process lock tests) the `flock`
-command of util-linux must be installed: on Debian/Ubuntu, `sudo Tests/Unix/provision.sh "$PWD" "$USER"`
+command of util-linux must be installed: on Debian/Ubuntu or Alpine, `sudo Tests/Unix/provision.sh "$PWD" "$USER"`
 does it. On macOS, there is no `flock` command: the cross-process lock test is ignored.
 
 ## What run-tests.sh does

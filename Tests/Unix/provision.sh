@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Provisions a Debian/Ubuntu machine (typically the dedicated "CK-UnixTests" WSL distribution created
-# by Run-UnixTests.ps1) to run the CK-AppIdentity tests. Must run as root. Idempotent.
+# Provisions a Debian/Ubuntu or an Alpine machine (typically a dedicated "CK-UnixTests" WSL distribution
+# created by Run-UnixTests.ps1) to run the CK-AppIdentity tests. Must run as root. Idempotent.
 #
 #   provision.sh <repository-root> [user-name]
 #
-# - Installs the required packages (rsync to copy the sources, util-linux for the flock command
-#   used by the cross-process lock tests, ICU for .NET).
+# - Installs the required packages (rsync to copy the sources, the flock command used by the
+#   cross-process lock tests, ICU for .NET on Debian/Ubuntu).
+#   Alpine is kept minimal: musl, BusyBox and no ICU (the .NET globalization is invariant).
 # - Creates a regular user (default "tester"): the tests must not run as root, root bypasses the
 #   permission checks that the store relies on.
 # - Installs the .NET SDK required by the repository's global.json in /usr/share/dotnet.
@@ -20,19 +21,34 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "provision.sh must run as root." >&2
     exit 1
 fi
-if ! command -v apt-get > /dev/null; then
-    echo "provision.sh supports Debian/Ubuntu (apt-get) only. Install rsync, flock (util-linux), ICU and the .NET SDK manually." >&2
+
+invariant_globalization=false
+echo "== Packages"
+if command -v apt-get > /dev/null; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends ca-certificates curl rsync util-linux libicu-dev git > /dev/null
+elif command -v apk > /dev/null; then
+    # util-linux-misc: the flock command. libgcc and libstdc++: required by .NET on musl. No ICU.
+    apk add --no-cache -q bash ca-certificates curl rsync util-linux-misc libgcc libstdc++
+    invariant_globalization=true
+else
+    echo "provision.sh supports Debian/Ubuntu (apt-get) and Alpine (apk). Install rsync, flock, ICU and the .NET SDK manually." >&2
     exit 1
 fi
-
-echo "== Packages"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends ca-certificates curl rsync util-linux libicu-dev git > /dev/null
+if [ "$invariant_globalization" = true ]; then
+    # Without ICU, .NET doesn't start unless its globalization is invariant (this is also needed below).
+    export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+fi
 
 echo "== User '$user'"
 if ! id "$user" > /dev/null 2>&1; then
-    useradd --create-home --shell /bin/bash "$user"
+    if command -v useradd > /dev/null; then
+        useradd --create-home --shell /bin/bash "$user"
+    else
+        # BusyBox.
+        adduser -D -s /bin/bash "$user"
+    fi
 fi
 
 echo "== .NET SDK (from $repo/global.json)"
@@ -49,6 +65,14 @@ export DOTNET_NOLOGO=1
 # The SDK is installed without workloads: the integrity check only emits a useless warning.
 export DOTNET_SKIP_WORKLOAD_INTEGRITY_CHECK=true
 EOF
+if [ "$invariant_globalization" = true ]; then
+    # Culture names are accepted (and behave like the invariant culture): otherwise the build warns
+    # (NETSDK1188) for every satellite resource of the packages.
+    cat >> /etc/profile.d/dotnet.sh << 'EOF'
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=0
+EOF
+fi
 dotnet --version
 
 if grep -qi microsoft /proc/version 2> /dev/null; then
