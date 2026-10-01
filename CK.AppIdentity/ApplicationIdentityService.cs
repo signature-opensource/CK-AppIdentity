@@ -142,9 +142,9 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         // This destroys the LocalParty's remotes (including calls to OnShutdownOrDestroyedAsync)
         // and clears the _remotes array.
         await d.OnDestroyedAsync( monitor ).ConfigureAwait( false );
-        // We raise the event before the final destruction of the domain and
-        // its _destroyTCS signal.
-        await _allPartyChanged.RaiseAsync( monitor, d ).ConfigureAwait( false );
+        // We raise the event before the final destruction of the domain and its destroy signal
+        // (the agent signals it). Subscribers' exceptions are logged: they must not prevent the destruction.
+        await _allPartyChanged.SafeRaiseAsync( monitor, d ).ConfigureAwait( false );
         await d.OnShutdownOrDestroyedAsync( monitor, true ).ConfigureAwait( false );
     }
 
@@ -162,12 +162,13 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     {
         Util.InterlockedAdd( ref _domains, d );
         // Makes the domain appear before its remotes.
-        await _allPartyChanged.RaiseAsync( monitor, d ).ConfigureAwait( false );
+        // Subscribers' exceptions are logged: the domain is created.
+        await _allPartyChanged.SafeRaiseAsync( monitor, d ).ConfigureAwait( false );
         foreach( var r in d.Remotes )
         {
             // There's little chance that subscribers exist on the new remote
             // but it is cleaner to raise the event through it (the bridge will do its job).
-            await d.RemotesChangedSender.RaiseAsync( monitor, r ).ConfigureAwait( false );
+            await d.RemotesChangedSender.SafeRaiseAsync( monitor, r ).ConfigureAwait( false );
         }
     }
 
@@ -176,7 +177,8 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     /// When the returned initialization task is successfully completed, all configured features are
     /// initialized and available.
     /// <para>
-    /// This can be called safely multiple times.
+    /// This can be called safely multiple times and never throws: when the start is refused, the initialization
+    /// task is faulted and when the service has been stopped before being started, it is canceled.
     /// </para>
     /// </summary>
     /// <returns>The initialization task.</returns>
@@ -202,12 +204,14 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
             // Let the feature initialization be done in the background, in parallel
             // with other hosted services.
             _agent.Start();
+            // A refused start fails the host start immediately.
+            if( _initialization.Task.IsFaulted ) return _initialization.Task;
         }
         return Task.CompletedTask;
     }
 
     // Called last: this returns the initialization task.
-    Task IHostedLifecycleService.StartedAsync( System.Threading.CancellationToken cancellationToken ) => _initialization.Task;
+    Task IHostedLifecycleService.StartedAsync( CancellationToken cancellationToken ) => _initialization.Task.WaitAsync( cancellationToken );
 
     Task IHostedLifecycleService.StoppingAsync( CancellationToken cancellationToken ) => DoStopAsync();
 
@@ -219,7 +223,7 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         return Task.CompletedTask;
     }
 
-    Task IHostedLifecycleService.StoppedAsync( System.Threading.CancellationToken cancellationToken ) => _agent.RunningTask;
+    Task IHostedLifecycleService.StoppedAsync( CancellationToken cancellationToken ) => _agent.RunningTask.WaitAsync( cancellationToken );
     #endregion
 
     /// <summary>
@@ -238,13 +242,26 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     /// <param name="monitor">The agent's monitor.</param>
     internal async Task OnShutdownAsync( IActivityMonitor monitor )
     {
-        foreach( var r in _remotes )
+        // This shuts down this root party (its stores) and its remotes: one remote can't prevent
+        // the others to be shut down.
+        try
         {
-            await r.OnShutdownOrDestroyedAsync( monitor, false );
+            await OnShutdownOrDestroyedAsync( monitor, false ).ConfigureAwait( false );
+        }
+        catch( Exception ex )
+        {
+            monitor.Error( $"While shutting down '{this}'.", ex );
         }
         foreach( var d in _domains )
         {
-            await d.OnShutdownOrDestroyedAsync( monitor, false );
+            try
+            {
+                await d.OnShutdownOrDestroyedAsync( monitor, false ).ConfigureAwait( false );
+            }
+            catch( Exception ex )
+            {
+                monitor.Error( $"While shutting down '{d}'.", ex );
+            }
         }
     }
 

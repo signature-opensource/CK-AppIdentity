@@ -155,7 +155,10 @@ public sealed class BasicTrampolineRunner
             {
                 int roundNumber = 0;
                 int roundCount;
-                while( (roundCount = actions.Count - doneCount) > 0 )
+                // In "stop on first error" mode, an action that returns false stops the execution
+                // (an exception does it by leaving the loops).
+                while( (executeAll || _result == TrampolineResult.TotalSuccess)
+                       && (roundCount = actions.Count - doneCount) > 0 )
                 {
                     using( monitor.OpenTrace( $"Executing round n°{++roundNumber} with {roundCount} actions." ) )
                     {
@@ -178,6 +181,7 @@ public sealed class BasicTrampolineRunner
                             else if( !await ExecuteInitialActionAsync( actions[doneCount] ).ConfigureAwait( false ) )
                             {
                                 AddErrorAction( monitor, null );
+                                ++doneCount;
                                 break;
                             }
                             ++doneCount;
@@ -197,7 +201,7 @@ public sealed class BasicTrampolineRunner
                 }
                 else
                 {
-                    Throw.DebugAssert( actions.Count == doneCount );
+                    Throw.DebugAssert( !executeAll || actions.Count == doneCount );
                     await ExecuteOnErrorAsync( monitor, actions, doneCount ).ConfigureAwait( false );
                 }
             }

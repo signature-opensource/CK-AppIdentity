@@ -12,7 +12,8 @@ namespace CK.AppIdentity;
 sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyInternal
 {
     LocalParty _owner;
-    TaskCompletionSource? _destroyTCS;
+    // Created upfront (only dynamic parties can be destroyed): a concurrent DestroyAsync can't see it null.
+    readonly TaskCompletionSource? _destroyTCS;
     int _isDestroyed;
     readonly bool _isDynamic;
 
@@ -21,6 +22,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
     {
         _owner = owner;
         _isDynamic = isDynamic;
+        if( isDynamic ) _destroyTCS = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
     }
 
     public new RemotePartyConfiguration Configuration => Unsafe.As<RemotePartyConfiguration>( _configuration );
@@ -52,22 +54,14 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
 
     internal bool DoSetDestroyed( bool isTop )
     {
+        Throw.DebugAssert( _destroyTCS != null, "Only dynamic parties can be destroyed (the remotes of a dynamic tenant domain are dynamic)." );
         if( Interlocked.CompareExchange( ref _isDestroyed, 1, 0 ) == 0 )
         {
-            _destroyTCS = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
             if( isTop ) Owner.ApplicationIdentityService.Agent.OnDestroy( this );
             return true;
         }
         return false;
     }
 
-    internal override async ValueTask OnShutdownOrDestroyedAsync( IActivityMonitor monitor, bool isDestroyed )
-    {
-        await base.OnShutdownOrDestroyedAsync( monitor, isDestroyed ).ConfigureAwait( false );
-        if( isDestroyed )
-        {
-            Debug.Assert( _destroyTCS != null );
-            _destroyTCS.SetResult();
-        }
-    }
+    public void SignalDestroyed() => _destroyTCS?.TrySetResult();
 }

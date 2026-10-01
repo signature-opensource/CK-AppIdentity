@@ -275,21 +275,35 @@ public class FeatureBuilderInitializationTests
 
         using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
         {
-            await Should.ThrowAsync<Exception>( () =>
+            await Should.ThrowAsync<InvalidOperationException>( () =>
             {
                 var sp = services.BuildServiceProvider();
                 var s = sp.GetRequiredService<ApplicationIdentityService>();
                 _ = ((IHostedService)s).StartAsync( cancellation );
                 return s.InitializationTask.WaitAsync( cancellation );
             } );
-            logs.ExtractCurrentTexts().ShouldContain( """
+            ( await WaitForLogAsync( logs, """
                 Found duplicated service registration for: 'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.F1FeatureDriver' (2 registrations).
                 AppIdentityFeatureBuilder are singletons, they must be registered only once. If you cannot find the duplicate site(s),
                 use the (unfortunately costly) TryAddSingleton instead of AddSingleton registration. 
-                """ );
+                """ ) ).ShouldBeTrue();
         }
     }
 
+
+    // The GrandOutput dispatches the logs asynchronously.
+    static async Task<bool> WaitForLogAsync( GrandOutputMemoryCollector logs, string text )
+    {
+        var all = new List<string>();
+        for( int i = 0; i < 50; ++i )
+        {
+            all.AddRange( logs.ExtractCurrentTexts() );
+            if( all.Contains( text ) ) return true;
+            await Task.Delay( 20 );
+        }
+        TestContext.Progress.WriteLine( "COLLECTED:" + Environment.NewLine + string.Join( Environment.NewLine + "---" + Environment.NewLine, all ) );
+        return false;
+    }
 
     class Alien : IApplicationIdentityFeatureDriver
     {
@@ -311,16 +325,16 @@ public class FeatureBuilderInitializationTests
 
         using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
         {
-            await Should.ThrowAsync<Exception>( () =>
+            await Should.ThrowAsync<InvalidOperationException>( () =>
             {
                 var sp = services.BuildServiceProvider();
                 var s = sp.GetRequiredService<ApplicationIdentityService>();
                 _ = ((IHostedService)s).StartAsync( cancellation );
                 return s.InitializationTask.WaitAsync( cancellation );
             } );
-            logs.ExtractCurrentTexts().ShouldContain( """
+            ( await WaitForLogAsync( logs, """
                 IAppIdentityFeatureBuilder type 'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.Alien' must inherit from CK.AppIdentity.ApplicationIdentityFeatureDriver base class.
-                """ );
+                """ ) ).ShouldBeTrue();
         }
 
     }

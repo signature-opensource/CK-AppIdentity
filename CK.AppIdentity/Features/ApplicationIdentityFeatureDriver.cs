@@ -103,6 +103,16 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <para>
     /// This is called in the same order as this driver has been instantiated: any dependent feature drivers have been initialized.
     /// </para>
+    /// <para>
+    /// The setup of a party fails if any driver returns false or throws. All the drivers are called anyway: when it fails,
+    /// <see cref="TeardownDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)"/> is NOT called for this party. A driver that
+    /// must undo its work registers a <see cref="BasicTrampoline.OnError(System.Action)"/> handler on the <see cref="FeatureLifetimeContext.Trampoline"/>
+    /// when it does it.
+    /// </para>
+    /// <para>
+    /// Dynamic parties are added all or nothing: when another party of the same batch fails, the parties that have been successfully
+    /// set up are torn down (they have never been published).
+    /// </para>
     /// </summary>
     /// <param name="context">The lifetime context.</param>
     /// <param name="party">The dynamic party to initialize.</param>
@@ -110,7 +120,11 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     internal protected abstract Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party );
 
     /// <summary>
-    /// Called when a dynamic party is destroyed.
+    /// Called when a dynamic party is destroyed, or when it has been successfully set up but another party of the same batch
+    /// failed (the party has never been published).
+    /// <para>
+    /// This is called only for parties that have been successfully set up by all the drivers.
+    /// </para>
     /// <para>
     /// This is called in reverse order (from most dependent feature drivers to basic ones).
     /// </para>
@@ -124,6 +138,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// Called by a stopping agent. Must get rid of any acquired resources at any level.
     /// <para>
     /// This is called in reverse order (from most dependent feature drivers to basic ones).
+    /// </para>
+    /// <para>
+    /// This is called even if <see cref="SetupAsync(FeatureLifetimeContext)"/> failed for this driver or for another one:
+    /// it must handle a partial setup.
     /// </para>
     /// </summary>
     /// <param name="context">The lifetime context.</param>

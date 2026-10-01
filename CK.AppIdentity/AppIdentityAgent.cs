@@ -42,7 +42,45 @@ public sealed class AppIdentityAgent : MicroAgent
     /// </summary>
     public ApplicationIdentityService.ISystemClock SystemClock => Unsafe.As<ApplicationIdentityService.ISystemClock>( _service.SystemClock );
 
-    internal void Start() => Throw.CheckState( TryStart() == RunningStatus.Running );
+    /// <summary>
+    /// Starts the agent. This never throws: when the start is refused (see <see cref="OnTryStart(IActivityMonitor)"/>),
+    /// the <see cref="ApplicationIdentityService.InitializationTask"/> is faulted and the agent is stopped: it will never start.
+    /// This does nothing if the agent is already running or stopped.
+    /// </summary>
+    internal void Start()
+    {
+        if( TryStart() == RunningStatus.WaitingForStart )
+        {
+            _service._initialization.TrySetException( new InvalidOperationException( $"{ToString()} refused to start (see the logs)." ) );
+            SendStop();
+        }
+    }
+
+    /// <summary>
+    /// Cancels the <see cref="ApplicationIdentityService.InitializationTask"/>: the initialization will never happen
+    /// (if the start has been refused, it is already faulted).
+    /// </summary>
+    protected override void OnStoppedBeforeStart() => _service._initialization.TrySetCanceled();
+
+    /// <summary>
+    /// Releases the awaiters of the jobs that will never be executed:
+    /// a destroyed party is signaled (it has been shut down with the service) and the addition of dynamic parties fails.
+    /// </summary>
+    /// <param name="logger">The logger to use.</param>
+    /// <param name="job">The rejected job.</param>
+    protected override void OnRejectedTypedJob( IActivityLineEmitter logger, object job )
+    {
+        switch( job )
+        {
+            case IOwnedPartyInternal destroyed:
+                destroyed.SignalDestroyed();
+                break;
+            case InitializeDynamicPartiesJob init:
+                logger.Error( $"Unable to add parties '{init.Added.Parties.Select( p => p.ToString() ).Concatenate( "', '" )}': {ToString()} is stopped." );
+                init.Result.TrySetResult( false );
+                break;
+        }
+    }
 
     /// <summary>
     /// Ensures that all feature providers have been instantiated.
@@ -102,12 +140,20 @@ public sealed class AppIdentityAgent : MicroAgent
     {
         using( monitor.OpenInfo( $"Starting {ToString()}: initializing '{_service._builders.Select( f => f.FeatureName ).Concatenate( "', '" )}' features." ) )
         {
-            var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
-            Exception? error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
-            if( error == null ) _service._initialization.SetResult();
+            Exception? error;
+            try
+            {
+                var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
+                error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
+            }
+            catch( Exception ex )
+            {
+                error = ex;
+            }
+            if( error == null ) _service._initialization.TrySetResult();
             else
             {
-                _service._initialization.SetException( error );
+                _service._initialization.TrySetException( error );
                 monitor.CloseGroup( "Failed." );
             }
         }
@@ -165,74 +211,134 @@ public sealed class AppIdentityAgent : MicroAgent
                 {
                     return HandleInitializeDynamicPartiesAsync( monitor, init );
                 }
-                else
-                {
-                    init.Result.SetResult( false );
-                }
-                break;
+                // The agent is stopping: the parties won't be set up.
+                OnRejectedTypedJob( monitor, init );
+                return default;
         }
         return base.ExecuteTypedJobAsync( monitor, job );
     }
 
     async ValueTask HandleInitializeDynamicPartiesAsync( IActivityMonitor monitor, InitializeDynamicPartiesJob init )
     {
-        int addedCount = init.Added.Count;
-        using( monitor.OpenInfo( $"Initializing {addedCount} parties ({_service._builders.Count} feature builders)." ) )
+        bool success = false;
+        try
         {
-            bool success = true;
-            // Setup a hash set with ALL the names, including the root application one.
-            var existing = new HashSet<string>( _service.AllParties.Select( p => p.FullName.Path ).Prepend( _service.FullName.Path ), StringComparer.OrdinalIgnoreCase );
-            Throw.DebugAssert( _service.AllParties.All( p => !p.IsDestroyed ), "We are in the Agent: operations are serialized: destroyed parties are not observable." );
-            foreach( var p in init.Added.Parties )
+            success = await DoInitializeDynamicPartiesAsync( monitor, init.Added ).ConfigureAwait( false );
+        }
+        finally
+        {
+            init.Result.TrySetResult( success );
+        }
+    }
+
+    // All or nothing: the parties are published only once all of them have been successfully set up.
+    async Task<bool> DoInitializeDynamicPartiesAsync( IActivityMonitor monitor, AddedDynamicParties added )
+    {
+        using( monitor.OpenInfo( $"Initializing {added.Count} parties ({_service._builders.Count} feature builders)." ) )
+        {
+            if( !CheckNewParties( monitor, added ) )
             {
-                var newOne = p.FullName.Path;
-                Throw.DebugAssert( init.Added.Parties.SingleOrDefault( a => a.FullName.Path.Equals( p.FullName, StringComparison.OrdinalIgnoreCase ) ) == p,
-                              "This has been checked when building the configuration objects: there is no duplicates in the configuration." );
-                if( existing.Contains( newOne ) )
+                monitor.CloseGroup( "Failed." );
+                return false;
+            }
+            var setup = new List<IOwnedParty>( added.Count );
+            foreach( var p in added.Parties )
+            {
+                using( monitor.OpenInfo( $"Initializing dynamic party '{p}'." ) )
                 {
-                    monitor.Error( $"Party '{newOne}' already exists. A party must first be destroyed before being added again." );
-                    success = false;
+                    var context = new FeatureLifetimeContext( monitor, this, _service._builders );
+                    // Only an error matters: the success handlers exceptions are logged and ignored.
+                    // On error, the drivers' OnError handlers registered on the trampoline undo their work.
+                    var result = await context.ExecuteSetupDynamicRemoteAsync( p ).ConfigureAwait( false );
+                    if( (result & TrampolineResult.Error) != 0 )
+                    {
+                        monitor.CloseGroup( "Failed." );
+                        break;
+                    }
+                    setup.Add( p );
                 }
             }
-            // If a clash occurs, we add nothing.
-            if( success )
+            if( setup.Count < added.Count )
             {
-                foreach( var p in init.Added.Parties )
+                // The parties that have been fully set up have never been published: they are torn down.
+                for( int i = setup.Count - 1; i >= 0; --i )
                 {
-                    using( monitor.OpenInfo( $"Initializing dynamic party '{p}'." ) )
+                    var p = setup[i];
+                    using( monitor.OpenInfo( $"Tearing down dynamic party '{p}' that has been set up: another party of the same batch failed." ) )
                     {
                         var context = new FeatureLifetimeContext( monitor, this, _service._builders );
-                        // The new configured party is published on the second round of the OnSuccess trampoline.
-                        context.Trampoline.OnSuccess( () =>
-                        {
-                            context.Trampoline.OnSuccess( () => _service.OnCreatedAsync( context.Monitor, p ) );
-                        } );
-                        if( await context.ExecuteSetupDynamicRemoteAsync( p ).ConfigureAwait( false ) != TrampolineResult.TotalSuccess )
-                        {
-                            success = false;
-                            monitor.CloseGroup( "Failed." );
-                            break;
-                        }
+                        await context.ExecuteTeardownDynamicRemoteAsync( p ).ConfigureAwait( false );
                     }
                 }
+                monitor.CloseGroup( "Failed." );
+                return false;
             }
-            if( !success ) monitor.CloseGroup( "Failed." );
-            init.Result.SetResult( success );
+            foreach( var p in added.Parties )
+            {
+                // This never throws: the events are safely raised.
+                await _service.OnCreatedAsync( monitor, p ).ConfigureAwait( false );
+            }
+            return true;
         }
+    }
+
+    bool CheckNewParties( IActivityMonitor monitor, AddedDynamicParties added )
+    {
+        bool success = true;
+        // Setup a hash set with ALL the names, including the root application one.
+        // A party being destroyed (IsDestroyed is true but it is still here) keeps its name until its
+        // destruction is handled.
+        var existing = new HashSet<string>( _service.AllParties.Select( p => p.FullName.Path ).Prepend( _service.FullName.Path ), StringComparer.OrdinalIgnoreCase );
+        foreach( var p in added.Parties )
+        {
+            var newOne = p.FullName.Path;
+            Throw.DebugAssert( added.Parties.SingleOrDefault( a => a.FullName.Path.Equals( p.FullName, StringComparison.OrdinalIgnoreCase ) ) == p,
+                          "This has been checked when building the configuration objects: there is no duplicates in the configuration." );
+            if( existing.Contains( newOne ) )
+            {
+                monitor.Error( $"Party '{newOne}' already exists. A party must first be destroyed before being added again." );
+                success = false;
+            }
+        }
+        // Remotes can be added to a tenant domain: it must be alive.
+        foreach( var r in added.Remotes )
+        {
+            if( r.Owner is TenantDomainParty d && (d.IsDestroyed || !_service.TenantDomains.Contains( d )) )
+            {
+                monitor.Error( $"Unable to add remote '{r}': its tenant domain '{d}' is destroyed." );
+                success = false;
+            }
+        }
+        return success;
     }
 
     async ValueTask HandleDestroyAsync( IActivityMonitor monitor, IOwnedPartyInternal destroyed )
     {
-        using( monitor.OpenInfo( $"Destroying '{destroyed}'." ) )
+        try
         {
-            // Enables the feature drivers to tear down any existing features, including the
-            // subordinates remotes if this is a domain.
-            var context = new FeatureLifetimeContext( monitor, this, _service._builders );
-            await context.ExecuteTeardownDynamicRemoteAsync( destroyed ).ConfigureAwait( false );
+            // A remote of a tenant domain may have been destroyed with its domain (when both are destroyed
+            // concurrently, the domain may be handled first): there is nothing more to do.
+            if( destroyed is RemoteParty r && !r.Owner.Remotes.Contains( r ) )
+            {
+                monitor.Trace( $"'{destroyed}' has already been destroyed with its tenant domain." );
+                return;
+            }
+            using( monitor.OpenInfo( $"Destroying '{destroyed}'." ) )
+            {
+                // Enables the feature drivers to tear down any existing features, including the
+                // subordinates remotes if this is a domain.
+                var context = new FeatureLifetimeContext( monitor, this, _service._builders );
+                await context.ExecuteTeardownDynamicRemoteAsync( destroyed ).ConfigureAwait( false );
 
-            // The service routes the call to the LocalService (for a remote) or
-            // its domains.
-            await _service.OnDestroyedAsync( monitor, destroyed ).ConfigureAwait( false );
+                // The service routes the call to the LocalService (for a remote) or
+                // its domains.
+                await _service.OnDestroyedAsync( monitor, destroyed ).ConfigureAwait( false );
+            }
+        }
+        finally
+        {
+            // Whatever happens, the awaiters of DestroyAsync are released (exactly once).
+            destroyed.SignalDestroyed();
         }
     }
 }

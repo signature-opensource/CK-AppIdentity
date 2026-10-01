@@ -73,6 +73,10 @@ public interface IApplicationIdentityService : ILocalParty, ISingletonAutoServic
     /// <para>
     /// Use <see cref="Task.IsCompletedSuccessfully"/> to know if initialization has been successful.
     /// </para>
+    /// <para>
+    /// This task is faulted when the service refused to start (feature drivers registration issue)
+    /// and canceled when the service has been stopped before being started.
+    /// </para>
     /// </summary>
     Task InitializationTask { get; }
 
@@ -83,6 +87,8 @@ public interface IApplicationIdentityService : ILocalParty, ISingletonAutoServic
 
     /// <summary>
     /// Raises an approximative 1 second, non reentrant, heart beat signal.
+    /// When a heartbeat (or any other agent job) takes longer than the period, the missed beats are skipped:
+    /// they are not raised later.
     /// <para>
     /// The period can be changed by using a specialized <see cref="IApplicationIdentityService.SystemClock"/>.
     /// </para>
@@ -93,6 +99,9 @@ public interface IApplicationIdentityService : ILocalParty, ISingletonAutoServic
     /// Tries to create and initialize one or more new parties that can be tenant domains or simple
     /// remotes from a configuration section.
     /// These parties will be <see cref="IOwnedParty.IsDynamic"/> and can be destroyed.
+    /// <para>
+    /// This is all or nothing: if any party fails to be set up, none of them is added.
+    /// </para>
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The configuration to process.</param>

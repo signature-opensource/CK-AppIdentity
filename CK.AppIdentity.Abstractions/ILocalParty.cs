@@ -36,6 +36,9 @@ public interface ILocalParty : IParty
     /// <para>
     /// No tenant domains must appear in the configuration otherwise an <see cref="ArgumentException"/> is thrown.
     /// </para>
+    /// <para>
+    /// This is all or nothing: if any remote fails to be set up, none of them is added.
+    /// </para>
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The configuration to process.</param>

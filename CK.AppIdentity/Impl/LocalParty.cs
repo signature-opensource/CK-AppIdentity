@@ -76,6 +76,12 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
                                                                                ApplicationIdentityService? withTenants )
     {
         Throw.CheckNotNullArgument( configuration );
+        // Early check (the agent checks it again when adding the parties).
+        if( this is TenantDomainParty { IsDestroyed: true } )
+        {
+            monitor.Error( $"Unable to add parties to '{this}': it is destroyed." );
+            return null;
+        }
         var c = Configuration.CreateDynamicRemoteConfiguration( monitor, configuration, ApplicationIdentityService.Configuration.StrictConfigurationMode );
         if( c == null ) return null;
         if( c.Value.Count == 0 ) return new AddedDynamicParties( Array.Empty<RemoteParty>(), Array.Empty<TenantDomainParty>() );
@@ -124,14 +130,16 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     internal async Task OnDestroyedRemoteAsync( IActivityMonitor monitor, RemoteParty p )
     {
         Util.InterlockedRemove( ref _remotes, p );
-        await _remotesChanged.RaiseAsync( monitor, p ).ConfigureAwait( false );
+        // Subscribers' exceptions are logged: they must not prevent the destruction.
+        await _remotesChanged.SafeRaiseAsync( monitor, p ).ConfigureAwait( false );
         await p.OnShutdownOrDestroyedAsync( monitor, true ).ConfigureAwait( false );
     }
 
     internal Task OnCreatedRemoteAsync( IActivityMonitor monitor, RemoteParty p )
     {
         Util.InterlockedAdd( ref _remotes, p );
-        return _remotesChanged.RaiseAsync( monitor, p );
+        // Subscribers' exceptions are logged: the remote is created.
+        return _remotesChanged.SafeRaiseAsync( monitor, p );
     }
 
     internal override async ValueTask OnShutdownOrDestroyedAsync( IActivityMonitor monitor, bool isDestroyed )
@@ -142,7 +150,15 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
                                                             "Destroying applies only for the TenantDomainParty and its has already cleared the _remotes list." );
         foreach( var r in _remotes )
         {
-            await r.OnShutdownOrDestroyedAsync( monitor, isDestroyed ).ConfigureAwait( false );
+            try
+            {
+                await r.OnShutdownOrDestroyedAsync( monitor, isDestroyed ).ConfigureAwait( false );
+            }
+            catch( Exception ex )
+            {
+                // One party must not prevent the others to be shut down.
+                monitor.Error( $"While shutting down '{r}'.", ex );
+            }
         }
     }
 

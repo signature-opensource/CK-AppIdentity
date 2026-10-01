@@ -43,6 +43,10 @@ public interface IOwnedParty : IParty
     /// <para>
     /// <see cref="IsDynamic"/> must be true otherwise an <see cref="System.InvalidOperationException"/> is thrown.
     /// </para>
+    /// <para>
+    /// This task always completes: when the service is stopped, the party has been shut down with it and the
+    /// task completes immediately.
+    /// </para>
     /// </summary>
     /// <returns>The awaitable.</returns>
     Task DestroyAsync();
