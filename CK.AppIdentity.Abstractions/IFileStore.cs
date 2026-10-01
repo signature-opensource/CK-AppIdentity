@@ -37,7 +37,7 @@ public interface IFileStore
     /// <para>
     /// Trashed files are deleted once they are older than <see cref="ApplicationIdentityServiceConfiguration.TrashBinRetention"/>
     /// (7 days by default): the trash bins are purged when the service starts, every 6 hours, when it shuts down and when
-    /// a party is destroyed. A trashed file is named with its UTC trash time ("yyyyMMddTHHmmssZ-guid.ext") and a ".binInfo"
+    /// a party is destroyed. A trashed file is named with its UTC trash time ("yyyyMMddTHHmmssZ-guid", without extension) and a ".binInfo"
     /// file beside it contains its original path (relative to <see cref="FolderPath"/>).
     /// </para>
     /// </summary>

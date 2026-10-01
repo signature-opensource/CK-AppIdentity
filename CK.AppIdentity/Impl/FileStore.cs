@@ -104,7 +104,9 @@ sealed class FileStore : IFileStore
         if( immediateDelete ) return TryDelete( logger, fullPath );
         // The trash time is in the name: the moved file keeps its last write time and the .binInfo
         // may be missing (crash between the move and its write).
-        var targetPath = $"{_binPath.Path}/{DateTime.UtcNow.ToString( TrashTimeFormat, CultureInfo.InvariantCulture )}-{Guid.NewGuid():N}{Path.GetExtension( fullPath.Path )}";
+        // The trashed file has no extension (the original path is in its .binInfo): a trashed file can't be
+        // mistaken for a .binInfo, even when its original extension is ".binInfo".
+        var targetPath = $"{_binPath.Path}/{DateTime.UtcNow.ToString( TrashTimeFormat, CultureInfo.InvariantCulture )}-{Guid.NewGuid():N}";
         try
         {
             _fileSystem.CreateDirectory( _binPath );
@@ -264,7 +266,10 @@ sealed class FileStore : IFileStore
             if( !Directory.Exists( _binPath ) ) return 0;
             foreach( var f in Directory.EnumerateFiles( _binPath ) )
             {
-                if( f.EndsWith( BinInfoExtension, StringComparison.Ordinal ) )
+                // Trashed files have no extension: only the .binInfo files end with it (case insensitively:
+                // Windows file names are). Files trashed with the original extension (by a previous version)
+                // and whose extension was ".binInfo" are purged as orphan .binInfo.
+                if( f.EndsWith( BinInfoExtension, StringComparison.OrdinalIgnoreCase ) )
                 {
                     // Orphan .binInfo: its trashed file has been deleted.
                     if( !File.Exists( f.Substring( 0, f.Length - BinInfoExtension.Length ) ) ) TryDeleteTrash( logger, f );

@@ -73,7 +73,7 @@ public class TrashBinTests
 
         var trashed = Directory.GetFiles( store.TrashBinPath ).Single( f => !f.EndsWith( ".binInfo" ) );
         var name = Path.GetFileName( trashed );
-        name.ShouldEndWith( ".txt" );
+        name.Length.ShouldBe( 16 + 1 + 32, "yyyyMMddTHHmmssZ-guid: no extension, it is in the .binInfo." );
         DateTime.ParseExact( name.Substring( 0, 16 ), "yyyyMMdd'T'HHmmss'Z'", null,
                              System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal )
             .ShouldBeGreaterThanOrEqualTo( before.AddTicks( -before.Ticks % TimeSpan.TicksPerSecond ) );
@@ -113,6 +113,32 @@ public class TrashBinTests
         File.Exists( recent ).ShouldBeTrue();
         File.Exists( recent + ".binInfo" ).ShouldBeTrue();
         File.Exists( legacyRecent ).ShouldBeTrue();
+    }
+
+    [TestCase( "Data.binInfo" )]
+    [TestCase( "Data.BININFO" )]
+    public async Task a_trashed_file_can_have_the_binInfo_extension_Async( string fileName )
+    {
+        var s = CreateService( "TrashBinInfo" );
+        await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        var store = s.SharedFileStore;
+        EmptyTrashBin( store );
+        var file = store.FolderPath.AppendPart( fileName );
+        store.WriteAllBytes( file, new byte[] { 1 } );
+        store.TryTrash( TestHelper.Monitor, file ).ShouldBeTrue();
+        // Shutdown purges with the 7 days retention: the trashed file is kept.
+        await s.DisposeAsync();
+
+        var entries = Directory.GetFiles( store.TrashBinPath ).Select( Path.GetFileName ).ToArray();
+        entries.Length.ShouldBe( 2 );
+        var trashed = entries.Single( n => !n!.EndsWith( ".binInfo" ) )!;
+        File.ReadAllText( Path.Combine( store.TrashBinPath, trashed + ".binInfo" ) ).ShouldBe( fileName );
+
+        // A zero retention deletes it with its .binInfo: nothing is left.
+        var s0 = CreateService( "TrashBinInfo", trashBinRetention: "00:00:00" );
+        await s0.StartAndInitializeAsync().WaitAsync( _timeout );
+        await s0.DisposeAsync();
+        Directory.GetFiles( store.TrashBinPath ).ShouldBeEmpty();
     }
 
     [Test]
