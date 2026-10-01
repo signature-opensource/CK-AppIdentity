@@ -260,6 +260,25 @@ public sealed class AppIdentityAgent : MicroAgent
                 monitor.CloseGroup( "Failed." );
                 return false;
             }
+            // The folders are created once the parties have been checked and before their setup (the drivers
+            // can use the stores). Only the folders that are created here are removed on failure, and only if they
+            // are empty: an existing folder is shared by the applications that use the same store and holds
+            // the pinned identity of the party.
+            var createdFolders = new List<NormalizedPath>();
+            try
+            {
+                foreach( var p in added.Parties )
+                {
+                    Unsafe.As<ApplicationIdentityParty>( p ).CreateFolders( createdFolders );
+                }
+            }
+            catch( Exception ex )
+            {
+                monitor.Error( "While creating the folders of the new parties.", ex );
+                DeleteCreatedFolders( monitor, createdFolders );
+                monitor.CloseGroup( "Failed." );
+                return false;
+            }
             var setup = new List<IOwnedParty>( added.Count );
             foreach( var p in added.Parties )
             {
@@ -289,6 +308,7 @@ public sealed class AppIdentityAgent : MicroAgent
                         await context.ExecuteTeardownDynamicRemoteAsync( p ).ConfigureAwait( false );
                     }
                 }
+                DeleteCreatedFolders( monitor, createdFolders );
                 monitor.CloseGroup( "Failed." );
                 return false;
             }
@@ -298,6 +318,14 @@ public sealed class AppIdentityAgent : MicroAgent
                 await _service.OnCreatedAsync( monitor, p ).ConfigureAwait( false );
             }
             return true;
+        }
+    }
+
+    static void DeleteCreatedFolders( IActivityMonitor monitor, List<NormalizedPath> createdFolders )
+    {
+        for( int i = createdFolders.Count - 1; i >= 0; --i )
+        {
+            FileStore.DeleteFolderIfEmpty( monitor, createdFolders[i] );
         }
     }
 

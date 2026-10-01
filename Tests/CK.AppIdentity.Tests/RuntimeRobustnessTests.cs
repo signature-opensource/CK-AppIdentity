@@ -7,6 +7,7 @@ using Shouldly;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +39,8 @@ public class RuntimeRobustnessTests
         protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
         {
             Add( $"Setup {party.PartyName}" );
+            // The folders are created before the setup: the drivers can use the stores.
+            if( !Directory.Exists( party.SharedFileStore.FolderPath ) ) Add( $"NoFolder {party.PartyName}" );
             context.Trampoline.OnError( () => Add( $"OnError {party.PartyName}" ) );
             return Task.FromResult( party.PartyName != FailSetupFor );
         }
@@ -98,12 +101,25 @@ public class RuntimeRobustnessTests
         s.TenantDomains.ShouldNotContain( t );
     }
 
+    // The shared folder of a remote of the "Test/$Runtime" application.
+    static NormalizedPath RemoteFolder( string domainName, string partyName )
+    {
+        return ApplicationIdentityServiceConfiguration.DefaultStoreRootPath.Combine( $"#Dev/{domainName}/${partyName}" );
+    }
+
+    static void DeleteFolder( NormalizedPath path )
+    {
+        if( Directory.Exists( path ) ) Directory.Delete( path, recursive: true );
+    }
+
     [Test]
     public async Task a_failed_batch_adds_nothing_Async()
     {
         var (s, driver) = Create();
         await using var _s = s;
         await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        DeleteFolder( RemoteFolder( "Test", "A" ) );
+        DeleteFolder( RemoteFolder( "Test", "B" ) );
         driver.FailSetupFor = "$B";
 
         var added = await s.AddMultipleRemotesAsync( TestHelper.Monitor, c =>
@@ -116,6 +132,8 @@ public class RuntimeRobustnessTests
         s.Remotes.ShouldBeEmpty();
         driver.Log.ShouldBe( ["Setup $A", "Setup $B", "OnError $B", "Teardown $A"],
                              "B undoes its work with OnError, A has been fully set up: it is torn down." );
+        Directory.Exists( RemoteFolder( "Test", "A" ) ).ShouldBeFalse( "The folders created for the failed batch are removed." );
+        Directory.Exists( RemoteFolder( "Test", "B" ) ).ShouldBeFalse();
 
         // The names are free: the same batch can be added once the problem is fixed.
         driver.FailSetupFor = null;
@@ -124,6 +142,61 @@ public class RuntimeRobustnessTests
             c["Parties:0:PartyName"] = "A";
             c["Parties:1:PartyName"] = "B";
         } ).WaitAsync( _timeout )).ShouldNotBeNull().Count.ShouldBe( 2 );
+    }
+
+    [Test]
+    public async Task a_failed_batch_keeps_the_existing_folders_Async()
+    {
+        var (s, driver) = Create();
+        await using var _s = s;
+        await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        // The folder of B exists (another application uses it, or B has been destroyed): it holds its pinned identity.
+        var bFolder = RemoteFolder( "Test", "KeptB" );
+        Directory.CreateDirectory( bFolder );
+        var pinned = bFolder.AppendPart( "Identity.Pinned.public" );
+        File.WriteAllText( pinned, "key" );
+        DeleteFolder( RemoteFolder( "Test", "KeptA" ) );
+        driver.FailSetupFor = "$KeptB";
+
+        (await s.AddMultipleRemotesAsync( TestHelper.Monitor, c =>
+        {
+            c["Parties:0:PartyName"] = "KeptA";
+            c["Parties:1:PartyName"] = "KeptB";
+        } ).WaitAsync( _timeout )).ShouldBeNull();
+
+        driver.Log.ShouldNotContain( l => l.StartsWith( "NoFolder" ) );
+        File.Exists( pinned ).ShouldBeTrue( "An existing folder is never removed." );
+        Directory.Exists( RemoteFolder( "Test", "KeptA" ) ).ShouldBeFalse( "The created one is." );
+    }
+
+    [Test]
+    public async Task a_dynamic_tenant_creates_its_folders_and_the_ones_of_its_remotes_Async()
+    {
+        var (s, _) = Create();
+        await using var _s = s;
+        await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        DeleteFolder( ApplicationIdentityServiceConfiguration.DefaultStoreRootPath.Combine( "#Dev/FoldersT" ) );
+        var t = await s.AddTenantDomainAsync( TestHelper.Monitor, c =>
+        {
+            c["FullName"] = "FoldersT/$FoldersT";
+            c["Parties:0:PartyName"] = "TR";
+        } ).WaitAsync( _timeout );
+        Throw.DebugAssert( t != null );
+        Directory.Exists( t.SharedFileStore.FolderPath ).ShouldBeTrue();
+        Directory.Exists( t.LocalFileStore.FolderPath ).ShouldBeTrue( "The local store of a dynamic tenant is created." );
+        Directory.Exists( t.Remotes.Single().SharedFileStore.FolderPath ).ShouldBeTrue( "The remotes of a dynamic tenant are created with it." );
+    }
+
+    [Test]
+    public async Task no_folder_is_created_for_a_rejected_party_Async()
+    {
+        var (s, _) = Create();
+        DeleteFolder( RemoteFolder( "Test", "Rejected" ) );
+        // The service is never started: the pending addition is rejected by the agent.
+        var pending = s.AddRemoteAsync( TestHelper.Monitor, c => c["PartyName"] = "Rejected" );
+        await s.DisposeAsync();
+        (await pending.WaitAsync( _timeout )).ShouldBeNull();
+        Directory.Exists( RemoteFolder( "Test", "Rejected" ) ).ShouldBeFalse( "Constructing a dynamic party doesn't create its folders." );
     }
 
     [Test]

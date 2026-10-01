@@ -2,6 +2,7 @@ using CK.Core;
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,13 +26,71 @@ sealed class FileStore : IFileStore
     NormalizedPath _folderPath;
     NormalizedPath _binPath;
 
-    internal FileStore( StoreFileSystem fileSystem, in NormalizedPath folderPath )
+    /// <summary>
+    /// Initializes a new store. When <paramref name="createFolder"/> is false, nothing is done on the file system:
+    /// <see cref="CreateFolder"/> must be called before the store is used (this is the case of the dynamic parties:
+    /// their folders are created by the agent once the new parties have been checked).
+    /// </summary>
+    /// <param name="fileSystem">The store file system.</param>
+    /// <param name="folderPath">This store's folder.</param>
+    /// <param name="createFolder">Whether the folder must be created now.</param>
+    internal FileStore( StoreFileSystem fileSystem, in NormalizedPath folderPath, bool createFolder )
     {
         _fileSystem = fileSystem;
         _folderPath = folderPath;
         _binPath = folderPath.AppendPart( TrashBinName );
-        fileSystem.CreateDirectory( _folderPath );
+        if( createFolder ) CreateFolder();
+    }
+
+    /// <summary>
+    /// Creates the <see cref="FolderPath"/> (if it doesn't exist) and deletes the temporary files of interrupted
+    /// atomic writes. IO errors are thrown.
+    /// </summary>
+    /// <returns>
+    /// The topmost directory that has been created by this call (the store's folder or one of its parents),
+    /// null if the folder already existed.
+    /// </returns>
+    internal NormalizedPath? CreateFolder()
+    {
+        NormalizedPath? created = null;
+        if( !Directory.Exists( _folderPath ) )
+        {
+            var top = _folderPath;
+            int rootCount = _fileSystem.Root.Parts.Count;
+            while( top.Parts.Count > rootCount + 1 && !Directory.Exists( top.RemoveLastPart() ) )
+            {
+                top = top.RemoveLastPart();
+            }
+            created = top;
+        }
+        _fileSystem.CreateDirectory( _folderPath );
         StoreFileSystem.DeleteTemporaryFiles( _folderPath );
+        return created;
+    }
+
+    /// <summary>
+    /// Deletes a directory (created by <see cref="CreateFolder"/>) if it contains no file: its empty sub directories
+    /// are deleted. A directory that contains files is kept (another application that shares the store may be using it).
+    /// Errors are logged as warnings.
+    /// </summary>
+    /// <param name="logger">The logger to use.</param>
+    /// <param name="path">The directory to delete.</param>
+    internal static void DeleteFolderIfEmpty( IActivityLineEmitter logger, NormalizedPath path )
+    {
+        try
+        {
+            if( !Directory.Exists( path ) ) return;
+            if( Directory.EnumerateFiles( path, "*", SearchOption.AllDirectories ).Any() )
+            {
+                logger.Trace( $"Folder '{path}' is not empty: it is kept." );
+                return;
+            }
+            Directory.Delete( path, recursive: true );
+        }
+        catch( Exception ex )
+        {
+            logger.Warn( $"Unable to delete the folder '{path}'.", ex );
+        }
     }
 
     public NormalizedPath FolderPath => _folderPath;

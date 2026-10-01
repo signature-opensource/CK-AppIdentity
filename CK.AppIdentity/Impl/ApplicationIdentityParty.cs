@@ -20,14 +20,27 @@ public abstract class ApplicationIdentityParty : IParty
     readonly FileStore _sharedStore;
     object[] _features;
 
-    internal ApplicationIdentityParty( ApplicationIdentityPartyConfiguration configuration, ApplicationIdentityService? appIdentityService )
+    // The folders of a dynamic party are not created by its constructor: they are created by the agent
+    // (see CreateFolders) once the new parties have been checked.
+    internal ApplicationIdentityParty( ApplicationIdentityPartyConfiguration configuration, bool isDynamic, ApplicationIdentityService? appIdentityService )
     {
         Throw.CheckNotNullArgument( configuration );
         _appIdentityService = appIdentityService ?? (ApplicationIdentityService)this;
         _configuration = configuration;
         _features = Array.Empty<object>();
         _sharedStore = new FileStore( ApplicationIdentityService.Configuration.StoreFileSystem,
-                                      ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ) );
+                                      ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ),
+                                      createFolder: !isDynamic );
+    }
+
+    /// <summary>
+    /// Creates the folders of this party's stores (and of its remotes for a tenant domain).
+    /// IO errors are thrown.
+    /// </summary>
+    /// <param name="created">Collects the topmost directories that have been created.</param>
+    internal virtual void CreateFolders( List<NormalizedPath> created )
+    {
+        if( _sharedStore.CreateFolder() is NormalizedPath p ) created.Add( p );
     }
 
     IApplicationIdentityService IParty.ApplicationIdentityService => _appIdentityService;

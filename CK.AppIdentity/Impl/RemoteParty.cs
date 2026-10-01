@@ -18,7 +18,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
     readonly bool _isDynamic;
 
     internal RemoteParty( RemotePartyConfiguration configuration, LocalParty owner, bool isDynamic )
-        : base( configuration, owner.ApplicationIdentityService )
+        : base( configuration, isDynamic, owner.ApplicationIdentityService )
     {
         _owner = owner;
         _isDynamic = isDynamic;

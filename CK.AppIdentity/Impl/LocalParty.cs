@@ -30,7 +30,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
                          ApplicationIdentityLocalConfiguration localConfiguration,
                          bool isDynamic,
                          ApplicationIdentityService? appIdentityService )
-        : base( configuration, appIdentityService )
+        : base( configuration, isDynamic, appIdentityService )
     {
         _remotesChanged = new PerfectEventSender<IRemoteParty>();
         _remotes = remotes.Select( c => new RemoteParty( c, this, isDynamic ) ).ToArray();
@@ -41,7 +41,8 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
         var bridgeTarget = appIdentityService?._allPartyChanged ?? new PerfectEventSender<IOwnedParty>();
         _remotesChangedBridge = _remotesChanged.CreateBridge( bridgeTarget!, Unsafe.As<IOwnedParty> );
         _privateStore = new FileStore( ApplicationIdentityService.Configuration.StoreFileSystem,
-                                       SharedFileStore.FolderPath.AppendPart( FileStore.LocalStoreName ) );
+                                       SharedFileStore.FolderPath.AppendPart( FileStore.LocalStoreName ),
+                                       createFolder: !isDynamic );
         _localConfiguration = localConfiguration;
     }
 
@@ -126,6 +127,18 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
 
 
     internal PerfectEventSender<IRemoteParty> RemotesChangedSender => _remotesChanged;
+
+    internal override void CreateFolders( List<NormalizedPath> created )
+    {
+        base.CreateFolders( created );
+        // Inside the shared store's folder: it is never a topmost created directory when the shared one has been created.
+        if( _privateStore.CreateFolder() is NormalizedPath p ) created.Add( p );
+        // The remotes of a dynamic tenant domain are created with it.
+        foreach( var r in _remotes )
+        {
+            r.CreateFolders( created );
+        }
+    }
 
     internal override int PurgeTrashBins( IActivityLineEmitter logger, DateTime olderThanUtc )
     {
