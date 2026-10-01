@@ -89,8 +89,10 @@ we just need to declare the new OneCS remote on the SigBox.
 _Notes:_
 - From now on, we don't show the LogTower configuration. This is the same for every party
   (if we want to target the same LogTower).
-- We also don’t specify the EnvironmentName anymore. This defaults to the IHostEnvironment.EnvironementName
-  (that defaults to "#Dev")
+- We also don’t specify the EnvironmentName anymore. For the application itself, this defaults to the
+  IHostEnvironment.EnvironmentName prefixed with '#': "Development" becomes "#Dev" but a default .NET host
+  is in "Production", which gives "#Production" (where `StrictConfigurationMode` is on). The parties inherit
+  the EnvironmentName of their parent.
 
 The name of this new Party is the same as the DomainName: **"AcmeCorp/$AcmeCorp"**.
 

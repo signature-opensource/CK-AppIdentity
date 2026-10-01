@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
+using System.Threading;
 
 namespace CK.AppIdentity;
 
@@ -24,8 +25,15 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     readonly StoreFileSystem _storeFileSystem;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly bool _strictMode;
-    static NormalizedPath _defaultStoreRootPath;
+    // A string (not a NormalizedPath struct) so that it is read and written atomically.
+    static string? _defaultStoreRootPath;
     static readonly object _defaultStoreRootPathLock = new object();
+
+    /// <summary>
+    /// The "Default" domain name used when no domain name is configured for the root party
+    /// (the <see cref="CoreApplicationIdentity.DefaultDomainName"/> "Undefined" denotes an external party).
+    /// </summary>
+    public const string DefaultRootDomainName = "Default";
 
     ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
                                              string domainName,
@@ -123,40 +131,47 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// Gets or sets the default store path that is by default "<see cref="Environment.SpecialFolder.LocalApplicationData"/>/CK-AppIdentity".
     /// <para>
     /// This is primarily intended for tests and must be set prior to any access to this property: once this property is accessed or set,
-    /// its value is settled. 
+    /// its value is settled and setting a different value throws an <see cref="InvalidOperationException"/>.
+    /// </para>
+    /// <para>
+    /// The value must be a valid fully qualified path (otherwise an <see cref="ArgumentException"/> is thrown).
     /// </para>
     /// </summary>
     public static NormalizedPath DefaultStoreRootPath
     {
         get
         {
-            var p = _defaultStoreRootPath;
-            if( p.IsEmptyPath )
+            var p = Volatile.Read( ref _defaultStoreRootPath );
+            if( p == null )
             {
                 lock( _defaultStoreRootPathLock )
                 {
                     p = _defaultStoreRootPath;
-                    if( p.IsEmptyPath )
+                    if( p == null )
                     {
                         p = Environment.GetFolderPath( Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify );
-                        p = Path.Combine( p, "CK-AppIdentity" );
+                        p = new NormalizedPath( Path.Combine( p, "CK-AppIdentity" ) ).Path;
+                        Volatile.Write( ref _defaultStoreRootPath, p );
                     }
                 }
-                _defaultStoreRootPath = p;
             }
             return p;
         }
         set
         {
-            var p = _defaultStoreRootPath;
-            if( p.IsEmptyPath )
+            Throw.CheckArgument( "The default store root path must be a valid fully qualified path.",
+                                 FileUtil.IndexOfInvalidPathChars( value.Path ) < 0 && Path.IsPathFullyQualified( value.Path ) );
+            lock( _defaultStoreRootPathLock )
             {
-                lock( _defaultStoreRootPathLock )
+                var p = _defaultStoreRootPath;
+                if( p == null )
                 {
-                    p = _defaultStoreRootPath;
-                    if( p.IsEmptyPath ) p = value;
+                    Volatile.Write( ref _defaultStoreRootPath, value.Path );
                 }
-                _defaultStoreRootPath = p;
+                else if( p != value.Path )
+                {
+                    Throw.InvalidOperationException( $"The DefaultStoreRootPath is already settled to '{p}', it can't be changed to '{value}'." );
+                }
             }
         }
     }
@@ -168,9 +183,11 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// to be added (and destroyed) but prevents the <see cref="LocalParty"/> to be altered.
     /// </para>
     /// </summary>
-    /// <param name="domainName">Domain name.</param>
-    /// <param name="partyName">Party name.</param>
-    /// <param name="environmentName">Environment name.</param>
+    /// <param name="domainName">
+    /// Domain name. Defaults to <see cref="DefaultRootDomainName"/>: it can't be "External" or "Undefined" (an external system).
+    /// </param>
+    /// <param name="partyName">Party name (the leading '$' is optional).</param>
+    /// <param name="environmentName">Environment name (must start with a '#', "#Development" is normalized to "#Dev").</param>
     /// <param name="storeRootPath">
     /// Optional store root path. Defaults to <see cref="DefaultStoreRootPath"/> (a private store).
     /// When specified, the store is shared (see <see cref="StoreRootPath"/>) and must be fully qualified.
@@ -181,7 +198,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// </para>
     /// </param>
     /// <returns>An empty configuration.</returns>
-    public static ApplicationIdentityServiceConfiguration CreateEmpty( string domainName = CoreApplicationIdentity.DefaultDomainName,
+    public static ApplicationIdentityServiceConfiguration CreateEmpty( string domainName = DefaultRootDomainName,
                                                                        string partyName = CoreApplicationIdentity.DefaultPartyName,
                                                                        string environmentName = CoreApplicationIdentity.DefaultEnvironmentName,
                                                                        NormalizedPath? storeRootPath = null )
@@ -192,9 +209,20 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             Throw.CheckArgument( "The store root path must be a valid fully qualified path.",
                                  FileUtil.IndexOfInvalidPathChars( store ) < 0 && Path.IsPathFullyQualified( store ) );
         }
-        CoreApplicationIdentity.IsValidDomainName( domainName );
-        CoreApplicationIdentity.IsValidPartyName( partyName );
-        CoreApplicationIdentity.IsValidPartyName( environmentName );
+        Throw.CheckNotNullArgument( domainName );
+        Throw.CheckNotNullArgument( partyName );
+        Throw.CheckNotNullArgument( environmentName );
+        Throw.CheckArgument( CoreApplicationIdentity.IsValidDomainName( domainName ) );
+        var firstSegment = domainName.Split( '/' )[0];
+        Throw.CheckArgument( "The root domain name cannot be \"External\" or \"Undefined\": this denotes an external system.",
+                             !firstSegment.Equals( ExternalDomainName, StringComparison.OrdinalIgnoreCase )
+                             && !firstSegment.Equals( CoreApplicationIdentity.DefaultDomainName, StringComparison.OrdinalIgnoreCase ) );
+        Throw.CheckArgument( partyName.Length > 0 && CoreApplicationIdentity.IsValidPartyName( partyName ) );
+        Throw.CheckArgument( CoreApplicationIdentity.IsValidEnvironmentName( environmentName ) );
+        if( environmentName.Equals( "#Development", StringComparison.OrdinalIgnoreCase ) )
+        {
+            environmentName = CoreApplicationIdentity.DefaultEnvironmentName;
+        }
         if( partyName[0] != '$' ) partyName = '$' + partyName;
         var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty, AssemblyConfiguration.Empty );
         var c = new MutableConfigurationSection( "CK-AppIdentity" );
@@ -229,7 +257,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                                                    IConfigurationSection configuration )
     {
         var env = hostEnvironment.EnvironmentName;
-        if( string.IsNullOrWhiteSpace( env ) || env == "Development" )
+        if( string.IsNullOrWhiteSpace( env ) || env.Equals( Environments.Development, StringComparison.OrdinalIgnoreCase ) )
         {
             env = CoreApplicationIdentity.DefaultEnvironmentName;
         }
@@ -241,7 +269,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             env = env.Substring( 0, CoreApplicationIdentity.EnvironmentNameMaxLength );
         }
-        return Create( monitor, configuration, "Default", hostEnvironment.ApplicationName, env );
+        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env );
     }
 
     /// <summary>
@@ -260,60 +288,15 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         return Create( monitor, c );
     }
 
-    sealed class WarnTracker : IActivityMonitorClient, IDisposable
-    {
-        private readonly IActivityMonitorOutput _output;
-        int _warnCount;
-
-        public WarnTracker( IActivityMonitorOutput output )
-        {
-            _output = output;
-            output.RegisterClient( this );
-        }
-
-        public int WarnCount => _warnCount;
-
-        public void Dispose()
-        {
-            _output.UnregisterClient( this );
-        }
-
-        public void OnUnfilteredLog( ref ActivityMonitorLogData data )
-        {
-            if( data.MaskedLevel == LogLevel.Warn ) _warnCount++;
-        }
-
-        public void OnOpenGroup( IActivityLogGroup group )
-        {
-            if( group.Data.MaskedLevel == LogLevel.Warn ) _warnCount++;
-        }
-
-        public void OnGroupClosing( IActivityLogGroup group, ref List<ActivityLogGroupConclusion>? conclusions )
-        {
-        }
-
-        public void OnGroupClosed( IActivityLogGroup group, IReadOnlyList<ActivityLogGroupConclusion> conclusions )
-        {
-        }
-
-        public void OnTopicChanged( string newTopic, string? fileName, int lineNumber )
-        {
-        }
-
-        public void OnAutoTagsChanged( CKTrait newTrait )
-        {
-        }
-    }
-
     /// <summary>
     /// Tries to create an <see cref="ApplicationIdentityServiceConfiguration"/> instance from a <see cref="IConfigurationSection"/>.
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The configuration section (typically named "CK-AppIdentity").</param>
     /// <param name="defaultDomainName">A valid domain name to use if the <paramref name="configuration"/> doesn't specify "DomainName".</param>
-    /// <param name="defaultPartyName">A valid party name to use if the <paramref name="configuration"/> doesn't specify "PartyName".</param>
-    /// <param name="defaultEnvironmentName">A valid environment name to use if the <paramref name="configuration"/> doesn't specify "EnvironmentName".</param>
-    /// <returns>A valid instance on success, null on configuration error.</returns>
+    /// <param name="defaultPartyName">A party name to use if the <paramref name="configuration"/> doesn't specify "PartyName".</param>
+    /// <param name="defaultEnvironmentName">An environment name to use if the <paramref name="configuration"/> doesn't specify "EnvironmentName".</param>
+    /// <returns>A valid instance on success, null on configuration error (this includes invalid default names).</returns>
     public static ApplicationIdentityServiceConfiguration? Create( IActivityMonitor monitor,
                                                                    IConfigurationSection configuration,
                                                                    string? defaultDomainName = null,
@@ -324,11 +307,15 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         using var gLog = monitor.OpenInfo( "Creating root ApplicationIdentityServiceConfiguration service." );
         var root = configuration as ImmutableConfigurationSection ?? new ImmutableConfigurationSection( configuration );
 
-        // ReadNames is strict.
-        bool success = ReadNames( monitor, root,
-                                  out var domainName, out var partyName, out var environmentName,
-                                  defaultDomainName, defaultPartyName, defaultEnvironmentName )
-                       & InheritedConfigurationProps.TryCreate( monitor, root, out var props );
+        // The strict mode is known only once the names are read: warnings are tracked from the start
+        // and the tracker is closed once the whole configuration (including the root "Local") has been analyzed.
+        using var warnTracker = new WarnTracker( monitor );
+
+        // ReadNames is strict. An empty default party name would denote a group: it is not a default for the root.
+        bool nameSuccess = ReadNames( monitor, root,
+                                      out var domainName, out var partyName, out var environmentName,
+                                      defaultDomainName, string.IsNullOrEmpty( defaultPartyName ) ? null : defaultPartyName, defaultEnvironmentName );
+        bool success = nameSuccess & InheritedConfigurationProps.TryCreate( monitor, root, out var props );
 
         Throw.DebugAssert( nameof( StrictConfigurationMode ) == "StrictConfigurationMode" );
         bool strictMode = environmentName != CoreApplicationIdentity.DefaultEnvironmentName;
@@ -339,44 +326,34 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             success = false;
         }
 
-        if( ReferenceEquals( domainName, "External" ) )
+        if( domainName == ExternalDomainName )
         {
             Throw.DebugAssert( CoreApplicationIdentity.DefaultDomainName == "Undefined" );
             monitor.Error( $"Root domain name cannot be \"External\" or \"Undefined\". This name denotes an external system." );
             success = false;
         }
-
-        monitor.MinimalFilter = monitor.MinimalFilter.Combine( LogFilter.Minimal );
-
-        var warnAsError = strictMode ? new WarnTracker( monitor.Output ) : null;
+        var fullName = partyName[0] == '$' ? $"{domainName}/{partyName}/{environmentName}" : $"{domainName}/${partyName}/{environmentName}";
 
         // Always try to create the parties even if success is already false: this enables
         // configuration errors to be fixed at once.
         var fullNameIndex = new Dictionary<string, ImmutableConfigurationSection>( StringComparer.OrdinalIgnoreCase );
+        // The local party is a party: no remote can have its FullName (they would share the same store folder).
+        if( nameSuccess ) fullNameIndex.Add( fullName, root );
         var parties = CreateParties( monitor, root.GetSection( "Parties" ), domainName, environmentName, ref props, fullNameIndex );
         success &= parties.HasValue;
 
         var store = HandleStorePath( monitor, configuration );
         success &= store != null;
 
-        if( warnAsError != null )
-        {
-            warnAsError.Dispose();
-            if( warnAsError.WarnCount > 0 )
-            {
-                monitor.Error( $"{warnAsError.WarnCount} warnings occurred and StrictConfigurationMode is true: no warning must be emitted." );
-                success = false;
-            }
-        }
         // Success may become false if something fails in the local configuration.
         var localConfig = CreateLocalConfiguration( monitor, root, ref props, ref success );
 
+        success &= warnTracker.Close( monitor, strictMode );
         if( !success )
         {
             monitor.CloseGroup( "Failed." );
             return null;
         }
-        var fullName = partyName[0] == '$' ? $"{domainName}/{partyName}/{environmentName}" : $"{domainName}/${partyName}/{environmentName}";
         return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, localConfig, strictMode, store!, ref parties, ref props );
 
         static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
@@ -451,9 +428,17 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             using var gLog = monitor.OpenInfo( $"Party group found '{partiesSection.Path}'." );
             int count = partyCollector.Count;
-            foreach( var c in configuration.GetChildren() )
+            // Only the "Parties" of a group are parties: its other keys (inherited configuration, "Local", etc.)
+            // must not be read as parties.
+            bool hasParties = false;
+            foreach( var c in partiesSection.GetChildren() )
             {
+                hasParties = true;
                 success &= ReadParties( monitor, c, domainName, environmentName, ref props, ref partyCollector, fullNameIndex );
+            }
+            if( !hasParties )
+            {
+                monitor.Warn( $"'{configuration.Path}' has no PartyName (nor FullName) and no Parties: it is ignored." );
             }
             if( success ) monitor.CloseGroup( $"Found {partyCollector.Count - count} parties." );
             else monitor.CloseGroup( "Failed." );
@@ -510,6 +495,10 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         }
         else
         {
+            if( partiesSection.Exists() )
+            {
+                monitor.Warn( $"'{partiesSection.Path}' is ignored: '{fullName}' is a remote party, only groups and tenant domains have Parties." );
+            }
             if( success )
             {
                 var p = new RemotePartyConfiguration( configuration, domainName, fullName, address, ref props );

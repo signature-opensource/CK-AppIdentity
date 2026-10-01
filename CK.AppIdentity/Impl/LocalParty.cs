@@ -76,7 +76,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
                                                                                ApplicationIdentityService? withTenants )
     {
         Throw.CheckNotNullArgument( configuration );
-        var c = Configuration.CreateDynamicRemoteConfiguration( monitor, configuration );
+        var c = Configuration.CreateDynamicRemoteConfiguration( monitor, configuration, ApplicationIdentityService.Configuration.StrictConfigurationMode );
         if( c == null ) return null;
         if( c.Value.Count == 0 ) return new AddedDynamicParties( Array.Empty<RemoteParty>(), Array.Empty<TenantDomainParty>() );
         if( singleTenant )

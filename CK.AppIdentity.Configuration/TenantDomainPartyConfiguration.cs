@@ -1,4 +1,5 @@
 using CK.Core;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -26,7 +27,7 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
     {
         Throw.DebugAssert( CoreApplicationIdentity.TryParseFullName( fullName.Path, out var d, out var p, out var e )
                       && d == domainName && p == fullName.Parts[^2] && e == fullName.LastPart
-                      && p[0] == '$' && p.Substring( 1 ) == fullName.Parts[^3] );
+                      && p[0] == '$' && p.AsSpan( 1 ).Equals( fullName.Parts[^3], StringComparison.OrdinalIgnoreCase ) );
         _localConfiguration = local;
         _remotes = remotes;
     }

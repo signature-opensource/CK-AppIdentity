@@ -29,9 +29,10 @@ public sealed class RemotePartyConfiguration : ApplicationIdentityPartyConfigura
     }
 
     /// <summary>
-    /// Gets whether this is an External party: this FullName is "External".
+    /// Gets whether this is an External party: its <see cref="ApplicationIdentityPartyConfiguration.DomainName"/>
+    /// is <see cref="ApplicationIdentityPartyConfiguration.ExternalDomainName"/>.
     /// </summary>
-    public bool IsExternalParty => ReferenceEquals( FullName.Path, "External" );
+    public bool IsExternalParty => DomainName == ExternalDomainName;
 
     /// <summary>
     /// Gets the address of this party.

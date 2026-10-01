@@ -56,7 +56,7 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     public NormalizedPath FullName => _fullName;
 
     /// <summary>
-    /// Defines the result of the <see cref="CreateDynamicRemoteConfiguration(IActivityMonitor, Action{MutableConfigurationSection})"/> method.
+    /// Defines the result of the <see cref="CreateDynamicRemoteConfiguration(IActivityMonitor, Action{MutableConfigurationSection}, bool)"/> method.
     /// </summary>
     /// <param name="Tenants">The list of tenant configurations.</param>
     /// <param name="Remotes">The list of remote configurations.</param>
@@ -79,10 +79,16 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The dynamic configurator.</param>
+    /// <param name="strictConfigurationMode">
+    /// When true, any warning is an error (this should be the <see cref="ApplicationIdentityServiceConfiguration.StrictConfigurationMode"/>
+    /// of the root configuration).
+    /// </param>
     /// <returns>One or more party configuration or null if an error occurred.</returns>
     public ProcessedConfiguration? CreateDynamicRemoteConfiguration( IActivityMonitor monitor,
-                                                                       Action<MutableConfigurationSection> configuration )
+                                                                     Action<MutableConfigurationSection> configuration,
+                                                                     bool strictConfigurationMode = false )
     {
+        using var warnTracker = new WarnTracker( monitor );
         // Anchors the new mutable section below this section: lookups apply.
         //
         // The "Remotes:X" levels are useless. We don't need these because these slots don't carry any
@@ -104,17 +110,15 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
         // existing remotes.
         var fullNameIndex = new Dictionary<string, ImmutableConfigurationSection>( StringComparer.OrdinalIgnoreCase );
         var partyCollector = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>() );
-        if( ApplicationIdentityServiceConfiguration.ReadParties( monitor,
-                                                                 finalConfig,
-                                                                 _domainName,
-                                                                 _environmentName,
-                                                                 ref inheritedProps,
-                                                                 ref partyCollector,
-                                                                 fullNameIndex ) )
-        {
-            return partyCollector;
-        }
-        return null;
+        bool success = ApplicationIdentityServiceConfiguration.ReadParties( monitor,
+                                                                            finalConfig,
+                                                                            _domainName,
+                                                                            _environmentName,
+                                                                            ref inheritedProps,
+                                                                            ref partyCollector,
+                                                                            fullNameIndex );
+        success &= warnTracker.Close( monitor, strictConfigurationMode );
+        return success ? partyCollector : null;
     }
 
     /// <summary>
@@ -206,11 +210,9 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
                 monitor.Error( $"'{s.Path}:DomainName' cannot be used when '{s.Path}:FullName' is defined." );
                 success = false;
             }
-            Throw.DebugAssert( string.IsInterned( "<error>" ) != null && string.IsInterned( "External" ) != null );
-            domainName = NormalizeDomainName( monitor, d );
-            success &= !ReferenceEquals( domainName, "<error>" );
+            success &= NormalizeDomainName( monitor, d, out domainName );
             partyName = p;
-            environmentName = e;
+            environmentName = NormalizeEnvironmentName( e );
             return success;
         }
 
@@ -218,37 +220,47 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
         {
             var k = _names[(int)kind];
             var n = s[k];
-            if( n != null )
-            {
-                bool isValid = kind switch
-                {
-                    NameKind.Domain => CoreApplicationIdentity.IsValidDomainName( n ),
-                    NameKind.Party => CoreApplicationIdentity.IsValidPartyName( n ),
-                    NameKind.Env => CoreApplicationIdentity.IsValidEnvironmentName( n ),
-                    _ => Throw.NotSupportedException<bool>()
-                };
-                if( !isValid )
-                {
-                    monitor.Error( $"Invalid '{s.Path}:{k}'. It {_nameSyntaxes[(int)NameKind.Env]}" );
-                    return ErrorName( kind, out name );
-                }
-                if( kind == NameKind.Domain )
-                {
-                    name = NormalizeDomainName( monitor, n );
-                    return name != "error";
-                }
-                name = n;
-            }
-            else
+            if( n == null )
             {
                 if( defaultName == null )
                 {
                     monitor.Error( $"Configuration '{s.Path}:{k}' is required." );
                     return ErrorName( kind, out name );
                 }
-                name = defaultName;
+                // An empty default party name denotes a group of parties (see ReadParties).
+                if( kind == NameKind.Party && defaultName.Length == 0 )
+                {
+                    name = defaultName;
+                    return true;
+                }
+                // Defaults come from code or from the host (the IHostEnvironment.ApplicationName is
+                // typically an assembly name like "Acme.Service"): they are checked like configured names.
+                if( !IsValid( kind, defaultName ) )
+                {
+                    monitor.Error( $"Configuration '{s.Path}:{k}' must be defined: its default value '{defaultName}' is invalid. It {_nameSyntaxes[(int)kind]}" );
+                    return ErrorName( kind, out name );
+                }
+                n = defaultName;
             }
+            else if( !IsValid( kind, n ) )
+            {
+                monitor.Error( $"Invalid '{s.Path}:{k}'. It {_nameSyntaxes[(int)kind]}" );
+                return ErrorName( kind, out name );
+            }
+            if( kind == NameKind.Domain )
+            {
+                return NormalizeDomainName( monitor, n, out name );
+            }
+            name = kind == NameKind.Env ? NormalizeEnvironmentName( n ) : n;
             return true;
+
+            static bool IsValid( NameKind kind, string n ) => kind switch
+            {
+                NameKind.Domain => CoreApplicationIdentity.IsValidDomainName( n ),
+                NameKind.Party => CoreApplicationIdentity.IsValidPartyName( n ),
+                NameKind.Env => CoreApplicationIdentity.IsValidEnvironmentName( n ),
+                _ => Throw.NotSupportedException<bool>()
+            };
 
             static bool ErrorName( NameKind kind, out string name )
             {
@@ -257,30 +269,42 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
             }
         }
 
-        static string NormalizeDomainName( IActivityMonitor monitor, string domainName )
+        // Same as the CoreApplicationIdentity.Builder.EnvironmentName.
+        static string NormalizeEnvironmentName( string environmentName )
         {
-            if( domainName.StartsWith( "External", StringComparison.OrdinalIgnoreCase ) )
-            {
-                return CheckNoSubDomain( monitor, domainName, "External" );
-            }
-            if( domainName.StartsWith( CoreApplicationIdentity.DefaultDomainName, StringComparison.OrdinalIgnoreCase ) )
-            {
-                return CheckNoSubDomain( monitor, domainName, CoreApplicationIdentity.DefaultDomainName );
-            }
-            return domainName;
+            return environmentName.Equals( "#Development", StringComparison.OrdinalIgnoreCase )
+                    ? CoreApplicationIdentity.DefaultEnvironmentName
+                    : environmentName;
+        }
 
-            static string CheckNoSubDomain( IActivityMonitor monitor, string domainName, string prefix )
+        // "External" and "Undefined" (the CoreApplicationIdentity.DefaultDomainName) denote an external system:
+        // they are normalized to "External" and can't have sub domains. Only the whole first segment is considered:
+        // "ExternalPartners" is a regular domain.
+        static bool NormalizeDomainName( IActivityMonitor monitor, string domainName, out string normalized )
+        {
+            var firstSegment = domainName.AsSpan( 0, domainName.IndexOf( '/' ) is var idx && idx >= 0 ? idx : domainName.Length );
+            if( firstSegment.Equals( ExternalDomainName, StringComparison.OrdinalIgnoreCase )
+                || firstSegment.Equals( CoreApplicationIdentity.DefaultDomainName, StringComparison.OrdinalIgnoreCase ) )
             {
-                int prefixLen = prefix.Length;
-                if( domainName.Length > prefixLen && domainName[prefixLen] == '/' )
+                if( firstSegment.Length < domainName.Length )
                 {
-                    monitor.Error( $"Domain name cannot start with \"{prefix}\". This denotes an \"External\" system where domains don't apply." );
-                    return "error";
+                    monitor.Error( $"Domain name '{domainName}' cannot start with \"{firstSegment}\". This denotes an \"External\" system where domains don't apply." );
+                    normalized = "error";
+                    return false;
                 }
-                return "External";
+                normalized = ExternalDomainName;
+                return true;
             }
+            normalized = domainName;
+            return true;
         }
     }
+
+    /// <summary>
+    /// The "External" domain name: the domain of the external parties. "Undefined" (the <see cref="CoreApplicationIdentity.DefaultDomainName"/>)
+    /// is normalized to "External".
+    /// </summary>
+    public const string ExternalDomainName = "External";
 
     #endregion
 }
