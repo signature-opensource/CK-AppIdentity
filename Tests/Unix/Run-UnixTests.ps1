@@ -145,18 +145,19 @@ if( -not $exists ) {
 }
 
 # The repository, seen from the distribution.
-$wslRepository = Get-WslOutput '-d', $Distribution, '-u', 'root', '--', 'wslpath', '-a', ($repository -replace '\\', '/')
-if( -not $wslRepository ) { throw "Unable to compute the WSL path of '$repository'." }
+# (a function that returns a single line returns a string, not an array: @() ensures an array.)
+$wslRepository = @( Get-WslOutput '-d', $Distribution, '-u', 'root', '--exec', 'wslpath', '-a', ($repository -replace '\\', '/') )
+if( $wslRepository.Count -eq 0 -or -not $wslRepository[0] ) { throw "Unable to compute the WSL path of '$repository'." }
 $wslRepository = $wslRepository[0]
 
 # 3. Provisioning (only when needed).
 $hash = (Get-FileHash -Algorithm SHA256 -InputStream ([IO.MemoryStream]::new( [Text.Encoding]::UTF8.GetBytes(
             (Get-Content -Raw (Join-Path $PSScriptRoot 'provision.sh')) + (Get-Content -Raw (Join-Path $repository 'global.json')) )))).Hash
-$provisioned = Get-WslOutput '-d', $Distribution, '-u', 'root', '--', 'bash', '-c', 'cat /etc/ck-unixtests.provisioned 2> /dev/null || true'
+$provisioned = Get-WslOutput '-d', $Distribution, '-u', 'root', '--exec', 'bash', '-c', 'cat /etc/ck-unixtests.provisioned 2> /dev/null || true'
 if( $Provision -or "$provisioned".Trim() -ne $hash ) {
     Write-Step "Provisioning '$Distribution'."
     $command = "tr -d '\r' < '$wslRepository/Tests/Unix/provision.sh' > /tmp/provision.sh && bash /tmp/provision.sh '$wslRepository' $user && echo $hash > /etc/ck-unixtests.provisioned"
-    if( (Invoke-Wsl '-d', $Distribution, '-u', 'root', '--', 'bash', '-c', $command) -ne 0 ) { throw "Provisioning of '$Distribution' failed." }
+    if( (Invoke-Wsl '-d', $Distribution, '-u', 'root', '--exec', 'bash', '-c', $command) -ne 0 ) { throw "Provisioning of '$Distribution' failed." }
     # /etc/wsl.conf is read when the distribution starts.
     Invoke-Wsl '--terminate', $Distribution | Out-Null
 }
@@ -168,7 +169,7 @@ if( $TestArguments.Count -gt 0 ) {
     $extra = ' -- ' + (($TestArguments | ForEach-Object { "'" + ($_ -replace "'", "'\''") + "'" }) -join ' ')
 }
 $command = "tr -d '\r' < '$wslRepository/Tests/Unix/run-tests.sh' > /tmp/run-tests.sh && bash /tmp/run-tests.sh --source '$wslRepository' --work ~/src/CK-AppIdentity --results '$wslRepository/Tests/Unix/.results'$extra"
-$exitCode = Invoke-Wsl '-d', $Distribution, '-u', $user, '--', 'bash', '-lc', $command
+$exitCode = Invoke-Wsl '-d', $Distribution, '-u', $user, '--exec', 'bash', '-lc', $command
 if( $exitCode -eq 0 ) { Write-Host 'All the Unix test passes succeeded.' -ForegroundColor Green }
 else { Write-Host "Unix tests FAILED (exit code $exitCode). See Tests\Unix\.results." -ForegroundColor Red }
 exit $exitCode

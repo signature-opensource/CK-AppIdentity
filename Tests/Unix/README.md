@@ -10,6 +10,12 @@ Part of the code behaves differently on Unix and must be tested there: the store
 .\Tests\Unix\Run-UnixTests.ps1
 ```
 
+If running scripts is disabled on the machine (the default execution policy), use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Tests\Unix\Run-UnixTests.ps1
+```
+
 Everything is automated and idempotent:
 
 1. **WSL is installed if needed.** This requires administrator rights (a UAC prompt) and a reboot:

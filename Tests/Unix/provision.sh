@@ -46,6 +46,8 @@ cat > /etc/profile.d/dotnet.sh << 'EOF'
 export DOTNET_ROOT=/usr/share/dotnet
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
+# The SDK is installed without workloads: the integrity check only emits a useless warning.
+export DOTNET_SKIP_WORKLOAD_INTEGRITY_CHECK=true
 EOF
 dotnet --version
 
