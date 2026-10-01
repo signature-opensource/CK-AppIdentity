@@ -180,15 +180,26 @@ sealed partial class StoreFileSystem
     /// The content is written to a temporary file in the same folder, flushed to disk, and then renamed
     /// over the target, but only if <paramref name="write"/> returns normally.
     /// </summary>
+    /// <remarks>
+    /// The temporary file is locked while it exists so that <see cref="DeleteTemporaryFiles"/> never deletes a write
+    /// in progress, even a stalled one: on Windows, it is opened with <see cref="FileShare.None"/> (it can't be deleted)
+    /// until the rename. On Unix, it is locked by flock(2) (whatever the .NET FileShare emulation does) and kept open
+    /// during the rename (the lock follows the file).
+    /// </remarks>
     public void WriteAtomically( NormalizedPath path, Action<Stream> write )
     {
         var temp = GetTempPath( path );
+        FileStream? f = null;
         try
         {
-            using( var f = OpenWrite( temp, FileMode.CreateNew, FileShare.None, FileOptions.None ) )
+            f = OpenTemporaryFile( temp, FileOptions.None );
+            write( f );
+            f.Flush( flushToDisk: true );
+            // On Windows, the file can't be renamed while it is opened without FileShare.Delete.
+            if( OperatingSystem.IsWindows() )
             {
-                write( f );
-                f.Flush( flushToDisk: true );
+                f.Dispose();
+                f = null;
             }
             for( int retry = 0; !TryReplace( temp, path, retry ); ++retry )
             {
@@ -197,8 +208,14 @@ sealed partial class StoreFileSystem
         }
         catch
         {
+            f?.Dispose();
+            f = null;
             TryDelete( temp );
             throw;
+        }
+        finally
+        {
+            f?.Dispose();
         }
     }
 
@@ -206,13 +223,17 @@ sealed partial class StoreFileSystem
     public async Task WriteAtomicallyAsync( NormalizedPath path, Func<Stream, CancellationToken, Task> write, CancellationToken cancel )
     {
         var temp = GetTempPath( path );
+        FileStream? f = null;
         try
         {
-            await using( var f = OpenWrite( temp, FileMode.CreateNew, FileShare.None, FileOptions.Asynchronous ) )
+            f = OpenTemporaryFile( temp, FileOptions.Asynchronous );
+            await write( f, cancel ).ConfigureAwait( false );
+            await f.FlushAsync( cancel ).ConfigureAwait( false );
+            f.Flush( flushToDisk: true );
+            if( OperatingSystem.IsWindows() )
             {
-                await write( f, cancel ).ConfigureAwait( false );
-                await f.FlushAsync( cancel ).ConfigureAwait( false );
-                f.Flush( flushToDisk: true );
+                await f.DisposeAsync().ConfigureAwait( false );
+                f = null;
             }
             for( int retry = 0; !TryReplace( temp, path, retry ); ++retry )
             {
@@ -221,13 +242,33 @@ sealed partial class StoreFileSystem
         }
         catch
         {
+            if( f != null ) await f.DisposeAsync().ConfigureAwait( false );
+            f = null;
             TryDelete( temp );
             throw;
         }
+        finally
+        {
+            if( f != null ) await f.DisposeAsync().ConfigureAwait( false );
+        }
+    }
+
+    FileStream OpenTemporaryFile( NormalizedPath temp, FileOptions options )
+    {
+        var f = OpenWrite( temp, FileMode.CreateNew, FileShare.None, options );
+        if( !OperatingSystem.IsWindows() )
+        {
+            // Best effort: on a file system that doesn't support locking, only the age of the
+            // file protects it from DeleteTemporaryFiles.
+            UnixFlock.TryLockExclusive( f.SafeFileHandle, out _ );
+        }
+        return f;
     }
 
     /// <summary>
     /// Deletes the temporary files of interrupted atomic writes (older than one hour) in a folder and below it.
+    /// A temporary file that is locked (a write is in progress, see <see cref="WriteAtomically"/>) is never deleted.
+    /// On Unix, when the file system doesn't support locking, the temporary files are kept.
     /// Errors are ignored.
     /// </summary>
     public static void DeleteTemporaryFiles( NormalizedPath folder )
@@ -237,12 +278,41 @@ sealed partial class StoreFileSystem
             var limit = DateTime.UtcNow.AddHours( -1 );
             foreach( var f in Directory.EnumerateFiles( folder, TempFilePrefix + "*", SearchOption.AllDirectories ) )
             {
-                if( File.GetLastWriteTimeUtc( f ) < limit ) TryDelete( f );
+                if( File.GetLastWriteTimeUtc( f ) >= limit ) continue;
+                if( OperatingSystem.IsWindows() )
+                {
+                    // An opened temporary file can't be deleted (sharing violation).
+                    TryDelete( f );
+                }
+                else
+                {
+                    TryDeleteUnlockedFile( f );
+                }
             }
         }
         catch( Exception )
         {
             // Best effort.
+        }
+    }
+
+    [UnsupportedOSPlatform( "windows" )]
+    static void TryDeleteUnlockedFile( string path )
+    {
+        try
+        {
+            // When the .NET FileShare emulation is active, opening a file locked by a writer fails (LOCK_SH | LOCK_NB):
+            // this is caught below.
+            using var h = File.OpenHandle( path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete );
+            if( UnixFlock.TryLockExclusive( h, out _ ) == UnixFlock.Result.Locked )
+            {
+                // Deleted while we hold the lock: no writer can be using it.
+                File.Delete( path );
+            }
+        }
+        catch( Exception )
+        {
+            // Locked, already deleted or not deletable: best effort.
         }
     }
 

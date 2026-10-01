@@ -15,6 +15,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="CK.AppIdentity" />
+        <InternalsVisibleTo Include="CK.AppIdentity.Abstractions" />
     </ItemGroup>
 
 </Project>

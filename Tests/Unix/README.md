@@ -35,7 +35,8 @@ Options:
 |---|---|
 | `-Reset` | Deletes the distribution and creates it again. |
 | `-Provision` | Provisions again even if nothing changed. |
-| `-TestArguments '--filter','FullyQualifiedName~FileStore'` | Additional `dotnet test` arguments. |
+| `-Filter FullyQualifiedName~FileStore` | A `dotnet test --filter` expression. |
+| `-TestArguments '--x','y'` | Additional `dotnet test` arguments (from a PowerShell session only: `powershell -File` can't pass an array). |
 | `-Distribution <name>` / `-UbuntuRelease <codename>` | Another distribution name or Ubuntu release. |
 
 To remove everything: `wsl --unregister CK-UnixTests` and delete `%LOCALAPPDATA%\CK-UnixTests`.

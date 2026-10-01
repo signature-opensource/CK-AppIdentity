@@ -5,6 +5,7 @@ using Shouldly;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -88,6 +89,41 @@ public class AtomicWriteAndLockTests
             File.Exists( oldTemp ).ShouldBeFalse();
             File.Exists( recentTemp ).ShouldBeTrue( "It may be an atomic write in progress in another process." );
         }
+        Directory.Delete( folder, recursive: true );
+    }
+
+    [Test]
+    public async Task a_stalled_atomic_write_is_never_swept_Async()
+    {
+        await using var s = CreateService();
+        var store = s.SharedFileStore;
+        var folder = store.FolderPath.AppendPart( $"{Guid.NewGuid()}" );
+        var file = folder.AppendPart( "Data.bin" );
+        var release = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
+        var writing = store.WriteAtomicallyAsync( file, async ( f, cancel ) =>
+        {
+            f.WriteByte( 1 );
+            await release.Task;
+            f.WriteByte( 2 );
+        } );
+        string? temp = null;
+        var start = Stopwatch.GetTimestamp();
+        while( (temp = Directory.Exists( folder ) ? Directory.EnumerateFiles( folder, "$Tmp.*" ).SingleOrDefault() : null) == null )
+        {
+            Stopwatch.GetElapsedTime( start ).ShouldBeLessThan( TimeSpan.FromSeconds( 5 ) );
+            await Task.Delay( 10 );
+        }
+        // The write is stalled for 2 hours: the age alone would make it a leftover of an interrupted write.
+        File.SetLastWriteTimeUtc( temp, DateTime.UtcNow.AddHours( -2 ) );
+
+        // Creating the store of the same party sweeps its folder.
+        await using( CreateService() ) { }
+
+        File.Exists( temp ).ShouldBeTrue( "A write in progress holds a lock on its temporary file." );
+        release.SetResult();
+        await writing.WaitAsync( TimeSpan.FromSeconds( 5 ) );
+        File.ReadAllBytes( file ).ShouldBe( new byte[] { 1, 2 } );
+        File.Exists( temp ).ShouldBeFalse();
         Directory.Delete( folder, recursive: true );
     }
 

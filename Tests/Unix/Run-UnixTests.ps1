@@ -31,14 +31,18 @@ Unregisters (deletes) the distribution and creates it again.
 .PARAMETER Provision
 Provisions the distribution even if provision.sh and global.json didn't change.
 
+.PARAMETER Filter
+A "dotnet test --filter" expression (like "FullyQualifiedName~FileStore").
+
 .PARAMETER TestArguments
-Additional arguments for "dotnet test" (like "--filter", "FullyQualifiedName~FileStore").
+Additional arguments for "dotnet test". This is an array: it can't be used with "powershell -File"
+(that passes '--x','y' as a single string), only from a PowerShell session.
 
 .EXAMPLE
 .\Tests\Unix\Run-UnixTests.ps1
 
 .EXAMPLE
-.\Tests\Unix\Run-UnixTests.ps1 -TestArguments '--filter','FullyQualifiedName~AtomicWriteAndLock'
+powershell -ExecutionPolicy Bypass -File .\Tests\Unix\Run-UnixTests.ps1 -Filter FullyQualifiedName~AtomicWriteAndLock
 #>
 [CmdletBinding()]
 param(
@@ -46,8 +50,10 @@ param(
     [string] $UbuntuRelease = 'noble',
     [switch] $Reset,
     [switch] $Provision,
+    [string] $Filter,
     [string[]] $TestArguments = @()
 )
+if( $Filter ) { $TestArguments = @( '--filter', $Filter ) + $TestArguments }
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'

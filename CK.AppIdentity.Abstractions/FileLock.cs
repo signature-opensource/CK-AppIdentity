@@ -1,3 +1,4 @@
+using CK.AppIdentity;
 using Microsoft.Win32.SafeHandles;
 using System;
 using System.Diagnostics;
@@ -41,10 +42,6 @@ namespace CK.Core;
 public sealed class FileLock : IDisposable
 {
     const UnixFileMode OwnerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-    const int LOCK_EX = 2;
-    const int LOCK_NB = 4;
-    const int EINTR = 4;
-    static readonly int EWOULDBLOCK = OperatingSystem.IsLinux() || OperatingSystem.IsAndroid() ? 11 : 35;
     static readonly TimeSpan _maxDelay = TimeSpan.FromMilliseconds( 500 );
 
     readonly FileStream _file;
@@ -147,7 +144,7 @@ public sealed class FileLock : IDisposable
         // When the .NET FileShare emulation is active, it takes a flock(LOCK_EX | LOCK_NB) on open and
         // reports EWOULDBLOCK as an IOException whose HResult is the raw errno. Other plain IOExceptions
         // (EMFILE, EIO, ENOSPC, EROFS, etc.) are real errors that must not be mistaken for "busy".
-        return ex.GetType() == typeof( IOException ) && ex.HResult == EWOULDBLOCK;
+        return ex.GetType() == typeof( IOException ) && ex.HResult == UnixFlock.WouldBlock;
     }
 
     [UnsupportedOSPlatform( "windows" )]
@@ -155,26 +152,12 @@ public sealed class FileLock : IDisposable
     {
         // When the .NET emulation is active, it already holds LOCK_EX on this very descriptor and
         // this is a no-op. When it is disabled, this is the lock.
-        bool added = false;
-        handle.DangerousAddRef( ref added );
-        try
+        switch( UnixFlock.TryLockExclusive( handle, out int errno ) )
         {
-            int fd = (int)handle.DangerousGetHandle();
-            for(; ; )
-            {
-                if( flock( fd, LOCK_EX | LOCK_NB ) == 0 ) return true;
-                int errno = Marshal.GetLastPInvokeError();
-                if( errno == EINTR ) continue;
-                if( errno == EWOULDBLOCK ) return false;
+            case UnixFlock.Result.Locked: return true;
+            case UnixFlock.Result.Busy: return false;
+            default:
                 throw new IOException( $"Unable to lock '{path}' (errno {errno}): its file system doesn't support file locking. The lock file must be on a local file system." );
-            }
-        }
-        finally
-        {
-            if( added ) handle.DangerousRelease();
         }
     }
-
-    [DllImport( "libc", SetLastError = true )]
-    static extern int flock( int fd, int operation );
 }
