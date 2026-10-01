@@ -39,7 +39,7 @@ namespace CK.AppIdentity;
 /// the root's ACL.
 /// </para>
 /// </summary>
-sealed class StoreFileSystem
+sealed partial class StoreFileSystem
 {
     const UnixFileMode OwnerDirectory = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
     const UnixFileMode OwnerFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
@@ -452,4 +452,5 @@ sealed class StoreFileSystem
             }
         }
     }
+
 }

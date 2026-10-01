@@ -25,3 +25,10 @@ The initial objects are locked once the application starts and cannot change dur
 objects can be defined dynamically and destroyed, but what was configured is immutable.
 [CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/master/CK.Configuration/README.md)
 provides the `ImmutableConfigurationSection` that guarantees it.
+
+## Testing on Unix
+
+The store permissions and the inter-process locks behave differently on Unix. From Windows,
+`.\Tests\Unix\Run-UnixTests.ps1` runs the tests in a dedicated WSL distribution that it creates
+and provisions itself; on Linux or macOS, run `Tests/Unix/run-tests.sh`.
+See [Tests/Unix](Tests/Unix/README.md).

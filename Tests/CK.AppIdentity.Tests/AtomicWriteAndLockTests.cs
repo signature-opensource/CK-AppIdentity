@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shouldly;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -130,6 +131,81 @@ public class AtomicWriteAndLockTests
             again.ShouldNotBeNull();
         }
         File.Delete( path );
+    }
+
+    // Another process that holds the lock: on Unix the flock command (util-linux) takes the same flock(2)
+    // as FileLock, on Windows a PowerShell opens the file with FileShare.None.
+    static Process StartLockHolder( string path )
+    {
+        var info = OperatingSystem.IsWindows()
+                    ? new ProcessStartInfo( "powershell.exe", $"-NoProfile -NonInteractive -Command \"$f = [IO.File]::Open('{path}', 'OpenOrCreate', 'Read', 'None'); Start-Sleep 60\"" )
+                    : new ProcessStartInfo( "flock", $"-x \"{path}\" sleep 60" );
+        info.UseShellExecute = false;
+        info.CreateNoWindow = true;
+        try
+        {
+            return Process.Start( info ) ?? throw new InvalidOperationException( "Unable to start the lock holder." );
+        }
+        catch( System.ComponentModel.Win32Exception ) when( !OperatingSystem.IsWindows() )
+        {
+            Assert.Ignore( "The 'flock' command (util-linux) is not available." );
+            throw;
+        }
+    }
+
+    // Tries to take the lock from another process: true if it succeeded.
+    static bool TryLockFromAnotherProcess( string path )
+    {
+        var info = OperatingSystem.IsWindows()
+                    ? new ProcessStartInfo( "powershell.exe", $"-NoProfile -NonInteractive -Command \"try {{ [IO.File]::Open('{path}', 'OpenOrCreate', 'Read', 'None').Dispose(); exit 0 }} catch {{ exit 1 }}\"" )
+                    : new ProcessStartInfo( "flock", $"-n -x \"{path}\" true" );
+        info.UseShellExecute = false;
+        info.CreateNoWindow = true;
+        using var p = Process.Start( info ).ShouldNotBeNull();
+        p.WaitForExit( 30_000 ).ShouldBeTrue();
+        return p.ExitCode == 0;
+    }
+
+    [Test]
+    public async Task the_lock_excludes_other_processes_Async()
+    {
+        var path = ApplicationIdentityServiceConfiguration.DefaultStoreRootPath.AppendPart( $"{Guid.NewGuid()}.lock" );
+        // Created first: the external processes open it as is.
+        using( FileLock.TryAcquire( path ) ) { }
+        try
+        {
+            using( var held = FileLock.TryAcquire( path ) )
+            {
+                held.ShouldNotBeNull();
+                TryLockFromAnotherProcess( path ).ShouldBeFalse( "We hold the lock." );
+            }
+            TryLockFromAnotherProcess( path ).ShouldBeTrue( "The lock has been released." );
+
+            using var holder = StartLockHolder( path );
+            try
+            {
+                // Waits for the holder to actually hold the lock.
+                var start = Stopwatch.GetTimestamp();
+                while( FileLock.TryAcquire( path ) is FileLock l )
+                {
+                    l.Dispose();
+                    Stopwatch.GetElapsedTime( start ).ShouldBeLessThan( TimeSpan.FromSeconds( 20 ), "The lock holder process didn't take the lock." );
+                    await Task.Delay( 50 );
+                }
+                (await FileLock.TryAcquireAsync( path, TimeSpan.FromMilliseconds( 200 ) )).ShouldBeNull( "Another process holds the lock." );
+            }
+            finally
+            {
+                holder.Kill( entireProcessTree: true );
+                await holder.WaitForExitAsync();
+            }
+            using var afterKill = await FileLock.TryAcquireAsync( path, TimeSpan.FromSeconds( 5 ) );
+            afterKill.ShouldNotBeNull( "The lock of a dead process is released by the OS." );
+        }
+        finally
+        {
+            File.Delete( path );
+        }
     }
 
     static ApplicationIdentityService CreateService()
