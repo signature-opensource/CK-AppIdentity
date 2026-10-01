@@ -54,18 +54,18 @@
   </Interface>
   <Interface Name="CK.AppIdentity.ITenantDomainParty">
     <Position X="2.25" Y="7.5" Width="1.75" />
-    <InheritanceLine Type="CK.AppIdentity.IOwnedParty" ManuallyRouted="true" FixedFromPoint="true" FixedToPoint="true">
-      <Path>
-        <Point X="2" Y="6.562" />
-        <Point X="2.938" Y="6.562" />
-        <Point X="2.938" Y="7.5" />
-      </Path>
-    </InheritanceLine>
     <InheritanceLine Type="CK.AppIdentity.ILocalParty" FixedFromPoint="true" FixedToPoint="true">
       <Path>
         <Point X="4.25" Y="6.562" />
         <Point X="3.25" Y="6.562" />
         <Point X="3.25" Y="7.5" />
+      </Path>
+    </InheritanceLine>
+    <InheritanceLine Type="CK.AppIdentity.IOwnedParty" ManuallyRouted="true" FixedFromPoint="true" FixedToPoint="true">
+      <Path>
+        <Point X="2" Y="6.562" />
+        <Point X="2.938" Y="6.562" />
+        <Point X="2.938" Y="7.5" />
       </Path>
     </InheritanceLine>
     <AssociationLine Name="Owner" Type="CK.AppIdentity.IApplicationIdentityService" FixedFromPoint="true" FixedToPoint="true">
@@ -94,9 +94,9 @@
     </TypeIdentifier>
   </Interface>
   <Interface Name="CK.AppIdentity.IFileStore">
-    <Position X="5" Y="0.5" Width="1.5" />
+    <Position X="5" Y="0.5" Width="1.75" />
     <TypeIdentifier>
-      <HashCode>AAAAAAAAACAAAAAAAAAAACAAAAAAAIAAAAAAAAAAAAA=</HashCode>
+      <HashCode>AAAAAAAAACgAAAAAAAQAACAAAAAQAIJAAAAAAAAAAUA=</HashCode>
       <FileName>IFileStore.cs</FileName>
     </TypeIdentifier>
   </Interface>

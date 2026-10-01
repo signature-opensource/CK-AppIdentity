@@ -40,7 +40,8 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
         // The ApplicationIdentityService constructor will get the IBridge.Target. 
         var bridgeTarget = appIdentityService?._allPartyChanged ?? new PerfectEventSender<IOwnedParty>();
         _remotesChangedBridge = _remotesChanged.CreateBridge( bridgeTarget!, Unsafe.As<IOwnedParty> );
-        _privateStore = new FileStore( SharedFileStore.FolderPath.AppendPart( "-Local" ) );
+        _privateStore = new FileStore( ApplicationIdentityService.Configuration.StoreFileSystem,
+                                       SharedFileStore.FolderPath.AppendPart( FileStore.LocalStoreName ) );
         _localConfiguration = localConfiguration;
     }
 

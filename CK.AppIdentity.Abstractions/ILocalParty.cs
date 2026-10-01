@@ -61,6 +61,11 @@ public interface ILocalParty : IParty
 
     /// <summary>
     /// Gets the private local file store. This is the "-Local" directory inside this <see cref="IParty.SharedFileStore"/>.
+    /// <para>
+    /// It is private to this party: the <see cref="IParty.SharedFileStore"/> can't access it. It is not private to the
+    /// account: in a shared store, it has the same permissions as the rest of the store
+    /// (see <see cref="ApplicationIdentityServiceConfiguration.StoreRootPath"/>).
+    /// </para>
     /// </summary>
     IFileStore LocalFileStore { get; }
 

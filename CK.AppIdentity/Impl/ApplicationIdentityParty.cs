@@ -26,7 +26,8 @@ public abstract class ApplicationIdentityParty : IParty
         _appIdentityService = appIdentityService ?? (ApplicationIdentityService)this;
         _configuration = configuration;
         _features = Array.Empty<object>();
-        _sharedStore = new FileStore( ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ) );
+        _sharedStore = new FileStore( ApplicationIdentityService.Configuration.StoreFileSystem,
+                                      ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ) );
     }
 
     IApplicationIdentityService IParty.ApplicationIdentityService => _appIdentityService;

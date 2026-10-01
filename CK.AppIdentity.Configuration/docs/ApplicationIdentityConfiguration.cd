@@ -7,13 +7,14 @@
       <Field Name="_defaultStoreRootPathLock" Hidden="true" />
       <Field Name="_localConfiguration" Hidden="true" />
       <Field Name="_remotes" Hidden="true" />
-      <Field Name="_storeRootPath" Hidden="true" />
+      <Field Name="_storeFileSystem" Hidden="true" />
       <Field Name="_strictMode" Hidden="true" />
       <Field Name="_tenants" Hidden="true" />
       <Method Name="ApplicationIdentityServiceConfiguration" Hidden="true" />
       <Method Name="CreateLocalConfiguration" Hidden="true" />
       <Method Name="CreateParties" Hidden="true" />
       <Method Name="ReadParties" Hidden="true" />
+      <Property Name="StoreFileSystem" Hidden="true" />
     </Members>
     <NestedTypes>
       <Class Name="CK.AppIdentity.ApplicationIdentityServiceConfiguration.WarnTracker" Collapsed="true">
@@ -23,16 +24,6 @@
         <Lollipop Position="0.2" />
       </Class>
     </NestedTypes>
-    <AssociationLine Name="TenantDomains" Type="CK.AppIdentity.TenantDomainPartyConfiguration" FixedFromPoint="true" FixedToPoint="true">
-      <Path>
-        <Point X="3.5" Y="7" />
-        <Point X="4.471" Y="7" />
-        <Point X="4.471" Y="6.483" />
-      </Path>
-      <MemberNameLabel ManuallyPlaced="true" ManuallySized="true">
-        <Position X="-0.323" Y="0.577" Height="0.182" Width="1.229" />
-      </MemberNameLabel>
-    </AssociationLine>
     <AssociationLine Name="Remotes" Type="CK.AppIdentity.RemotePartyConfiguration" FixedFromPoint="true" FixedToPoint="true">
       <Path>
         <Point X="3.5" Y="7.688" />
@@ -43,13 +34,23 @@
         <Position X="2.643" Y="0.81" Height="0.182" Width="0.803" />
       </MemberNameLabel>
     </AssociationLine>
+    <AssociationLine Name="TenantDomains" Type="CK.AppIdentity.TenantDomainPartyConfiguration" FixedFromPoint="true" FixedToPoint="true">
+      <Path>
+        <Point X="3.5" Y="6.75" />
+        <Point X="4.471" Y="6.75" />
+        <Point X="4.471" Y="6.483" />
+      </Path>
+      <MemberNameLabel ManuallyPlaced="true" ManuallySized="true">
+        <Position X="-0.331" Y="0.352" Height="0.182" Width="1.229" />
+      </MemberNameLabel>
+    </AssociationLine>
     <TypeIdentifier>
-      <HashCode>AAoQAICAAgAACgAAAAAABAAABARAAUAAEAIAABAAAAQ=</HashCode>
+      <HashCode>BAoQAIGAAgQACgAAAAAABAAABARAAUAAEAIAABAAAAA=</HashCode>
       <FileName>ApplicationIdentityServiceConfiguration.cs</FileName>
     </TypeIdentifier>
     <ShowAsCollectionAssociation>
-      <Property Name="TenantDomains" />
       <Property Name="Remotes" />
+      <Property Name="TenantDomains" />
     </ShowAsCollectionAssociation>
   </Class>
   <Class Name="CK.AppIdentity.RemotePartyConfiguration">

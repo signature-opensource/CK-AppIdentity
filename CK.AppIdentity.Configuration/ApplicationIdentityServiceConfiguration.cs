@@ -21,7 +21,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
 {
     readonly List<RemotePartyConfiguration> _remotes;
     readonly List<TenantDomainPartyConfiguration> _tenants;
-    readonly NormalizedPath _storeRootPath;
+    readonly StoreFileSystem _storeFileSystem;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly bool _strictMode;
     static NormalizedPath _defaultStoreRootPath;
@@ -32,13 +32,13 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                              NormalizedPath fullName,
                                              ApplicationIdentityLocalConfiguration localConfiguration,
                                              bool strictMode,
-                                             string store,
+                                             StoreFileSystem store,
                                              ref ProcessedConfiguration? parties,
                                              ref InheritedConfigurationProps inhProps )
         : base( configuration, domainName, fullName, ref inhProps )
     {
         Throw.DebugAssert( parties.HasValue );
-        _storeRootPath = store;
+        _storeFileSystem = store;
         _remotes = parties.Value.Remotes;
         _tenants = parties.Value.Tenants;
         _localConfiguration = localConfiguration;
@@ -53,7 +53,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                              ref InheritedConfigurationProps inhProps )
         : base( configuration, domainName, fullName, ref inhProps )
     {
-        _storeRootPath = storeRootPath ?? DefaultStoreRootPath;
+        _storeFileSystem = new StoreFileSystem( storeRootPath ?? DefaultStoreRootPath, isPrivate: !storeRootPath.HasValue );
         _remotes = new List<RemotePartyConfiguration>();
         _tenants = new List<TenantDomainPartyConfiguration>();
         _strictMode = EnvironmentName != CoreApplicationIdentity.DefaultEnvironmentName;
@@ -89,12 +89,35 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// <summary>
     /// Gets the file storage root path. Defaults to <see cref="DefaultStoreRootPath"/>.
     /// <para>
-    /// This folder is de facto shared by all applications (parties) that use CK.AppIdentity and run on this computer.
-    /// Such installed parties can use <see cref="ILocalParty.LocalFileStore"/> to store any application 
-    /// specific data. All installed parties can use <see cref="IParty.SharedFileStore"/> to store and share data related to parties.
+    /// This folder is shared by all applications (parties) that use CK.AppIdentity, run on this computer
+    /// and use the same root. Such installed parties can use <see cref="ILocalParty.LocalFileStore"/> to store
+    /// any application specific data. All installed parties can use <see cref="IParty.SharedFileStore"/> to store
+    /// and share data related to parties.
+    /// </para>
+    /// <para>
+    /// The store holds trust anchors: anyone able to create, delete or rename files in it can repoint the trusted
+    /// identity of a remote. When this is not configured, the store is private (see <see cref="IsPrivateStore"/>):
+    /// it is restricted to the current account, which is anyway the only account that can share it since the default
+    /// root is in the user's profile. When configured, the store is shared and its permissions are managed by the
+    /// operator: on Unix, folders and files take the owner and group permissions of the root, never the "others" ones
+    /// (use a setgid group root like 2770); on Windows, they inherit the root's ACL as-is. Applications sharing a store
+    /// must run under accounts of this group.
+    /// </para>
+    /// <para>
+    /// A store writable by every local account is reported by a warning (an error in <see cref="StrictConfigurationMode"/>).
+    /// Note that writes in a shared store are not synchronized between processes.
     /// </para>
     /// </summary>
-    public NormalizedPath StoreRootPath => _storeRootPath;
+    public NormalizedPath StoreRootPath => _storeFileSystem.Root;
+
+    /// <summary>
+    /// Gets whether the store is private: <see cref="StoreRootPath"/> is not configured and the store is
+    /// restricted to the current account. When false, the store is shared and its permissions are
+    /// managed by the operator. See <see cref="StoreRootPath"/>.
+    /// </summary>
+    public bool IsPrivateStore => _storeFileSystem.IsPrivate;
+
+    internal StoreFileSystem StoreFileSystem => _storeFileSystem;
 
     /// <summary>
     /// Gets or sets the default store path that is by default "<see cref="Environment.SpecialFolder.LocalApplicationData"/>/CK-AppIdentity".
@@ -148,24 +171,44 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// <param name="domainName">Domain name.</param>
     /// <param name="partyName">Party name.</param>
     /// <param name="environmentName">Environment name.</param>
-    /// <param name="storeRootPath">Optional store root path. Defaults to <see cref="DefaultStoreRootPath"/>.</param>
+    /// <param name="storeRootPath">
+    /// Optional store root path. Defaults to <see cref="DefaultStoreRootPath"/> (a private store).
+    /// When specified, the store is shared (see <see cref="StoreRootPath"/>) and must be fully qualified.
+    /// <para>
+    /// The store root is created and checked here: a store writable by every local account is reported by a warning
+    /// to the <see cref="ActivityMonitor.StaticLogger"/> and, in <see cref="StrictConfigurationMode"/>, this throws an
+    /// <see cref="InvalidOperationException"/>.
+    /// </para>
+    /// </param>
     /// <returns>An empty configuration.</returns>
     public static ApplicationIdentityServiceConfiguration CreateEmpty( string domainName = CoreApplicationIdentity.DefaultDomainName,
                                                                        string partyName = CoreApplicationIdentity.DefaultPartyName,
                                                                        string environmentName = CoreApplicationIdentity.DefaultEnvironmentName,
                                                                        NormalizedPath? storeRootPath = null )
     {
+        if( storeRootPath.HasValue )
+        {
+            var store = storeRootPath.Value.Path;
+            Throw.CheckArgument( "The store root path must be a valid fully qualified path.",
+                                 FileUtil.IndexOfInvalidPathChars( store ) < 0 && Path.IsPathFullyQualified( store ) );
+        }
         CoreApplicationIdentity.IsValidDomainName( domainName );
         CoreApplicationIdentity.IsValidPartyName( partyName );
         CoreApplicationIdentity.IsValidPartyName( environmentName );
         if( partyName[0] != '$' ) partyName = '$' + partyName;
         var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty, AssemblyConfiguration.Empty );
         var c = new MutableConfigurationSection( "CK-AppIdentity" );
-        return new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
-                                                            domainName,
-                                                            $"{domainName}/{partyName}/{environmentName}",
-                                                            storeRootPath ?? DefaultStoreRootPath,
-                                                            ref props );
+        var config = new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
+                                                                  domainName,
+                                                                  $"{domainName}/{partyName}/{environmentName}",
+                                                                  storeRootPath,
+                                                                  ref props );
+        // Same check as HandleStorePath, without a monitor.
+        if( !config._storeFileSystem.Initialize( ActivityMonitor.StaticLogger ) && config.StrictConfigurationMode )
+        {
+            Throw.InvalidOperationException( $"Store '{config.StoreRootPath}' is not secure (see the logs) and StrictConfigurationMode is true." );
+        }
+        return config;
     }
 
     /// <summary>
@@ -336,9 +379,10 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var fullName = partyName[0] == '$' ? $"{domainName}/{partyName}/{environmentName}" : $"{domainName}/${partyName}/{environmentName}";
         return new ApplicationIdentityServiceConfiguration( root, domainName, fullName, localConfig, strictMode, store!, ref parties, ref props );
 
-        static string? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
+        static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
         {
             var store = configuration[nameof( StoreRootPath )]?.Trim();
+            bool isPrivate = string.IsNullOrEmpty( store );
             if( !string.IsNullOrEmpty( store ) )
             {
                 if( FileUtil.IndexOfInvalidPathChars( store ) >= 0 )
@@ -356,16 +400,18 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             {
                 store = DefaultStoreRootPath;
             }
+            var fileSystem = new StoreFileSystem( store, isPrivate );
             try
             {
-                Directory.CreateDirectory( store );
+                // Warnings are emitted here, in the scope of the StrictConfigurationMode tracker.
+                fileSystem.Initialize( monitor );
             }
             catch( Exception ex )
             {
                 monitor.Error( $"Unable to create store directory '{store}'.", ex );
                 return null;
             }
-            return store;
+            return fileSystem;
         }
     }
 
