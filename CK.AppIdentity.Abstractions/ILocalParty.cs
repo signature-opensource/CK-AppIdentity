@@ -10,7 +10,7 @@ namespace CK.AppIdentity;
 /// A local party is the root <see cref="IApplicationIdentityService"/> or a <see cref="ITenantDomainParty"/>.
 /// It owns remotes (the root service also owns tenant domains).
 /// </summary>
-public interface ILocalParty : IParty
+public interface ILocalParty : IParty, IAmbientAutoService
 {
     /// <summary>
     /// Raised whenever a new party appears or disappears in this <see cref="Remotes"/>.
