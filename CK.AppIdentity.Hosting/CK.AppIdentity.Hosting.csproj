@@ -5,7 +5,7 @@
     <Description>Application identity core abstraction and implementation.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.Monitoring.Hosting" Version="27.0.0" />
+    <PackageReference Include="CK.Monitoring.Hosting" Version="27.0.1-mike.0.ci.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CK.AppIdentity\CK.AppIdentity.csproj" />
