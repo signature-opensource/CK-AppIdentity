@@ -32,7 +32,7 @@ Both entry points lead to the same `DoStartAsync`, and the comment says why that
 deliberate - *"this enables pseudo host code to use `IHostedService.StartAsync` transparently"*. So
 code without a real host can cast to `IHostedService`, call `StartAsync`, then await
 `InitializationTask`. `StartAndInitializeAsync()` does both in one call and is safe to call several
-times; nothing in the repository uses it, it exists for that caller.
+times.
 
 `InitializationTask` is the handle for anything that must wait: when it completes successfully, every
 configured feature is initialized and available.
@@ -81,8 +81,8 @@ sender can await it:
 
 | Event | Raised on |
 |-------|-----------|
-| `ILocalParty.RemotesChanged` | a remote added to or destroyed on that party |
-| `IApplicationIdentityService.AllPartyChanged` | any owned party anywhere in the graph |
+| `ILocalParty.AnyRemoteChanged` | a remote added to or destroyed on that party |
+| `IApplicationIdentityService.AnyPartyChanged` | any owned party anywhere in the graph |
 | `IApplicationIdentityService.Heartbeat` | the periodic tick, carrying an `int` |
 
 `SystemClock` is exposed beside them, which is what makes the heartbeat testable: a test substitutes the

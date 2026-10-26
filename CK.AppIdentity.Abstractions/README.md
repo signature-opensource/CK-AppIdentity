@@ -1,8 +1,10 @@
 # Application identity model
 
-This 'running" model is built from the immutable `ApplicationIdentityServiceConfiguration` 
+This "running" model is built from the immutable `ApplicationIdentityServiceConfiguration` 
 (you should first read the [Application identity model configuration](../CK.AppIdentity.Configuration/README.md)
-documentation before this one).
+documentation before this one). This is why this package references `CK.AppIdentity.Configuration`, and not
+the reverse: the model is built from the configuration and nothing else - an identity object exists because a
+configuration section described it, or because it was added dynamically at runtime through the same configuration shape.
 
 The resulting `IApplicationIdentityService` obtained is a "nearly" immutable object: configured Parties
 are immutable but this can be extended by "dynamic parties". These dynamic parties are then also
@@ -20,13 +22,6 @@ This model is "totally typed", there is no need for any property to be cast into
 type (this is why the 3 fundamental objects that are `IRemoteParty`, `ITenantDomainParty`
 and `IApplicationIdentityService` all expose their respective `RemotePartyConfiguration`,
 `TenantDomainPartyConfiguration` and `ApplicationIdentityServiceConfiguration` Configuration property.
-
-The implementation is totally thread safe. A micro agent (the [`AppIdentityAgent`](../CK.AppIdentity/AppIdentityAgent.cs))
-handles the initialization, dynamic parties lifetime, setup and teardown of the features, and disposal
-of the whole identity service.
-
-__Note:__ The abstract base [`MicroAgent`](../CK.AppIdentity/MicroAgent.cs) is publicly exposed as it can be reused
-by (complex) feature implementations if needed.
 
 ## The FileStore
 
@@ -72,7 +67,7 @@ insensitive file system (typically Windows). Once this is guaranteed, the `IPart
 safely be compared with its ordinal (case sensitive) equality.
 
 The **LocalFileStore** is inside the **SharedFileStore** of the Party: it is the "*-Local*" folder. This results in a rather readable structure.
-Here's a very simple example (from a unit test, which explains why we're not in %LOCALAPPDATA%) with two Parties in the same "Test" domain.
+Here's a very simple example (with a test store root, which explains why we're not in %LOCALAPPDATA%) with two Parties in the same "Test" domain.
 
 ```
 TestStore/
@@ -81,13 +76,16 @@ TestStore/
         ├── $Listener/                                    <- SharedFileStore of Test/$Listener
         │   ├── -Local/                                   <- its LocalFileStore
         │   │   └── Keys/
-        │   └── Identity.2024-02-19 12h18.04.3929728.public
+        │   └── Identity.<seq>.trust                      <- a file written by a feature
         └── $Sender/                                      <- SharedFileStore of Test/$Sender
             └── -Local/
 ```
 
-The presence of "-Local" in the 2 Party directories indicates that they both run on the same machine. The ".public" file is the
-public key of the Party "$Listener" (this comes from the CK.AppIdentity.KeyManagement feature).
+The presence of "-Local" in the 2 Party directories indicates that they both run on the same machine. The ".trust" file is
+what a key management feature stores in the SharedFileStore of the remote "$Listener": the pinned identity of that remote.
+For an example of such a feature, see
+[CK.AppIdentity.KeyManagement](https://github.com/signature-opensource/CK-AppIdentity-Transport/tree/stable/CK.AppIdentity.KeyManagement)
+in the CK-AppIdentity-Transport repository, which is built on this package.
 
 ## And here come the Features...
 
@@ -96,5 +94,7 @@ structure" on which the "Features" come into play. Features can decorate any of 
 the actual functionalities like managing the Key store of a Remote party, exposing the Google API of
 a Google external Remote, etc.
 
-Features are described [here](../CK.AppIdentity/Features/README.md).
+This package only exposes how a party carries them (`IParty.AddFeature`, `GetFeature<T>` and
+`GetRequiredFeature<T>`). The feature drivers that create and configure them are implemented by `CK.AppIdentity`,
+which depends on this package: see its [Features](../CK.AppIdentity/Features/README.md) documentation.
 

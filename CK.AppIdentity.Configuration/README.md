@@ -6,275 +6,49 @@ and its peers (its Parties) and to "carry" all the communication and interaction
 - Once initially configured, no configuration change is possible during the execution **for what has been configured**.
 - Dynamic parties are supported (these are the non initially configured beasts).
 
-The simplest way to introduce configurations is to show some examples that introduce the basic concepts
-of CK.AppIdentity.
+Application identity may be the only aspect that requires an explicit configuration. Any other aspect
+can have a default behavior, but the remote parties an application interacts with, and how it interacts
+with them, can hardly exist without configuration.
 
 > One should be able to understand the role of an application and its interactions with the external world
 by looking at its configuration.
 
+The [configuration samples](docs/Samples.md) introduce the basic concepts of CK.AppIdentity step by step: remote
+parties, which side is the client and which is the server, tenant domains, the "Local" sections and the inheritance
+of the configuration keys.
 
-## Configuration samples
+## Configuration keys
 
-### The simplest one
-An application identity is a triple: DomainName, PartyName, EnvironementName that are strictly defined
-(see [CK.Core.CoreApplicationIdentity](https://github.com/Invenietis/CK-Core/tree/develop/CK.Core/CoreApplicationIdentity)). The simplest valid configuration is an application without any parties:
-```json
-{
-  "FullName": "AcmeCorp/$Trolley1/#Production"
-}
-```
-This is a functional but lonely application. Dynamic parties can then be added to it at runtime and
-subsequently destroyed.
+| Key | Where | Description |
+|-----|-------|-------------|
+| `FullName` | root, parties | `"Domain/$Party/#Environment"`. The party and the environment can be omitted. |
+| `DomainName`, `PartyName`, `EnvironmentName` | root, parties | The 3 parts of the full name, when `FullName` doesn't define them (`DomainName` cannot be used with `FullName`). A party inherits the domain and environment names of its parent. |
+| `Parties` | root, tenant domains, groups | The parties. An item with no `PartyName` (nor `FullName`) is a group: its `Parties` are flattened into the enclosing list. An item with no `Address` whose `PartyName` is the last segment of its domain (`"AcmeCorp/$AcmeCorp"`) is a tenant domain; any other item is a remote party. |
+| `Address` | remote parties | Where the remote can be reached. The party that declares the address initiates the communication (the client); the other side listens (the server). |
+| `Local` | root, tenant domains | The configuration that applies to the local application (or to the tenant), see the [samples](docs/Samples.md#the-local-configurations). |
+| `AllowFeatures`, `DisallowFeatures` | everywhere | Feature names: a string, a comma-separated string or an array of strings. Inherited downward. |
+| `DefaultAssembly`, `Assemblies` | everywhere | The [`AssemblyConfiguration`](https://github.com/signature-opensource/CK-Configuration/blob/stable/CK.Configuration/README.md#assemblyconfiguration) of CK.Configuration: the "plugins/dynamic extension" assemblies. Inherited downward. |
+| `StrictConfigurationMode` | root | Whether warnings are errors (see [below](#strictly-checking-the-configuration-or-not)). |
+| `StoreRootPath` | root | A fully qualified path. When not configured, the store is private and defaults to `ApplicationIdentityServiceConfiguration.DefaultStoreRootPath` (the `CK-AppIdentity` folder in `Environment.SpecialFolder.LocalApplicationData`). |
+| `TrashBinRetention` | root | How long trashed files are kept: a `TimeSpan` like `"7.00:00:00"` (the default, 7 days). |
+
+The DomainName, PartyName and EnvironmentName are strictly defined
+(see [CK.Core.CoreApplicationIdentity](https://github.com/signature-opensource/CK-Core/tree/stable/CK.Core/CoreApplicationIdentity)).
 
 The FullName identifies a Party: it must be unique **regardless of the case**. "AcmeCorp/$Trolley1/#Production" and
 "acmecorp/$trolley1/#production" denote the same Party, so a configuration that defines both is invalid, and a dynamic
 party whose name differs only by case from an existing one is rejected. This is stricter than CoreApplicationIdentity
 (which only states that the DomainName is case sensitive) and avoids clashes between the Parties' file stores on
-case insensitive file systems (see [The FileStore](../CK.AppIdentity.Abstractions/README.md#the-filestore)).
+case insensitive file systems. The file stores belong to the running model, which is built on this package: for their
+layout, see [The FileStore](../CK.AppIdentity.Abstractions/README.md#the-filestore) in CK.AppIdentity.Abstractions.
 
-In the following examples, Parties are defined statically, in the initial configuration: these are not dynamic
-parties and cannot be destroyed.
-
-### Standard ones
-A simple application that interacts with 2 remote parties:
-```json
-{
-  "FullName": "AcmeCorp/$Trolley1/#Production",
-  "Parties": [
-   {
-    "DomainName": "CentralHealth/Clients",
-    "PartyName": "LogTower",
-    "Address": "148.54.11.18:3712"
-   },
-   {
-     "PartyName": "$SigBox",
-     "Address": "155.88.22.22"
-   }]
-}
-```
-There should be no more than that: Trolley1 sends its logs to a LogTower and can initiate communications
-(see below) with the SigBox.
-
-The LogTower is not in the AcmeCorp domain but in the "CentralHealth/Clients" domain. The above example uses
-the explicit properties "DomainName" and "PartyName". We could have used the
-`"FullName": "CentralHealth/Clients/$LogTower"` here.
-
-The SigBox also sends its logs to the same LogTower and knows the Trolley1 but also the Trolley2 and the PickingStation.
-```json
-{
-  "FullName": "AcmeCorp/$SigBox/#Production",
-  "Parties": [
-  {
-    "FullName": "CentralHealth/Clients/$LogTower",
-    "Address": "148.54.11.18:3712"
-  },
-  {
-    "PartyName": "Trolley1"
-  },
-  {
-    "PartyName": "Trolley2"
-  },
-  {
-    "PartyName": "PickingStation"
-  }]
-}
-```
-These 3 remotes have no Addresses: "AcmeCorp/$SigBox/#Production" is a server for these parties
-and this is enough for the SigBox, 2 trolleys and one picking station to work together.
-
-Now we want the SigBox to interact with a OneCS application (the supervision and operation portal).
-The OneCS application typically lives in the cloud. If the SigBox can be reached from the outside,
-we just need to declare the new OneCS remote on the SigBox.
-
-_Notes:_
-- From now on, we don't show the LogTower configuration. This is the same for every party
-  (if we want to target the same LogTower).
-- We also don’t specify the EnvironmentName anymore. For the application itself, this defaults to the
-  IHostEnvironment.EnvironmentName prefixed with '#': "Development" becomes "#Dev" but a default .NET host
-  is in "Production", which gives "#Production" (where `StrictConfigurationMode` is on). The parties inherit
-  the EnvironmentName of their parent.
-
-The name of this new Party is the same as the DomainName: **"AcmeCorp/$AcmeCorp"**.
-
-When the PartyName is the same as the last segment of the Domain path, this Party conventionally designates the
-"domain controller" which is the "default application" (we can call it "$Portal" or "$Root" or "$Main", etc.).
-For example, the international customer BigCorp may have a root application (the world-wide portal) "BigCorp/$BigCorp"
-and multiple country-specific applications "BigCorp/FR/$FR", "BigCorp/EN/$EN", etc.
-
-This convention is simple and allows such "controllers" to be designated in a complex architecture. This is a
-convention until one need to handle multi-tenancy: a **TenantDomain** That will be presented next follow
-this convention (and have no Address).
-
-```json
-{
-  "FullName": "AcmeCorp/$SigBox",
-  "Parties": [
-  {
-    "PartyName": "$Trolley1"
-  },
-  {
-    "PartyName": "$Trolley2"
-  },
-  {
-    "PartyName": "$PickingStation"
-  },
-  {
-    "PartyName": "$AcmeCorp"
-  }]
-}
-```
-Below is the OneCS configuration:
-```json
-{
-  "FullName": "AcmeCorp/$AcmeCorp"
-  "Parties": [
-  {
-    "PartyName": "$SigBox",
-    "Address": "65.12.13.14"
-  }]
-}
-```
-If, for any reason, the SigBox cannot be reached from the outside (typically because of a firewall), we simply
-change the place where the Address is defined. By moving the Address from the OneCS configuration to the SigBox,
-the box becomes the initiator (the Client) and OneCS becomes a listener (a Server) for the box.
-
-The configurations become:
-```json
-{
-  "FullName": "AcmeCorp/$AcmeCorp"
-  "Parties": [
-  {
-    "PartyName": "$SigBox",
-  }]
-}
-```
-And:
-```json
-{
-  "FullName": "AcmeCorp/$SigBox",
-  "Parties": [
-  {
-    "PartyName": "$Trolley1"
-  },
-  {
-    "PartyName": "$Trolley2"
-  },
-  {
-    "PartyName": "$PickingStation"
-  },
-  {
-    "PartyName": "$AcmeCorp",
-    "Address": "27.28.29.30"
-  }]
-}
-```
-
-### Multi-tenancy support: the TenantDomain configuration
-
-A **Tenant** is a subset of bigger system logically tied to some human concept like an organization or a "group
-or resources" for which data specific to the Tenant must be handled potentially by code specific to that Tenant.
-
-A multi-tenant application hosts one or more Tenants, each being logically disjointed from the others. The Application
-identity models supports such Tenants definition through the **TenantDomain** concept. A TenantDomain is a Party
-of an application (just like a Remote Party is) but it is a Party that contains other Parties. Defining a **TenantDomain**
-is straightforward:
-- Its name follow the "controller domain" convention (its full name is like "BigCorp/$BigCorp" or "BigCorp/EN/$EN").
-- It has no Address:
-  - It can be somehow "virtual": no one will call it, it has no intrinsic capability;
-  - Or it can play an active part in the "domain it controls" and then it is necessarily a Server for its Remote Parties.
-
-The important point to understand here is that this structure is not recursive; it's not a tree structure. A Tenant
-is a simple group with a list of Remote Parties. Usually its Remote Parties have the same Domain as the Tenant's one, or
-are in a sub domain of the Tenant's Domain but this is not mandatory.
-
-The simplest TenantDomain definition is:
-```json
-{
-  "FullName": "AcmeCorp/$AcmeCorp"
-}
-```
-It is initially empty but dynamic remotes can be programmatically added to it.
-
-Because each Tenant has its own dedicated configuration space, it can contain configuration keys that can apply (by
-"inheritance") to its Remotes (and only to its Remotes).
-
-### The Local configuration(s)
-
-One subtlety concerns the modeling of the notion of local application.
-From a hierarchical point of view, it seems logical to configure the host application in the
-configuration root:
-```jsonc
-{
-  "FullName": "Test/$App",
-  // This is where application-specific configurations MAY appear... but NO!
-  "Parties": [
-   {
-     "PartyName": "$Box",
-   }]
-}
-```
-However, one of the principles underlying the handling of these configurations is "inheritance": keys from
-a higher level can be applied "below". This inheritance factorizes information and secures the system (some
-components introduce the possibility of locking or limiting critical configurations, enabling dynamic sub-configuration
-"imports" to be accepted without risk). This is why there is a "Local" configuration section:
-
-```jsonc
-{
-  "FullName": "Test/$App",
-  // Configurations that apply globally to the application (typically default values)
-  // can be entered here.
-  "Local": {
-     // This is where the local application can be configured.
-  },
-  "Parties": [
-   {
-     "PartyName": "$Box",
-   }]
-}
-```
-
-In a multi-tenant configuration, each Tenant has its "Local": this can be used to configure
-components and plugins specific to that Tenant:
-
-```jsonc
-{
-  "FullName": "Test/$SaaSApp",
-  "Local": {
-     // This is where the local application can be configured.
-  },
-  "Parties": [
-   {
-     "FullName": "Tenant1/$Tenant1",
-     "Local": {
-        // Here comes the local configuration of Tenant1.
-     },
-     "Parties": [
-      {
-        "PartyName": "$Box"
-        "Address": "126.87.1.1:4040"
-      }]
-   }]
-}
-```
-
-Here too, inheritance applies: the configuration keys in the definition of the Tenant itself apply
-to the entire section and its sub-sections.
-
-Inheritance is actually "generalized": Tenant can have recursive `Parties` (think "groups"): this
-allows parts of a Tenant that share certain configuration aspects to be grouped together and these common
-configurations to be factored into a parent node.
-
-When the sections are analyzed, recursive "Parties" sections are traversed and all "RemoteParty"
-are "flattened": the hierarchy applies only to configuration and key factorization/propagation,
-not to the structure of a Tenant itself: a Tenant is and remains a simple list of Remote Parties.
-
-The above examples are in JSON. The actual configuration is provided by the .NET abstraction
+The configuration is provided by the .NET abstraction
 [IConfigurationSection](https://learn.microsoft.com/fr-fr/dotnet/api/microsoft.extensions.configuration.iconfigurationsection)
-that can originate from multiple configuration providers.
+that can originate from multiple configuration providers (the samples are in JSON).
 
 ## Mutable and immutable IConfigurationSection helpers (from CK.Configuration).
 
-To manage this lower level of configuration (and guaranty its immutability), we use [CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/master/CK.Configuration/README.md).
+To manage this lower level of configuration (and guaranty its immutability), we use [CK.Configuration](https://github.com/signature-opensource/CK-Configuration/blob/stable/CK.Configuration/README.md).
 
 A `ImmutableConfigurationSection` is a `IConfigurationSection` that captures once for all the content and path of any other `IConfigurationSection`.
 
@@ -313,8 +87,5 @@ This model shows the 3 main types of identity objects:
 - All configurations are issued and expose their `ImmutableConfigurationSection` configuration and
   a `AssemblyConfiguration` that captures possible "plugins/dynamic extension" assemblies.
 
-Based on these configuration objects, the ["runtime" model](../CK.AppIdentity.Abstractions/README.md) is initialized.
-
-
-
-
+The "runtime" model is initialized from these configuration objects. It is described by
+[CK.AppIdentity.Abstractions](../CK.AppIdentity.Abstractions/README.md), which depends on this package.

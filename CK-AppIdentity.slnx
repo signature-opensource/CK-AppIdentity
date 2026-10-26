@@ -9,8 +9,6 @@
   </Folder>
   <Folder Name="/Solution Items/Doc/">
     <File Path="Doc/CK-AppIdentity.pptx" />
-    <File Path="Doc/FeatureDriver.png" />
-    <File Path="Doc/PartyFeature.png" />
   </Folder>
   <Folder Name="/Tests/">
     <File Path="Tests/TestHelper.config" />

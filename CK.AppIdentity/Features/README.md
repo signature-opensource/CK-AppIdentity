@@ -1,11 +1,11 @@
 # The Features
 
-If the ["run time" model](../Model/README.md) is a skeleton, the Features are the muscles.
+If the ["run time" model](../../CK.AppIdentity.Abstractions/README.md) is a skeleton, the Features are the muscles.
 
 Features are not typed: they are objects that can be very simple or very complex, and which decorate
 each Party. From the outside, the API is trivial:
 
-![Features on a Party](../../Doc/PartyFeature.png)
+![Features on a Party](../docs/PartyFeature.png)
 
 Features can only be added, not removed. 
 
@@ -26,7 +26,7 @@ A driver is responsible for:
 These functions are called by the micro agent ([AppIdentityAgent](../AppIdentityAgent.cs)) which manages the lifecycle of Parties and
 Features.
 
-![FeatureDriver](../../Doc/FeatureDriver.png)
+![FeatureDriver](../docs/FeatureDriver.png)
 
 A Feature can be opt-in or opt-out. The implementation expresses this via the constructor of the abstract class:
 ```csharp
@@ -70,8 +70,10 @@ to each FeatureDriver (described above) then takes over to establish the final l
 Thanks to the topological ordering of the FeatureDrivers (described above), a Driver can decide whether a Feature is available
 depending on the status of another Feature (absence, presence, or even some of its configurations). 
 
-For example, the TransportFeature (from CK.AppIdentity.Transport) requires a RemoteKeyFeature (from CK.AppIdentity.KeyManagement) to be
-available on a party: if this is not the case, the TransportFeatureDriver issues a warning:
+For an example in packages built on this one, see the
+[CK-AppIdentity-Transport](https://github.com/signature-opensource/CK-AppIdentity-Transport/tree/stable) repository: there, the "Transport"
+feature (`TransportFeatureDriver`, in CK.AppIdentity.TransportLayer) requires the "KeyManagement" feature (the `IRemoteKeys` of a
+remote, in CK.AppIdentity.KeyManagement) to be available on a party: if this is not the case, the `TransportFeatureDriver` issues a warning:
 *"Remote 'AcmeCorp/$Server' cannot support the allowed 'Transport' feature because the remote has a disallowed 'KeyManagement' feature."*.
 
 Drivers have access to all configuration sections. They are free to consider certain keys in parent sections (to implement configuration
@@ -99,14 +101,14 @@ that will manage a Feature "centrally". This is simply a rewriting of the API.
 Let's take the case of a Feature `F` that exposes a `DoSomething()` method. The developer has a
 Party `p` and wishes to call `DoSomething`:
 ```csharp
-p.GetRequiredFeature<F>().DoSomething().
+p.GetRequiredFeature<F>().DoSomething();
 ```
 The `Get(Required)Feature` call here is the Service Locator. Now let's create a very simple service:
 
 ```csharp
 public class FService : IAutoService
 {
-    public void DoSomething( Party p ) => p.GetRequiredFeature<F>().DoSomething();
+    public void DoSomething( IParty p ) => p.GetRequiredFeature<F>().DoSomething();
 }
 ```
 
@@ -123,18 +125,20 @@ public class ServerService : IAutoService
     readonly IRemoteParty _serverParty;
     readonly FService _fService;
 
-    public ServerService( ApplicationIdentityService appIdentity )
+    public ServerService( IApplicationIdentityService appIdentity, FService fService )
     {
-          _serverParty = appIdentity.AllRemotes.Single( p => p.Name == “$Server” );
-         _fService = p.GetRequiredFeature<F>();
+        _serverParty = appIdentity.AllRemotes.Single( p => p.PartyName == "$Server" );
+        _fService = fService;
     }
 
-    public void DoSomething() => _fService.DoSomething();
+    public void DoSomething() => _fService.DoSomething( _serverParty );
 }
 ```
 
+The feature is looked up when `DoSomething` is called, not in the constructor: features are set up
+asynchronously, and are available once `IApplicationIdentityService.InitializationTask` has completed.
+
 Please note that the `ServerService` is an `IAutoService`: it will automatically be singletonized
-if it can be. In this case, it can because `ApplicationIdentityService` is a singleton, but if it
-is specialized and its specialization depends on a scoped service, then it will automatically
-be scoped.
+if it can be. In this case, it can because its dependencies are singletons (`IApplicationIdentityService`
+is an `ISingletonAutoService`), but if one of them were a scoped service, it would automatically be scoped.
 
