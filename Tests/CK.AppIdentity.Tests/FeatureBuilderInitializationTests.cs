@@ -339,4 +339,89 @@ public class FeatureBuilderInitializationTests
 
     }
 
+    public abstract class NoopFeatureDriver : ApplicationIdentityFeatureDriver
+    {
+        protected NoopFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault )
+            : base( s, featureName, isAllowedByDefault )
+        {
+        }
+
+        protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
+        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+        protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+    }
+
+    public sealed class SingletonFeatureDriver : NoopFeatureDriver
+    {
+        public SingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, null, isAllowedByDefault ) { }
+    }
+
+    public sealed class LocalSingletonFeatureDriver : NoopFeatureDriver
+    {
+        public LocalSingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string featureName = "Singleton" ) : base( s, featureName, isAllowedByDefault ) { }
+    }
+
+    public sealed class RemoteSingletonFeatureDriver : NoopFeatureDriver
+    {
+        public RemoteSingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, "Singleton", isAllowedByDefault ) { }
+    }
+
+    public sealed class LocalStorageFeatureDriver : NoopFeatureDriver
+    {
+        public LocalStorageFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+    }
+
+    static ApplicationIdentityService CreateService()
+    {
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" ).ShouldNotBeNull();
+        return new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
+    }
+
+    [Test]
+    public void Local_and_Remote_sides_share_the_feature_name()
+    {
+        var s = CreateService();
+        new SingletonFeatureDriver( s ).FeatureName.ShouldBe( "Singleton" );
+        new LocalSingletonFeatureDriver( s ).FeatureName.ShouldBe( "Singleton" );
+        // Without the explicit feature name, the prefix is kept.
+        new LocalStorageFeatureDriver( s ).FeatureName.ShouldBe( "LocalStorage" );
+
+        new RemoteSingletonFeatureDriver( CreateService() ).FeatureName.ShouldBe( "Singleton" );
+    }
+
+    [Test]
+    public void an_application_is_the_Local_or_the_Remote_side_not_both()
+    {
+        var s = CreateService();
+        new LocalSingletonFeatureDriver( s );
+        Should.Throw<InvalidOperationException>( () => new RemoteSingletonFeatureDriver( s ) )
+              .Message.ShouldContain( "an application is the Local or the Remote side of the 'Singleton' feature, not both" );
+    }
+
+    [Test]
+    public void the_drivers_of_a_feature_must_agree_on_isAllowedByDefault()
+    {
+        var s = CreateService();
+        new SingletonFeatureDriver( s, isAllowedByDefault: false );
+        Should.Throw<InvalidOperationException>( () => new LocalSingletonFeatureDriver( s, isAllowedByDefault: true ) )
+              .Message.ShouldContain( "disagree on whether the 'Singleton' feature is allowed by default" );
+    }
+
+    [Test]
+    public void the_explicit_feature_name_must_match_the_type_name()
+    {
+        Should.Throw<InvalidOperationException>( () => new LocalSingletonFeatureDriver( CreateService(), featureName: "Other" ) )
+              .Message.ShouldContain( "it must be 'LocalOtherFeatureDriver' or 'RemoteOtherFeatureDriver'" );
+    }
+
+    [Test]
+    public void two_drivers_of_the_same_feature_name_are_an_error()
+    {
+        var s = CreateService();
+        new SingletonFeatureDriver( s );
+        Should.Throw<InvalidOperationException>( () => new SingletonFeatureDriver( s ) )
+              .Message.ShouldContain( "both manage the 'Singleton' feature" );
+    }
+
 }

@@ -37,6 +37,17 @@ Configuration then takes over via "Allow/DisallowFeatures", which control the fi
 
 - The feature name is deduced from the driver type: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
   used in the configuration.
+- A feature that is a **singleton within a domain** (one party of the domain implements it, the others use it: the
+  AuthCenter for instance) is split in a "Local" side (this application implements it) and a "Remote" side (this
+  application uses a remote one), in different packages. Their drivers, `LocalXXXFeatureDriver` and
+  `RemoteXXXFeatureDriver`, manage the same "*XXX*" feature: they give it explicitly to the base constructor
+  `ApplicationIdentityFeatureDriver( s, "XXX", isAllowedByDefault )` (the prefix is never removed implicitly: a
+  `LocalStorageFeatureDriver` manages "*LocalStorage*"). A common `XXXFeatureDriver` can exist too. The rules, checked
+  when the drivers are created:
+  - an application has **one role**: the Local and the Remote drivers of a feature cannot be both registered (until
+    the endpoints are subordinated to their local party, a Local or Remote role per local party);
+  - the drivers of a feature agree on `isAllowedByDefault`;
+  - two drivers can never manage the same feature otherwise.
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which will give it the final result of the
   Allow/Disallow configurations for the given Party according to the configuration sections (up to the configuration root).
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they

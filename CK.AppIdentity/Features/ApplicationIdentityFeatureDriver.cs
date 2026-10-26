@@ -14,6 +14,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly ApplicationIdentityService _s;
     readonly string _featureName;
     readonly bool _isRootAllowed;
+    readonly bool _isAllowedByDefault;
+    readonly bool _isLocalOrRemote;
 
     /// <summary>
     /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/>.
@@ -21,6 +23,24 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <param name="s">The application identity service.</param>
     /// <param name="isAllowedByDefault">Whether the feature is opt-in or opt-out.</param>
     protected ApplicationIdentityFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault )
+        : this( s, null, isAllowedByDefault )
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/> that is the "Local" or the "Remote" side of a feature
+    /// that is a singleton within a domain: the type is "Local<paramref name="featureName"/>FeatureDriver" or
+    /// "Remote<paramref name="featureName"/>FeatureDriver" and both sides manage the same <paramref name="featureName"/>
+    /// (the one used by the "AllowFeatures" and "DisallowFeatures" configurations).
+    /// <para>
+    /// An application has one role: the "Local" and "Remote" drivers of a feature cannot be both registered. The drivers of a
+    /// feature ("XXXFeatureDriver" and one of its sides) must agree on <paramref name="isAllowedByDefault"/>.
+    /// </para>
+    /// </summary>
+    /// <param name="s">The application identity service.</param>
+    /// <param name="featureName">The name of the feature: this type name without the "Local" or "Remote" prefix.</param>
+    /// <param name="isAllowedByDefault">Whether the feature is opt-in or opt-out.</param>
+    protected ApplicationIdentityFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault )
     {
         Throw.DebugAssert( "FeatureDriver".Length == 13 );
         var name = GetType().Name;
@@ -30,6 +50,34 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         {
             Throw.InvalidOperationException( $"Invalid type name '{name}': a feature driver type name MUST be suffixed with 'FeatureDriver'." );
         }
+        if( featureName != null )
+        {
+            if( featureName.Length == 0 || (name != "Local" + featureName && name != "Remote" + featureName) )
+            {
+                Throw.InvalidOperationException( $"Invalid feature name '{featureName}' for '{GetType().Name}': it must be 'Local{featureName}FeatureDriver' or 'Remote{featureName}FeatureDriver'." );
+            }
+            name = featureName;
+        }
+        bool isSide = featureName != null;
+        foreach( var other in s._builders )
+        {
+            if( other._featureName != name ) continue;
+            if( other._isLocalOrRemote == isSide
+                && (!isSide || other.GetType().Name.StartsWith( "Local" ) == GetType().Name.StartsWith( "Local" )) )
+            {
+                Throw.InvalidOperationException( $"'{GetType().ToCSharpName()}' and '{other.GetType().ToCSharpName()}' both manage the '{name}' feature." );
+            }
+            if( other._isLocalOrRemote && isSide )
+            {
+                Throw.InvalidOperationException( $"'{GetType().ToCSharpName()}' and '{other.GetType().ToCSharpName()}' cannot be both registered: an application is the Local or the Remote side of the '{name}' feature, not both." );
+            }
+            if( other._isAllowedByDefault != isAllowedByDefault )
+            {
+                Throw.InvalidOperationException( $"'{GetType().ToCSharpName()}' and '{other.GetType().ToCSharpName()}' disagree on whether the '{name}' feature is allowed by default." );
+            }
+        }
+        _isLocalOrRemote = isSide;
+        _isAllowedByDefault = isAllowedByDefault;
         _featureName = name;
         // Adding the builder to the list here captures the topological
         // dependency order of the feature builders.
@@ -68,7 +116,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
 
     /// <summary>
     /// Gets this feature name.
-    /// This is this type name without the "FeatureDriver" suffix.
+    /// This is this type name without the "FeatureDriver" suffix (and without the "Local" or "Remote" prefix of the side
+    /// of a feature, see <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService, string?, bool)"/>).
     /// </summary>
     public string FeatureName => _featureName;
 
