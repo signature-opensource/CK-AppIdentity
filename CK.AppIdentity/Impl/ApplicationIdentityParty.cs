@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CK.AppIdentity;
@@ -19,6 +20,7 @@ public abstract class ApplicationIdentityParty : IParty
     private protected readonly ApplicationIdentityPartyConfiguration _configuration;
     readonly FileStore _sharedStore;
     object[] _features;
+    int _partyActorId;
 
     // The folders of a dynamic party are not created by its constructor: they are created by the agent
     // (see CreateFolders) once the new parties have been checked.
@@ -62,6 +64,25 @@ public abstract class ApplicationIdentityParty : IParty
 
     /// <inheritdoc />
     public NormalizedPath FullName => Configuration.FullName;
+
+    /// <inheritdoc />
+    public int PartyActorId => _partyActorId;
+
+    /// <inheritdoc />
+    public bool TrySetPartyActorId( IActivityMonitor monitor, int partyActorId )
+    {
+        Throw.CheckNotNullArgument( monitor );
+        Throw.CheckOutOfRangeArgument( partyActorId > 0 );
+        var current = Interlocked.CompareExchange( ref _partyActorId, partyActorId, 0 );
+        if( current == 0 )
+        {
+            monitor.Info( ActivityMonitor.Tags.SecurityCritical, $"PartyActorId of '{FullName}' is {partyActorId}." );
+            return true;
+        }
+        if( current == partyActorId ) return true;
+        monitor.Warn( ActivityMonitor.Tags.SecurityCritical, $"PartyActorId of '{FullName}' is {current}: it cannot be changed to {partyActorId}." );
+        return false;
+    }
 
     /// <inheritdoc />
     public IEnumerable<object> Features => _features;

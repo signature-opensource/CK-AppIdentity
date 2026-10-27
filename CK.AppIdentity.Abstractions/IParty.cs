@@ -59,6 +59,26 @@ public interface IParty
     NormalizedPath FullName { get; }
 
     /// <summary>
+    /// Gets the actor identifier of this party in the actors model (its PartyActor), or 0 until it is resolved.
+    /// <para>
+    /// It is the identity of the party when it calls another one or receives a command directly: the authentication
+    /// information of a received command carries it as its caller party. It is resolved by an initialization step
+    /// (the PartyActor registrar of the authentication center packages) and set once with <see cref="TrySetPartyActorId"/>.
+    /// A party whose identifier is 0 cannot be a caller party.
+    /// </para>
+    /// </summary>
+    int PartyActorId { get; }
+
+    /// <summary>
+    /// Sets the <see cref="PartyActorId"/> once: it can only go from 0 to an identifier, it never changes afterwards.
+    /// This is a security-relevant value: the change is logged, a different identifier is refused and logged.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="partyActorId">The actor identifier of this party. Must be positive.</param>
+    /// <returns>True if the identifier is set (or was already this one), false if another identifier is already set.</returns>
+    bool TrySetPartyActorId( IActivityMonitor monitor, int partyActorId );
+
+    /// <summary>
     /// Gets the features associated to this <see cref="ApplicationIdentityService"/>, <see cref="IRemoteParty"/> or <see cref="ILocalParty"/>.
     /// </summary>
     IEnumerable<object> Features { get; }
