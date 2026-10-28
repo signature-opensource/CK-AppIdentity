@@ -26,8 +26,9 @@ and `IApplicationIdentityService` all expose their respective `RemotePartyConfig
 Every party also has a `PartyActorId`: its identifier in the actors model (its PartyActor), 0 until it is resolved.
 It is the identity of the party when it calls another one, or when it receives a command directly (the caller party of
 the authentication information). This package holds only the value, with no authentication logic: an initialization
-step (the PartyActor registrar of the authentication center packages) sets it once with `TrySetPartyActorId`. It can
-only go from 0 to an identifier, never change afterwards, and the change is logged.
+step sets it once with `TrySetPartyActorId`: the PartyActor registrar of CK.DB.AppIdentity where the actors database
+is available, otherwise the party asks its authentication center. It can only go from 0 to an identifier, never
+change afterwards, and the change is logged.
 
 ## The FileStore
 

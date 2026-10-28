@@ -63,7 +63,8 @@ public interface IParty
     /// <para>
     /// It is the identity of the party when it calls another one or receives a command directly: the authentication
     /// information of a received command carries it as its caller party. It is resolved by an initialization step
-    /// (the PartyActor registrar of the authentication center packages) and set once with <see cref="TrySetPartyActorId"/>.
+    /// (the PartyActor registrar of CK.DB.AppIdentity where the actors database is available, otherwise the party asks
+    /// its authentication center) and set once with <see cref="TrySetPartyActorId"/>.
     /// A party whose identifier is 0 cannot be a caller party.
     /// </para>
     /// </summary>
