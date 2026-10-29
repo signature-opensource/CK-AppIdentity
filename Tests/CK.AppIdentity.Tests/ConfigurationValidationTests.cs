@@ -144,8 +144,7 @@ public class ConfigurationValidationTests
         {
             c["FullName"] = "Acme/$App";
             c["Parties:0:DomainName"] = "Group";
-            c["Parties:0:Options:PartyName"] = "NotAParty";
-            c["Parties:0:Local:PartyName"] = "NotAPartyEither";
+            c["Parties:0:Defaults:Options:PartyName"] = "NotAParty";
             c["Parties:0:Parties:0:PartyName"] = "A";
         } );
         Throw.DebugAssert( config != null );

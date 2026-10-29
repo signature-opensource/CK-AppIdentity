@@ -83,7 +83,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         // dependency order of the feature builders.
         s._builders.Add( this );
         _s = s;
-        _isRootAllowed = s.Configuration.IsAllowedFeature( name, isAllowedByDefault );
+        _isRootAllowed = s.LocalConfiguration.IsAllowedFeature( name, isAllowedByDefault );
     }
 
     /// <summary>
@@ -92,26 +92,22 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     public ApplicationIdentityService ApplicationIdentityService => _s;
 
     /// <summary>
-    /// Gets whether this feature is allowed or disabled at the root <see cref="ApplicationIdentityService"/>.
-    /// Use <see cref="IsAllowedFeature(IParty)"/> to know whether this feature is eventually enabled for
-    /// a remote.
+    /// Gets whether this feature is allowed or disabled for the root <see cref="ApplicationIdentityService"/> (its "Local"
+    /// configuration). Use <see cref="IsAllowedFeature(IParty)"/> for any other party.
     /// </summary>
     public bool IsRootAllowed => _isRootAllowed;
 
     /// <summary>
-    /// Gets whether this feature is enabled for the given party (including the root <see cref="IApplicationIdentityService"/>),
-    /// accounting the potential intermediate Allow/DisallowFeatures inherited configurations.
+    /// Gets whether this feature is enabled for the given party (including the root <see cref="IApplicationIdentityService"/>):
+    /// a local party (the root or a tenant domain) answers from its <see cref="ILocalParty.LocalConfiguration"/>, a remote from
+    /// its own configuration. Both resolve the Allow/DisallowFeatures of the "Defaults" sections above them.
     /// </summary>
     /// <param name="p">The party to test.</param>
     /// <returns>True if this feature is allowed, false otherwise.</returns>
     public bool IsAllowedFeature( IParty p )
     {
-        if( p is IOwnedParty o )
-        {
-            bool above = o.Owner.Configuration.IsAllowedFeature( _featureName, _isRootAllowed );
-            return p.Configuration.IsAllowedFeature( _featureName, above );
-        }
-        return p.Configuration.IsAllowedFeature( _featureName, _isRootAllowed );
+        ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
+        return c.IsAllowedFeature( _featureName, _isAllowedByDefault );
     }
 
     /// <summary>

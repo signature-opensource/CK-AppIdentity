@@ -76,11 +76,12 @@ feature (`TransportFeatureDriver`, in CK.AppIdentity.TransportLayer) requires th
 remote, in CK.AppIdentity.KeyManagement) to be available on a party: if this is not the case, the `TransportFeatureDriver` issues a warning:
 *"Remote 'AcmeCorp/$Server' cannot support the allowed 'Transport' feature because the remote has a disallowed 'KeyManagement' feature."*.
 
-Drivers have access to all configuration sections. They are free to consider certain keys in parent sections (to implement configuration
-inheritance) or to ignore them altogether, taking into account only configurations directly expressed on the Party they are analyzing. 
-
-These different strategies are important. Some configuration keys should not be inherited (anything to do with security, for example,
-should not be inheritable), while others should be, to facilitate system configuration.
+A driver reads the configuration of a party: the `LocalConfiguration` of a local party (the root or a tenant domain, its "Local"
+section) or the configuration of a remote. Nothing is implicitly inherited from the levels above: a setting that can have a default
+value is resolved with the `TryResolveValue` / `TryResolveSection` extension methods of CK.Configuration (the party's own key, then the
+"Defaults" sections above it, see [the levels and the defaults](../../CK.AppIdentity.Configuration/README.md#the-structural-levels-and-the-defaults)).
+A setting that must be configured on each party (anything to do with security, for example) is read on the party only
+(`TryGetSection`).
 
 __Important:__ There is no namespace or other partitioning of names/keys: drivers who don't know each other can perfectly well use
 common keys... or should but don't. We didn't consider this to be an issue at this stage, and even saw it as a

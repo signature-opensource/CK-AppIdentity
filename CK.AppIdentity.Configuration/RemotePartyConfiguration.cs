@@ -19,7 +19,7 @@ public sealed class RemotePartyConfiguration : ApplicationIdentityPartyConfigura
                                        string domainName,
                                        NormalizedPath fullName,
                                        string? address,
-                                       ref InheritedConfigurationProps props )
+                                       ref ResolvedConfigurationProps props )
         : base( configuration, domainName, fullName, ref props )
     {
         Throw.DebugAssert( CoreApplicationIdentity.TryParseFullName( fullName.Path, out var d, out var p, out var e )

@@ -7,7 +7,7 @@ namespace CK.AppIdentity;
 /// </summary>
 public sealed class ApplicationIdentityLocalConfiguration : ApplicationIdentityConfiguration
 {
-    internal ApplicationIdentityLocalConfiguration( ImmutableConfigurationSection configuration, ref InheritedConfigurationProps props )
+    internal ApplicationIdentityLocalConfiguration( ImmutableConfigurationSection configuration, ref ResolvedConfigurationProps props )
         : base( configuration, ref props )
     {
     }

@@ -22,7 +22,7 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
                                              NormalizedPath fullName,
                                              ApplicationIdentityLocalConfiguration local,
                                              List<RemotePartyConfiguration> remotes,
-                                             ref InheritedConfigurationProps props )
+                                             ref ResolvedConfigurationProps props )
         : base( configuration, domainName, fullName, ref props )
     {
         Throw.DebugAssert( CoreApplicationIdentity.TryParseFullName( fullName.Path, out var d, out var p, out var e )

@@ -22,7 +22,7 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     internal ApplicationIdentityPartyConfiguration( ImmutableConfigurationSection configuration,
                                                     string domainName,
                                                     NormalizedPath fullName,
-                                                    ref InheritedConfigurationProps props )
+                                                    ref ResolvedConfigurationProps props )
         : base( configuration, ref props )
     {
         Throw.DebugAssert( CoreApplicationIdentity.TryParseFullName( fullName.Path, out var d, out var p, out var e )
@@ -75,7 +75,7 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
 
     /// <summary>
     /// Tries to create one or more party configurations from a configuration with a "Dynamic" key that
-    /// inherits from this configuration.
+    /// is anchored below this configuration: the "Defaults" sections above it apply.
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="configuration">The dynamic configurator.</param>
@@ -89,7 +89,7 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
                                                                      bool strictConfigurationMode = false )
     {
         using var warnTracker = new WarnTracker( monitor );
-        // Anchors the new mutable section below this section: lookups apply.
+        // Anchors the new mutable section below this section: the "Defaults" above apply.
         //
         // The "Remotes:X" levels are useless. We don't need these because these slots don't carry any
         // information other than the "collection" (array) and the "index" that we totally ignore.
@@ -100,7 +100,6 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
         Throw.DebugAssert( string.IsInterned( c.Key ) == "Dynamic" );
         configuration( c );
         var finalConfig = new ImmutableConfigurationSection( c, anchor );
-        var inheritedProps = new InheritedConfigurationProps( this );
         // We obviously have a race condition here on the full name unicity.
         // The fact that no full name conflict offers no guaranty when the new configuration
         // will be added.
@@ -114,7 +113,6 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
                                                                             finalConfig,
                                                                             _domainName,
                                                                             _environmentName,
-                                                                            ref inheritedProps,
                                                                             ref partyCollector,
                                                                             fullNameIndex );
         success &= warnTracker.Close( monitor, strictConfigurationMode );

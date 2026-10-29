@@ -17,11 +17,8 @@ public interface IApplicationIdentityFeatureDriver : ISingletonAutoService
     string FeatureName { get; }
 
     /// <summary>
-    /// Gets whether this feature is allowed by default.
-    /// <para>
-    /// When a feature is driven by a configuration key (like "GitHubApp"),
-    /// this should be initialized to true.
-    /// </para>
+    /// Gets whether this feature is allowed for the root application: its "Local" configuration (that resolves the
+    /// "Defaults" of the root) or, when it doesn't say, whether the feature is allowed by default.
     /// </summary>
     bool IsRootAllowed { get; }
 }

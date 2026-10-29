@@ -181,36 +181,30 @@ The simplest TenantDomain definition (an item of the "Parties") is:
 ```
 It is initially empty but dynamic remotes can be programmatically added to it.
 
-Because each Tenant has its own dedicated configuration space, it can contain configuration keys that can apply (by
-"inheritance") to its Remotes (and only to its Remotes).
+Because each Tenant has its own dedicated configuration space, its "Defaults" section can hold the default values of
+its parties: its "Local" and its Remotes (and only them). See below.
 
-## The Local configuration(s)
+## The "Local" and the "Defaults" configurations
 
-One subtlety concerns the modeling of the notion of local application.
-From a hierarchical point of view, it seems logical to configure the host application in the
-configuration root:
-```jsonc
-{
-  "FullName": "Test/$App",
-  // This is where application-specific configurations MAY appear... but NO!
-  "Parties": [
-   {
-     "PartyName": "$Box"
-   }]
-}
-```
-However, one of the principles underlying the handling of these configurations is "inheritance": keys from
-a higher level can be applied "below". This inheritance factorizes information and secures the system (some
-components introduce the possibility of locking or limiting critical configurations, enabling dynamic sub-configuration
-"imports" to be accepted without risk). This is why there is a "Local" configuration section:
+The root, a tenant domain and a group of parties are *levels*: their own keys are only their identity and their
+structure (the names, the "Parties", "Local" and "Defaults"). A key that configures something cannot be written on a
+level: it is an error. It goes in one of these sections:
+
+- **"Local"** is the configuration of the local application (or of the tenant): its features, its assemblies, the
+  settings of its components.
+- **"Defaults"** holds the default values of all the parties below the level: its "Local" and its remotes. A party's own
+  key always wins, otherwise the nearest "Defaults" above it applies.
 
 ```jsonc
 {
   "FullName": "Test/$App",
-  // Configurations that apply globally to the application (typically default values)
-  // can be entered here.
+  // Default values for every party below (the "Local" included).
+  "Defaults": {
+     "AllowFeatures": "KeyManagement"
+  },
+  // The configuration of the application itself.
   "Local": {
-     // This is where the local application can be configured.
+     "AllowFeatures": "AuthCenter"
   },
   "Parties": [
    {
@@ -219,20 +213,28 @@ components introduce the possibility of locking or limiting critical configurati
 }
 ```
 
-In a multi-tenant configuration, each Tenant has its "Local": this can be used to configure
-components and plugins specific to that Tenant:
+The application has the KeyManagement and AuthCenter features, the Box only the KeyManagement. Allowing a feature in
+the "Local" concerns only the application: nothing written in a "Local" applies to the remotes.
+
+In a multi-tenant configuration, each Tenant has its "Local" and its "Defaults":
 
 ```jsonc
 {
   "FullName": "Test/$SaaSApp",
+  "Defaults": {
+     // For every party of the configuration, the tenants' included.
+  },
   "Local": {
-     // This is where the local application can be configured.
+     // The local application.
   },
   "Parties": [
    {
      "FullName": "Tenant1/$Tenant1",
+     "Defaults": {
+        // For the parties of Tenant1 (its "Local" and its remotes): they win over the root's "Defaults".
+     },
      "Local": {
-        // Here comes the local configuration of Tenant1.
+        // The local configuration of Tenant1.
      },
      "Parties": [
       {
@@ -243,13 +245,9 @@ components and plugins specific to that Tenant:
 }
 ```
 
-Here too, inheritance applies: the configuration keys in the definition of the Tenant itself apply
-to the entire section and its sub-sections.
+A group of parties (an item of the "Parties" with no PartyName) can also have a "Defaults" that applies to its parties:
+this factorizes their common configuration. A group is only a configuration convenience: its parties are "flattened",
+a Tenant is and remains a simple list of Remote Parties.
 
-Inheritance is actually "generalized": Tenant can have recursive `Parties` (think "groups"): this
-allows parts of a Tenant that share certain configuration aspects to be grouped together and these common
-configurations to be factored into a parent node.
-
-When the sections are analyzed, recursive "Parties" sections are traversed and all "RemoteParty"
-are "flattened": the hierarchy applies only to configuration and key factorization/propagation,
-not to the structure of a Tenant itself: a Tenant is and remains a simple list of Remote Parties.
+The domain and environment names are the only keys that a level passes to its parties: they are part of their identity
+(a party in a tenant is in the tenant's domain).

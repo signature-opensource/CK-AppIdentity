@@ -44,7 +44,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                              bool strictMode,
                                              StoreFileSystem store,
                                              ref ProcessedConfiguration? parties,
-                                             ref InheritedConfigurationProps inhProps )
+                                             ref ResolvedConfigurationProps inhProps )
         : base( configuration, domainName, fullName, ref inhProps )
     {
         Throw.DebugAssert( parties.HasValue );
@@ -60,7 +60,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                              string domainName,
                                              NormalizedPath fullName,
                                              NormalizedPath? storeRootPath,
-                                             ref InheritedConfigurationProps inhProps )
+                                             ref ResolvedConfigurationProps inhProps )
         : base( configuration, domainName, fullName, ref inhProps )
     {
         _storeFileSystem = new StoreFileSystem( storeRootPath ?? DefaultStoreRootPath, isPrivate: !storeRootPath.HasValue );
@@ -244,7 +244,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             environmentName = CoreApplicationIdentity.DefaultEnvironmentName;
         }
         if( partyName[0] != '$' ) partyName = '$' + partyName;
-        var props = new InheritedConfigurationProps( ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty, AssemblyConfiguration.Empty );
+        var props = ResolvedConfigurationProps.Empty;
         var c = new MutableConfigurationSection( "CK-AppIdentity" );
         var config = new ApplicationIdentityServiceConfiguration( new ImmutableConfigurationSection( c ),
                                                                   domainName,
@@ -335,11 +335,13 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         bool nameSuccess = ReadNames( monitor, root,
                                       out var domainName, out var partyName, out var environmentName,
                                       defaultDomainName, string.IsNullOrEmpty( defaultPartyName ) ? null : defaultPartyName, defaultEnvironmentName );
-        bool success = nameSuccess & InheritedConfigurationProps.TryCreate( monitor, root, out var props );
+        // The root is a structural level: its own keys are its identity and its structure.
+        bool success = nameSuccess & StructuralKeys.CheckRoot( monitor, root );
+        var props = ResolvedConfigurationProps.Empty;
 
         Throw.DebugAssert( nameof( StrictConfigurationMode ) == "StrictConfigurationMode" );
         bool strictMode = environmentName != CoreApplicationIdentity.DefaultEnvironmentName;
-        var sStrict = root.TryLookupSection( "StrictConfigurationMode" );
+        var sStrict = root.TryGetSection( "StrictConfigurationMode" );
         if( sStrict != null && !bool.TryParse( sStrict.Value, out strictMode ) )
         {
             monitor.Error( $"StrictConfigurationMode, when defined, must be a 'true' or 'false' boolean." );
@@ -359,7 +361,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var fullNameIndex = new Dictionary<string, ImmutableConfigurationSection>( StringComparer.OrdinalIgnoreCase );
         // The local party is a party: no remote can have its FullName (they would share the same store folder).
         if( nameSuccess ) fullNameIndex.Add( fullName, root );
-        var parties = CreateParties( monitor, root.GetSection( "Parties" ), domainName, environmentName, ref props, fullNameIndex );
+        var parties = CreateParties( monitor, root.GetSection( "Parties" ), domainName, environmentName, fullNameIndex );
         success &= parties.HasValue;
 
         var store = HandleStorePath( monitor, configuration );
@@ -375,7 +377,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         }
 
         // Success may become false if something fails in the local configuration.
-        var localConfig = CreateLocalConfiguration( monitor, root, ref props, ref success );
+        var localConfig = CreateLocalConfiguration( monitor, root, ref success );
 
         success &= warnTracker.Close( monitor, strictMode );
         if( !success )
@@ -428,15 +430,14 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                                   ImmutableConfigurationSection configuration,
                                                   string domainName,
                                                   string environmentName,
-                                                  ref InheritedConfigurationProps props,
                                                   Dictionary<string, ImmutableConfigurationSection> fullNameIndex )
     {
         Throw.DebugAssert( configuration.Key == "Parties" );
-        bool success = props.IsValid;
+        bool success = true;
         var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>() );
         foreach( var c in configuration.GetChildren() )
         {
-            success &= ReadParties( monitor, c, domainName, environmentName, ref props, ref parties, fullNameIndex );
+            success &= ReadParties( monitor, c, domainName, environmentName, ref parties, fullNameIndex );
         }
         return success ? parties : null;
     }
@@ -445,7 +446,6 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                       ImmutableConfigurationSection configuration,
                                       string inhDomainName,
                                       string inhEnvironmentName,
-                                      ref InheritedConfigurationProps inhProps,
                                       ref ProcessedConfiguration partyCollector,
                                       Dictionary<string, ImmutableConfigurationSection> fullNameIndex )
     {
@@ -453,11 +453,12 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         bool nameSuccess = ReadNames( monitor, configuration,
                                       out var domainName, out var partyName, out var environmentName,
                                       inhDomainName, "", inhEnvironmentName );
-        // Always try to propagate the inherited props.
-        bool success = nameSuccess & InheritedConfigurationProps.TryCreate( monitor, inhProps, configuration, out var props );
-        // If a PartyName is not defined, it is a pure group. We handle it recursively, handling inherited names and properties.
+        bool success = nameSuccess;
+        // If a PartyName is not defined, it is a pure group. We handle it recursively, handling the inherited names
+        // (its "Defaults" apply to the parties below it).
         if( partyName.Length == 0 )
         {
+            success &= StructuralKeys.CheckGroup( monitor, configuration );
             using var gLog = monitor.OpenInfo( $"Party group found '{partiesSection.Path}'." );
             int count = partyCollector.Count;
             // Only the "Parties" of a group are parties: its other keys (inherited configuration, "Local", etc.)
@@ -466,7 +467,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             foreach( var c in partiesSection.GetChildren() )
             {
                 hasParties = true;
-                success &= ReadParties( monitor, c, domainName, environmentName, ref props, ref partyCollector, fullNameIndex );
+                success &= ReadParties( monitor, c, domainName, environmentName, ref partyCollector, fullNameIndex );
             }
             if( !hasParties )
             {
@@ -507,7 +508,9 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         if( isDomain )
         {
             using var gLog = monitor.OpenInfo( $"Found domain definition '{fullName}'." );
-            var parties = CreateParties( monitor, partiesSection, domainName, environmentName, ref props, fullNameIndex );
+            success &= StructuralKeys.CheckTenant( monitor, configuration );
+            var props = ResolvedConfigurationProps.Empty;
+            var parties = CreateParties( monitor, partiesSection, domainName, environmentName, fullNameIndex );
             if( parties.HasValue )
             {
                 // Lifts the tenants found below.
@@ -516,7 +519,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                 if( nameSuccess )
                 {
                     // Success may become false if something fails in the local configuration.
-                    var localConfig = CreateLocalConfiguration( monitor, configuration, ref props, ref success );
+                    var localConfig = CreateLocalConfiguration( monitor, configuration, ref success );
                     partyCollector.Tenants.Add( new TenantDomainPartyConfiguration( configuration, domainName, fullName, localConfig, parties.Value.Remotes, ref props ) );
                 }
             }
@@ -531,6 +534,8 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             {
                 monitor.Warn( $"'{partiesSection.Path}' is ignored: '{fullName}' is a remote party, only groups and tenant domains have Parties." );
             }
+            success &= StructuralKeys.CheckRemote( monitor, configuration )
+                       & ResolvedConfigurationProps.TryResolve( monitor, configuration, out var props );
             if( success )
             {
                 var p = new RemotePartyConfiguration( configuration, domainName, fullName, address, ref props );
@@ -543,12 +548,12 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
 
     static ApplicationIdentityLocalConfiguration CreateLocalConfiguration( IActivityMonitor monitor,
                                                                            ImmutableConfigurationSection configuration,
-                                                                           ref InheritedConfigurationProps props,
                                                                            ref bool success )
     {
-        // This creates an empty section if "Local" is not defined: this is exactly what we want.
+        // This creates an empty section if "Local" is not defined: this is exactly what we want (the "Defaults" of the
+        // level and of the levels above apply to it).
         var local = configuration.GetSection( "Local" );
-        success &= InheritedConfigurationProps.TryCreate( monitor, props, configuration, out var localProps );
+        success &= ResolvedConfigurationProps.TryResolve( monitor, local, out var localProps );
         var localConfig = new ApplicationIdentityLocalConfiguration( local, ref localProps );
         return localConfig;
     }
