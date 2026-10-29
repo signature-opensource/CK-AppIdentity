@@ -9,7 +9,7 @@
 
     <ItemGroup>
         <PackageReference Include="CK.Abstractions" Version="32.0.0-0.cris-auth.0.ci.6" />
-        <PackageReference Include="CK.Configuration" Version="3.0.0-0.cris-auth.0.ci.5" />
+        <PackageReference Include="CK.Configuration" Version="3.0.0-0.cris-auth.0.ci.6" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
     </ItemGroup>
 
