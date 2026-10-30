@@ -292,13 +292,13 @@ public class FeatureBuilderInitializationTests
 
 
     // The GrandOutput dispatches the logs asynchronously.
-    static async Task<bool> WaitForLogAsync( GrandOutputMemoryCollector logs, string text )
+    static async Task<bool> WaitForLogAsync( GrandOutputMemoryCollector logs, params string[] texts )
     {
         var all = new List<string>();
         for( int i = 0; i < 50; ++i )
         {
             all.AddRange( logs.ExtractCurrentTexts() );
-            if( all.Contains( text ) ) return true;
+            if( texts.All( all.Contains ) ) return true;
             await Task.Delay( 20 );
         }
         TestContext.Progress.WriteLine( "COLLECTED:" + Environment.NewLine + string.Join( Environment.NewLine + "---" + Environment.NewLine, all ) );
@@ -372,10 +372,116 @@ public class FeatureBuilderInitializationTests
         public LocalStorageFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
     }
 
-    static ApplicationIdentityService CreateService()
+    static ApplicationIdentityService CreateService( Action<MutableConfigurationSection>? configure = null )
     {
-        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" ).ShouldNotBeNull();
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+        {
+            c["FullName"] = "FakeDomain/$FakeApp";
+            configure?.Invoke( c );
+        } ).ShouldNotBeNull();
         return new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
+    }
+
+    [Test]
+    public void the_configured_name_is_the_role_of_the_party()
+    {
+        // The Local side: the application is the "Singleton", its remotes are "SingletonRemote".
+        var s = CreateService( c =>
+        {
+            c["Local:AllowFeatures"] = "Singleton";
+            c["Parties:0:PartyName"] = "AllowsTheRemoteName";
+            c["Parties:0:AllowFeatures"] = "SingletonRemote";
+            c["Parties:1:PartyName"] = "AllowsTheFeatureName";
+            c["Parties:1:AllowFeatures"] = "Singleton";
+        } );
+        var common = new SingletonFeatureDriver( s );
+        var local = new LocalSingletonFeatureDriver( s );
+        var byRemote = s.Remotes.ToDictionary( r => r.PartyName );
+        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, local } )
+        {
+            d.IsLocalSide.ShouldBe( true );
+            d.GetFeatureName( s ).ShouldBe( "Singleton" );
+            d.GetFeatureName( byRemote["$AllowsTheRemoteName"] ).ShouldBe( "SingletonRemote" );
+            d.IsRootAllowed.ShouldBeTrue();
+            d.IsAllowedFeature( byRemote["$AllowsTheRemoteName"] ).ShouldBeTrue();
+            d.IsAllowedFeature( byRemote["$AllowsTheFeatureName"] ).ShouldBeFalse();
+        }
+
+        // The Remote side: the application is a "SingletonRemote", the remote that is the feature is "Singleton".
+        // The common driver created after its side has its role too.
+        s = CreateService( c =>
+        {
+            c["Local:AllowFeatures"] = "SingletonRemote";
+            c["Parties:0:PartyName"] = "TheSingleton";
+            c["Parties:0:AllowFeatures"] = "Singleton";
+        } );
+        var remote = new RemoteSingletonFeatureDriver( s );
+        common = new SingletonFeatureDriver( s );
+        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, remote } )
+        {
+            d.IsLocalSide.ShouldBe( false );
+            d.GetFeatureName( s ).ShouldBe( "SingletonRemote" );
+            d.GetFeatureName( s.Remotes.Single() ).ShouldBe( "Singleton" );
+            d.IsRootAllowed.ShouldBeTrue();
+            d.IsAllowedFeature( s.Remotes.Single() ).ShouldBeTrue();
+        }
+
+        // Without a side, there is no role: the feature name everywhere.
+        s = CreateService( c => c["Parties:0:PartyName"] = "R" );
+        common = new SingletonFeatureDriver( s );
+        common.IsLocalSide.ShouldBeNull();
+        common.GetFeatureName( s ).ShouldBe( "Singleton" );
+        common.GetFeatureName( s.Remotes.Single() ).ShouldBe( "Singleton" );
+    }
+
+    [TestCase( "Local" )]
+    [TestCase( "Remote" )]
+    [CancelAfter( 2000 )]
+    public async Task a_party_that_allows_only_the_name_of_the_other_role_is_an_error_Async( string side, CancellationToken cancellation )
+    {
+        // The configuration of the other role: the Local side reads a Remote side's configuration and conversely.
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+        {
+            c["FullName"] = "FakeDomain/$FakeApp";
+            c["Local:AllowFeatures"] = side == "Local" ? "SingletonRemote" : "Singleton";
+            c["Parties:0:PartyName"] = "Other";
+            c["Parties:0:AllowFeatures"] = side == "Local" ? "Singleton" : "SingletonRemote";
+            // A "Defaults" that allows the name of the other role too is fine when the party allows its own name.
+            c["Parties:1:PartyName"] = "Both";
+            c["Parties:1:AllowFeatures:0"] = "Singleton";
+            c["Parties:1:AllowFeatures:1"] = "SingletonRemote";
+        } ).ShouldNotBeNull();
+        var services = new ServiceCollection();
+        services.AddSingleton( c );
+        services.AddSingleton<ApplicationIdentityService>();
+        var t = side == "Local" ? typeof( LocalSingletonFeatureDriver ) : typeof( RemoteSingletonFeatureDriver );
+        services.AddSingleton( t, sp => side == "Local"
+                                            ? new LocalSingletonFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() )
+                                            : new RemoteSingletonFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() ) );
+        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
+
+        using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
+        {
+            await Should.ThrowAsync<Exception>( () =>
+            {
+                var sp = services.BuildServiceProvider();
+                var s = sp.GetRequiredService<ApplicationIdentityService>();
+                _ = ((IHostedService)s).StartAsync( cancellation );
+                return s.InitializationTask.WaitAsync( cancellation );
+            } );
+            if( side == "Local" )
+            {
+                ( await WaitForLogAsync( logs,
+                    "'Application: FakeDomain/$FakeApp/#Dev' allows the 'SingletonRemote' feature but, in this application ('LocalSingletonFeatureDriver' is the Local side of the 'Singleton' feature), it is the 'Singleton': it must allow 'Singleton'.",
+                    "'FakeDomain/$Other/#Dev' allows the 'Singleton' feature but, in this application ('LocalSingletonFeatureDriver' is the Local side of the 'Singleton' feature), it is a remote of the 'Singleton': it must allow 'SingletonRemote'." ) ).ShouldBeTrue();
+            }
+            else
+            {
+                ( await WaitForLogAsync( logs,
+                    "'Application: FakeDomain/$FakeApp/#Dev' allows the 'Singleton' feature but, in this application ('RemoteSingletonFeatureDriver' is the Remote side of the 'Singleton' feature), it is a remote of the 'Singleton': it must allow 'SingletonRemote'.",
+                    "'FakeDomain/$Other/#Dev' allows the 'SingletonRemote' feature but, in this application ('RemoteSingletonFeatureDriver' is the Remote side of the 'Singleton' feature), it is the 'Singleton': it must allow 'Singleton'." ) ).ShouldBeTrue();
+            }
+        }
     }
 
     [Test]

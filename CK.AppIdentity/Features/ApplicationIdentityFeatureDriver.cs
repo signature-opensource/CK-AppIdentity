@@ -1,4 +1,5 @@
 using CK.Core;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -13,9 +14,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
 {
     readonly ApplicationIdentityService _s;
     readonly string _featureName;
-    readonly bool _isRootAllowed;
     readonly bool _isAllowedByDefault;
-    readonly bool _isLocalOrRemote;
+    internal readonly bool _isLocalOrRemote;
+    // The role of the application: set for a side, and for the common driver of a feature that has a side.
+    bool? _isLocalSide;
 
     /// <summary>
     /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/>.
@@ -30,11 +32,17 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <summary>
     /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/> that is the "Local" or the "Remote" side of a feature
     /// that is a singleton within a domain: the type is "Local<paramref name="featureName"/>FeatureDriver" or
-    /// "Remote<paramref name="featureName"/>FeatureDriver" and both sides manage the same <paramref name="featureName"/>
-    /// (the one used by the "AllowFeatures" and "DisallowFeatures" configurations).
+    /// "Remote<paramref name="featureName"/>FeatureDriver" and both sides manage the same <paramref name="featureName"/>.
+    /// <para>
+    /// The "AllowFeatures" and "DisallowFeatures" configurations name what a party is: "<paramref name="featureName"/>" on
+    /// the party that is the feature (a local party of the Local side, a remote of the Remote side) and
+    /// "<paramref name="featureName"/>Remote" on the parties that are its remotes (the remotes of the Local side, a local
+    /// party of the Remote side). See <see cref="GetFeatureName(IParty)"/>.
+    /// </para>
     /// <para>
     /// An application has one role: the "Local" and "Remote" drivers of a feature cannot be both registered. The drivers of a
-    /// feature ("XXXFeatureDriver" and one of its sides) must agree on <paramref name="isAllowedByDefault"/>.
+    /// feature ("XXXFeatureDriver" and one of its sides) must agree on <paramref name="isAllowedByDefault"/>. The common driver
+    /// "XXXFeatureDriver" has the role of the side: it reads the same names.
     /// </para>
     /// </summary>
     /// <param name="s">The application identity service.</param>
@@ -59,6 +67,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             name = featureName;
         }
         bool isSide = featureName != null;
+        if( isSide ) _isLocalSide = GetType().Name.StartsWith( "Local" );
         foreach( var other in s._builders )
         {
             if( other._featureName != name ) continue;
@@ -75,6 +84,9 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             {
                 Throw.InvalidOperationException( $"'{GetType().ToCSharpName()}' and '{other.GetType().ToCSharpName()}' disagree on whether the '{name}' feature is allowed by default." );
             }
+            // The common driver and its side: the common driver has the role of the side (whichever is created first).
+            if( isSide ) other._isLocalSide = _isLocalSide;
+            else _isLocalSide = other._isLocalSide;
         }
         _isLocalOrRemote = isSide;
         _isAllowedByDefault = isAllowedByDefault;
@@ -83,7 +95,6 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         // dependency order of the feature builders.
         s._builders.Add( this );
         _s = s;
-        _isRootAllowed = s.LocalConfiguration.IsAllowedFeature( name, isAllowedByDefault );
     }
 
     /// <summary>
@@ -95,20 +106,19 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// Gets whether this feature is allowed or disabled for the root <see cref="ApplicationIdentityService"/> (its "Local"
     /// configuration). Use <see cref="IsAllowedFeature(IParty)"/> for any other party.
     /// </summary>
-    public bool IsRootAllowed => _isRootAllowed;
+    public bool IsRootAllowed => IsAllowedFeature( _s );
 
     /// <summary>
     /// Gets whether this feature is enabled for the given party (including the root <see cref="IApplicationIdentityService"/>):
     /// a local party (the root or a tenant domain) answers from its <see cref="ILocalParty.LocalConfiguration"/>, a remote from
     /// its own configuration. Both resolve the Allow/DisallowFeatures of the "Defaults" sections above them.
+    /// <para>
+    /// The configured name is the one of the role of the party (see <see cref="GetFeatureName(IParty)"/>).
+    /// </para>
     /// </summary>
     /// <param name="p">The party to test.</param>
     /// <returns>True if this feature is allowed, false otherwise.</returns>
-    public bool IsAllowedFeature( IParty p )
-    {
-        ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
-        return c.IsAllowedFeature( _featureName, _isAllowedByDefault );
-    }
+    public bool IsAllowedFeature( IParty p ) => GetConfiguration( p ).IsAllowedFeature( GetFeatureName( p ), _isAllowedByDefault );
 
     /// <summary>
     /// Gets this feature name.
@@ -116,6 +126,48 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// of a feature, see <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService, string?, bool)"/>).
     /// </summary>
     public string FeatureName => _featureName;
+
+    /// <summary>
+    /// Gets whether the application is the Local side (true) or the Remote side (false) of this feature, or null when this
+    /// feature has no side (or when only its common driver is registered).
+    /// See <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService, string?, bool)"/>.
+    /// </summary>
+    public bool? IsLocalSide => _isLocalSide;
+
+    /// <summary>
+    /// Gets the name that allows this feature on a party: the <see cref="FeatureName"/>, except for a feature with a side,
+    /// where it is "<see cref="FeatureName"/>Remote" on a party that is a remote of the feature (a remote of the Local side,
+    /// a local party of the Remote side).
+    /// </summary>
+    /// <param name="p">The party.</param>
+    /// <returns>The feature name to use in the "AllowFeatures" and "DisallowFeatures" of the party.</returns>
+    public string GetFeatureName( IParty p ) => IsRemoteOfTheFeature( p ) ? _featureName + "Remote" : _featureName;
+
+    bool IsRemoteOfTheFeature( IParty p ) => _isLocalSide.HasValue && (p is ILocalParty) != _isLocalSide.Value;
+
+    static ApplicationIdentityConfiguration GetConfiguration( IParty p ) => p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
+
+    // Called before the setup of a side: a party that allows only the name of the other role is an error (the configuration
+    // of the other role, the remotes of a Remote side that allow "XXXRemote" for instance).
+    internal bool CheckRoleNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
+    {
+        Throw.DebugAssert( _isLocalOrRemote && _isLocalSide.HasValue );
+        bool success = true;
+        foreach( var p in parties )
+        {
+            var c = GetConfiguration( p );
+            var name = GetFeatureName( p );
+            var other = IsRemoteOfTheFeature( p ) ? _featureName : _featureName + "Remote";
+            if( c.IsAllowedFeature( other, false ) && !c.IsAllowedFeature( name, _isAllowedByDefault ) )
+            {
+                var role = name == _featureName ? $"is the '{_featureName}'" : $"is a remote of the '{_featureName}'";
+                monitor.Error( $"'{p}' allows the '{other}' feature but, in this application ('{GetType().Name}' is the {(_isLocalSide.Value ? "Local" : "Remote")} side of the '{_featureName}' feature), "
+                               + $"it {role}: it must allow '{name}'." );
+                success = false;
+            }
+        }
+        return success;
+    }
 
     /// <summary>
     /// Must do whatever is required to register features into any <see cref="IParty.Features"/>

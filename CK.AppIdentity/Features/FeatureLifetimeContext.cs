@@ -107,12 +107,18 @@ public sealed class FeatureLifetimeContext
     /// </summary>
     public IDictionary<object, object> Memory => _trampoline.Memory;
 
+    // The side of a feature checks the names of the parties of the operation (the common driver reads the same names).
+    bool CheckRoleNames( ApplicationIdentityFeatureDriver d )
+    {
+        return !d._isLocalOrRemote || d.CheckRoleNames( _monitor, GetAllLocals().Concat<IParty>( GetAllRemotes() ) );
+    }
+
     internal async Task<Exception?> ExecuteSetupAsync()
     {
         _targetParty = null;
         foreach( var d in _drivers )
         {
-            _trampoline.Trampoline.Add( () => d.SetupAsync( this ) );
+            _trampoline.Trampoline.Add( () => CheckRoleNames( d ) ? d.SetupAsync( this ) : Task.FromResult( false ) );
         }
         await _trampoline.ExecuteAllAsync( _monitor );
         if( _trampoline.Result == TrampolineResult.TotalSuccess ) return null;
@@ -124,7 +130,7 @@ public sealed class FeatureLifetimeContext
         _targetParty = remote;
         foreach( var d in _drivers )
         {
-            _trampoline.Trampoline.Add( () => d.SetupDynamicRemoteAsync( this, remote ) );
+            _trampoline.Trampoline.Add( () => CheckRoleNames( d ) ? d.SetupDynamicRemoteAsync( this, remote ) : Task.FromResult( false ) );
         }
         await _trampoline.ExecuteAllAsync( _monitor );
         return _trampoline.Result;

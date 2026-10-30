@@ -48,6 +48,18 @@ Configuration then takes over via "Allow/DisallowFeatures", which control the fi
     the endpoints are subordinated to their local party, a Local or Remote role per local party);
   - the drivers of a feature agree on `isAllowedByDefault`;
   - two drivers can never manage the same feature otherwise.
+
+  The configuration **names what a party is**: "*XXX*" on the party that is the feature, "*XXXRemote*" on the parties
+  that are its remotes (`GetFeatureName( IParty p )` gives the name of a party, the common driver reads the same names
+  as its side):
+
+  | | Local side (the application is "*XXX*") | Remote side (the application is a remote of "*XXX*") |
+  |---|---|---|
+  | Its `Local` | `"AllowFeatures": "XXX"` | `"AllowFeatures": "XXXRemote"` |
+  | A remote | `"AllowFeatures": "XXXRemote"` | `"AllowFeatures": "XXX"` (the remote that is "*XXX*") |
+
+  A party that allows only the name of the other role (the configuration of the other role) is an error: the setup
+  of the side fails. Allowing both names is not an error (a "Defaults" may apply to the `Local` and to the remotes).
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which will give it the final result of the
   Allow/Disallow configurations for the given Party according to the configuration sections (up to the configuration root).
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they
