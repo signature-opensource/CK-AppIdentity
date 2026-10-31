@@ -108,7 +108,9 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// The store holds trust anchors: anyone able to create, delete or rename files in it can repoint the trusted
     /// identity of a remote. When this is not configured, the store is private (see <see cref="IsPrivateStore"/>):
     /// it is restricted to the current account, which is anyway the only account that can share it since the default
-    /// root is in the user's profile. When configured, the store is shared and its permissions are managed by the
+    /// root is in the user's profile. A relative path (resolved against the content root of the host: a folder of the
+    /// application, typically "../../#Dev/CK-AppIdentity" in a development solution) is also a private store.
+    /// When configured with a fully qualified path, the store is shared and its permissions are managed by the
     /// operator: on Unix, folders and files take the owner and group permissions of the root, never the "others" ones
     /// (use a setgid group root like 2770); on Windows, they inherit the root's ACL as-is. Applications sharing a store
     /// must run under accounts of this group.
@@ -121,8 +123,8 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     public NormalizedPath StoreRootPath => _storeFileSystem.Root;
 
     /// <summary>
-    /// Gets whether the store is private: <see cref="StoreRootPath"/> is not configured and the store is
-    /// restricted to the current account. When false, the store is shared and its permissions are
+    /// Gets whether the store is private: <see cref="StoreRootPath"/> is not configured (or is relative) and the
+    /// store is restricted to the current account. When false, the store is shared and its permissions are
     /// managed by the operator. See <see cref="StoreRootPath"/>.
     /// </summary>
     public bool IsPrivateStore => _storeFileSystem.IsPrivate;
@@ -262,7 +264,8 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// <summary>
     /// Tries to create an <see cref="ApplicationIdentityServiceConfiguration"/> instance from a <see cref="IConfigurationSection"/>
     /// and the <see cref="IHostEnvironment"/>: the <see cref="IHostEnvironment.ApplicationName"/> is the default party name
-    /// and <see cref="IHostEnvironment.EnvironmentName"/> is the default environment name.
+    /// and <see cref="IHostEnvironment.EnvironmentName"/> is the default environment name. A relative "StoreRootPath"
+    /// is resolved against the <see cref="IHostEnvironment.ContentRootPath"/>.
     /// <para>
     /// If the configuration doesn't specify the "DomainName" (or doesn't define the "FullName" of the party), "Default" domain name
     /// is used.
@@ -289,7 +292,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             env = env.Substring( 0, CoreApplicationIdentity.EnvironmentNameMaxLength );
         }
-        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env );
+        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env, hostEnvironment.ContentRootPath );
     }
 
     /// <summary>
@@ -316,12 +319,17 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// <param name="defaultDomainName">A valid domain name to use if the <paramref name="configuration"/> doesn't specify "DomainName".</param>
     /// <param name="defaultPartyName">A party name to use if the <paramref name="configuration"/> doesn't specify "PartyName".</param>
     /// <param name="defaultEnvironmentName">An environment name to use if the <paramref name="configuration"/> doesn't specify "EnvironmentName".</param>
+    /// <param name="basePath">
+    /// The fully qualified path against which a relative "StoreRootPath" is resolved (the content root of the host).
+    /// When null, a relative "StoreRootPath" is an error.
+    /// </param>
     /// <returns>A valid instance on success, null on configuration error (this includes invalid default names).</returns>
     public static ApplicationIdentityServiceConfiguration? Create( IActivityMonitor monitor,
                                                                    IConfigurationSection configuration,
                                                                    string? defaultDomainName = null,
                                                                    string? defaultPartyName = null,
-                                                                   string defaultEnvironmentName = CoreApplicationIdentity.DefaultEnvironmentName )
+                                                                   string defaultEnvironmentName = CoreApplicationIdentity.DefaultEnvironmentName,
+                                                                   string? basePath = null )
     {
         Throw.CheckNotNullArgument( defaultEnvironmentName );
         using var gLog = monitor.OpenInfo( "Creating root ApplicationIdentityServiceConfiguration service." );
@@ -364,7 +372,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var parties = CreateParties( monitor, root.GetSection( "Parties" ), domainName, environmentName, fullNameIndex );
         success &= parties.HasValue;
 
-        var store = HandleStorePath( monitor, configuration );
+        var store = HandleStorePath( monitor, configuration, basePath );
         success &= store != null;
 
         var trashBinRetention = DefaultTrashBinRetention;
@@ -390,7 +398,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             _trashBinRetention = trashBinRetention
         };
 
-        static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration )
+        static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration, string? basePath )
         {
             var store = configuration[nameof( StoreRootPath )]?.Trim();
             bool isPrivate = string.IsNullOrEmpty( store );
@@ -403,8 +411,15 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                 }
                 if( !Path.IsPathFullyQualified( store ) )
                 {
-                    monitor.Error( $"Invalid path '{configuration.Path}:{nameof( StoreRootPath )}'. '{store}' must not be relative." );
-                    return null;
+                    if( basePath == null || !Path.IsPathFullyQualified( basePath ) )
+                    {
+                        monitor.Error( $"Invalid path '{configuration.Path}:{nameof( StoreRootPath )}'. '{store}' is relative: it requires the content root of the host." );
+                        return null;
+                    }
+                    // A relative store is in a folder of the application (like the "#Dev" folder of a development solution):
+                    // it is private.
+                    store = Path.GetFullPath( Path.Combine( basePath, store ) );
+                    isPrivate = true;
                 }
             }
             else

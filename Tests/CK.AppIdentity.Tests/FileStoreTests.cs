@@ -54,6 +54,40 @@ public class FileStoreTests
     }
 
     [Test]
+    public void a_relative_store_is_private_and_resolved_against_the_base_path()
+    {
+        var basePath = CreateSharedRoot();
+        try
+        {
+            var c = new MutableConfigurationSection( "CK-AppIdentity" );
+            c["FullName"] = "Test/$Relative";
+            c["StoreRootPath"] = "../#Dev/CK-AppIdentity";
+            var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c, basePath: basePath.AppendPart( "Host" ) );
+            Throw.DebugAssert( config != null );
+            config.IsPrivateStore.ShouldBeTrue();
+            config.StoreRootPath.ShouldBe( basePath.Combine( "#Dev/CK-AppIdentity" ) );
+            if( OperatingSystem.IsWindows() )
+            {
+                CheckOwnerOnlyAccess( config.StoreRootPath );
+            }
+            else
+            {
+                File.GetUnixFileMode( config.StoreRootPath ).ShouldBe( OwnerDirectory );
+            }
+            // Without a base path, a relative store is an error.
+            using( TestHelper.Monitor.CollectTexts( out var logs ) )
+            {
+                ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c ).ShouldBeNull();
+                logs.ShouldContain( "Invalid path 'CK-AppIdentity:StoreRootPath'. '../#Dev/CK-AppIdentity' is relative: it requires the content root of the host." );
+            }
+        }
+        finally
+        {
+            Directory.Delete( basePath, recursive: true );
+        }
+    }
+
+    [Test]
     public void private_store_root_is_restricted_to_its_owner()
     {
         var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "Test/$Private" );
