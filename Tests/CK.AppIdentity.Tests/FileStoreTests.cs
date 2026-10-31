@@ -61,11 +61,11 @@ public class FileStoreTests
         {
             var c = new MutableConfigurationSection( "CK-AppIdentity" );
             c["FullName"] = "Test/$Relative";
-            c["StoreRootPath"] = "../#Dev/CK-AppIdentity";
+            c["StoreRootPath"] = "../#Dev/Store";
             var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c, basePath: basePath.AppendPart( "Host" ) );
             Throw.DebugAssert( config != null );
             config.IsPrivateStore.ShouldBeTrue();
-            config.StoreRootPath.ShouldBe( basePath.Combine( "#Dev/CK-AppIdentity" ) );
+            config.StoreRootPath.ShouldBe( basePath.Combine( "#Dev/Store" ) );
             if( OperatingSystem.IsWindows() )
             {
                 CheckOwnerOnlyAccess( config.StoreRootPath );
@@ -78,7 +78,7 @@ public class FileStoreTests
             using( TestHelper.Monitor.CollectTexts( out var logs ) )
             {
                 ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c ).ShouldBeNull();
-                logs.ShouldContain( "Invalid path 'CK-AppIdentity:StoreRootPath'. '../#Dev/CK-AppIdentity' is relative: it requires the content root of the host." );
+                logs.ShouldContain( "Invalid path 'CK-AppIdentity:StoreRootPath'. '../#Dev/Store' is relative: it requires the content root of the host." );
             }
         }
         finally

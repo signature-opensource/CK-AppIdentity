@@ -109,7 +109,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// identity of a remote. When this is not configured, the store is private (see <see cref="IsPrivateStore"/>):
     /// it is restricted to the current account, which is anyway the only account that can share it since the default
     /// root is in the user's profile. A relative path (resolved against the content root of the host: a folder of the
-    /// application, typically "../../#Dev/CK-AppIdentity" in a development solution) is also a private store.
+    /// application, typically "../../#Dev/Store" in a development solution) is also a private store.
     /// When configured with a fully qualified path, the store is shared and its permissions are managed by the
     /// operator: on Unix, folders and files take the owner and group permissions of the root, never the "others" ones
     /// (use a setgid group root like 2770); on Windows, they inherit the root's ACL as-is. Applications sharing a store
