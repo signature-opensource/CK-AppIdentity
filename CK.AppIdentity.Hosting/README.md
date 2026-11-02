@@ -97,10 +97,20 @@ Both fallbacks come from [`DomainTests`](../Tests/CK.AppIdentity.Tests/DomainTes
 
 ## The "#Dev" folder of a development solution.
 
-This package ships MSBuild targets (`buildTransitive`): they reach every project that references it, directly or
-transitively. A solution opts in by committing a `#Dev/.gitignore` (`*` and `!.gitignore`) at its root. Then the build of
-each **party** writes its manifest `#Dev/Parties/<Project>.json` (its project folder, its executable) and copies the
-generated scripts in `#Dev` (`Start.ps1`). They are generated: don't edit them.
+The `#Dev` folder holds the development data of a solution, at the root of its git working folder. It is automatic:
+nothing to commit, nothing to configure.
+- **The build of each party creates it** (with a `.gitignore` that is `*`: git ignores its content), writes the party's
+  manifest `#Dev/Parties/<Project>.json` (its project folder, its executable) and copies the generated scripts in `#Dev`
+  (`Start.ps1`). They are generated: don't edit them. This package ships these MSBuild targets (`buildTransitive`): they
+  reach every project that references it, directly or transitively.
+- **A party in Development uses `#Dev/Store`** when it doesn't configure its `StoreRootPath` (see
+  [CK.AppIdentity.Configuration](../CK.AppIdentity.Configuration/README.md)): its identity keys, its pinned remotes, its
+  running status. Deleting `#Dev/Store` resets the identities of the parties.
+
+The git working folder is the closest folder above the project with a `.git` folder (a main checkout) or a `.git` file (a
+linked worktree, a submodule): the same rule as `LocalDevSolution.SolutionFolder` (CK.ActivityMonitor) at run time. Each
+worktree has its own `#Dev`. A build outside a git working folder (a downloaded source archive) does nothing, and
+`<CKAppIdentityDevFolder>false</CKAppIdentityDevFolder>` opts a project out.
 
 **A project is a party** when it is an executable (`OutputType` `Exe`), is not a test project, and has an
 `appsettings.json`. In an App/Builder/Host solution, that is the host: the `.App` is a library and the Builder has no
@@ -118,8 +128,7 @@ generated scripts in `#Dev` (`Start.ps1`). They are generated: don't edit them.
   the client applications when needed).
 - **`-NoBrowser`** doesn't open the browser; **`-Timeout`** sets the seconds to wait (180 by default).
 
-The parties must use a relative store in `#Dev` (`"StoreRootPath": "../../#Dev/Store"`, resolved against their content
-root) and the `#Dev` environment: that is what activates their status file.
+The parties' status files require the `#Dev` environment and the `#Dev/Store` (no configured `StoreRootPath`).
 
 ## Requires.
 

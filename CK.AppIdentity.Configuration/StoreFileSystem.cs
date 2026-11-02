@@ -49,18 +49,21 @@ sealed partial class StoreFileSystem
     readonly NormalizedPath _root;
     readonly bool _isPrivate;
     readonly bool _isRelative;
+    readonly bool _isDevStore;
     readonly object _lock;
     UnixFileMode _directoryMode;
     UnixFileMode _fileMode;
     bool _initialized;
     bool _hasSecurityWarning;
 
-    internal StoreFileSystem( NormalizedPath root, bool isPrivate, bool isRelative = false )
+    internal StoreFileSystem( NormalizedPath root, bool isPrivate, bool isRelative = false, bool isDevStore = false )
     {
         Throw.DebugAssert( "A relative store is private.", !isRelative || isPrivate );
+        Throw.DebugAssert( "A dev store is private and not configured.", !isDevStore || (isPrivate && !isRelative) );
         _root = root;
         _isPrivate = isPrivate;
         _isRelative = isRelative;
+        _isDevStore = isDevStore;
         _lock = new object();
     }
 
@@ -76,9 +79,14 @@ sealed partial class StoreFileSystem
 
     /// <summary>
     /// Gets whether this store has been configured with a relative path (resolved against the content root of the host):
-    /// it is a folder of the application, typically the "#Dev/Store" of a development solution.
+    /// it is a folder of the application.
     /// </summary>
     public bool IsRelative => _isRelative;
+
+    /// <summary>
+    /// Gets whether this store is the "#Dev/Store" of a development solution (not configured, the host is in Development).
+    /// </summary>
+    public bool IsDevStore => _isDevStore;
 
     /// <summary>
     /// Creates the root if needed, applies the private policy to it and checks it.

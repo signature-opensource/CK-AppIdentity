@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// The "DevRunningStatus" static feature: when the application runs in the "#Dev" environment with a relative store
-/// (the "#Dev/Store" of a development solution), it writes a <see cref="FileName"/> file in the root party's store folder
+/// The "DevRunningStatus" static feature: when the application runs in the "#Dev" environment with the "#Dev/Store" of
+/// its development solution (<see cref="ApplicationIdentityServiceConfiguration.IsDevStore"/>), it writes a <see cref="FileName"/> file in the root party's store folder
 /// (<see cref="IParty.SharedFileStore"/>) while the host runs: the launcher of the solution reads it to know when the
 /// party is ready and where it is. The file is assembled from the <see cref="IDevRunningStatusContributor"/>.
 /// <para>
@@ -56,7 +56,7 @@ public sealed class DevRunningStatusFeatureDriver : ApplicationIdentityStaticFea
 
     /// <summary>
     /// Gets whether this feature writes the file: the root party allows it, its environment is "#Dev" and its store is
-    /// relative (<see cref="ApplicationIdentityServiceConfiguration.IsRelativeStore"/>).
+    /// the "#Dev/Store" of the solution (<see cref="ApplicationIdentityServiceConfiguration.IsDevStore"/>).
     /// </summary>
     public bool IsActive => _active;
 
@@ -71,7 +71,7 @@ public sealed class DevRunningStatusFeatureDriver : ApplicationIdentityStaticFea
         var s = ApplicationIdentityService;
         _active = IsRootAllowed
                   && s.EnvironmentName == CoreApplicationIdentity.DefaultEnvironmentName
-                  && s.Configuration.IsRelativeStore;
+                  && s.Configuration.IsDevStore;
         if( _active )
         {
             _path = s.SharedFileStore.FolderPath.AppendPart( FileName );

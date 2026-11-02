@@ -20,7 +20,7 @@ public class DevFolderTargetsTests
 {
     static NormalizedPath TargetsPath => TestHelper.SolutionFolder.Combine( "CK.AppIdentity.Hosting/buildTransitive/CK.AppIdentity.Hosting.targets" );
 
-    static void CreateProject( NormalizedPath folder, string name, bool appSettings, string? partyProperty = null )
+    static void CreateProject( NormalizedPath folder, string name, bool appSettings, string? partyProperty = null, string? devFolderProperty = null )
     {
         var project = folder.AppendPart( name );
         Directory.CreateDirectory( project );
@@ -30,6 +30,7 @@ public class DevFolderTargetsTests
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net10.0</TargetFramework>
                 {(partyProperty != null ? $"<CKAppIdentityParty>{partyProperty}</CKAppIdentityParty>" : "")}
+                {(devFolderProperty != null ? $"<CKAppIdentityDevFolder>{devFolderProperty}</CKAppIdentityDevFolder>" : "")}
               </PropertyGroup>
               <Import Project="{TargetsPath.Path}" />
             </Project>
@@ -52,16 +53,23 @@ public class DevFolderTargetsTests
         p.ExitCode.ShouldBe( 0, output );
     }
 
+    static NormalizedPath CreateRoot() => new NormalizedPath( Path.Combine( Path.GetTempPath(), "CKDevFolder-" + Guid.NewGuid().ToString( "N" ) ) );
+
+    // A main checkout: a ".git" folder (its "HEAD" file is what the targets look for).
+    static void CreateGitFolder( NormalizedPath root )
+    {
+        Directory.CreateDirectory( root.AppendPart( ".git" ) );
+        File.WriteAllText( root.Combine( ".git/HEAD" ), "ref: refs/heads/main\n" );
+    }
+
     [Test]
     [CancelAfter( 180000 )]
     public async Task the_parties_write_their_manifest_and_copy_the_scripts_in_the_Dev_folder_Async()
     {
-        var root = new NormalizedPath( Path.Combine( Path.GetTempPath(), "CKDevFolder-" + Guid.NewGuid().ToString( "N" ) ) );
+        var root = CreateRoot();
         try
         {
-            // The opt-in: a committed "#Dev/.gitignore".
-            Directory.CreateDirectory( root.AppendPart( "#Dev" ) );
-            File.WriteAllText( root.Combine( "#Dev/.gitignore" ), "*\n!.gitignore\n" );
+            CreateGitFolder( root );
             CreateProject( root, "Party.Host", appSettings: true );
             CreateProject( root, "Tool", appSettings: false );
             CreateProject( root, "NotAParty", appSettings: true, partyProperty: "false" );
@@ -83,6 +91,8 @@ public class DevFolderTargetsTests
             File.Exists( manifest.GetProperty( "Dll" ).GetString() ).ShouldBeTrue();
 
             File.ReadAllText( root.Combine( "#Dev/Start.ps1" ) ).ShouldBe( File.ReadAllText( TargetsPath.RemoveLastPart().AppendPart( "Start.ps1" ) ) );
+            // The "#Dev" folder is ignored by git: nothing to commit.
+            File.ReadAllText( root.Combine( "#Dev/.gitignore" ) ).Trim().ShouldBe( "*" );
         }
         finally
         {
@@ -92,13 +102,41 @@ public class DevFolderTargetsTests
 
     [Test]
     [CancelAfter( 120000 )]
-    public async Task without_a_Dev_folder_nothing_is_written_Async()
+    public async Task in_a_submodule_or_a_linked_worktree_the_Dev_folder_is_in_it_Async()
     {
-        var root = new NormalizedPath( Path.Combine( Path.GetTempPath(), "CKDevFolder-" + Guid.NewGuid().ToString( "N" ) ) );
+        var root = CreateRoot();
+        try
+        {
+            // A main checkout that contains a submodule (a ".git" file): the closest one is the solution.
+            CreateGitFolder( root );
+            var sub = root.AppendPart( "Sub" );
+            Directory.CreateDirectory( sub );
+            File.WriteAllText( sub.AppendPart( ".git" ), "gitdir: ../.git/modules/Sub\n" );
+            CreateProject( sub, "Party.Host", appSettings: true );
+            await BuildAsync( sub.AppendPart( "Party.Host" ) );
+            File.Exists( sub.Combine( "#Dev/Parties/Party.Host.json" ) ).ShouldBeTrue();
+            Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
+        }
+        finally
+        {
+            TestHelper.CleanupFolder( root, ensureFolderAvailable: false );
+        }
+    }
+
+    [Test]
+    [CancelAfter( 120000 )]
+    public async Task outside_a_git_working_folder_or_with_the_opt_out_nothing_is_written_Async()
+    {
+        var root = CreateRoot();
         try
         {
             CreateProject( root, "Party.Host", appSettings: true );
             await BuildAsync( root.AppendPart( "Party.Host" ) );
+            Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
+
+            CreateGitFolder( root );
+            CreateProject( root, "OptOut.Host", appSettings: true, devFolderProperty: "false" );
+            await BuildAsync( root.AppendPart( "OptOut.Host" ) );
             Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
         }
         finally

@@ -109,7 +109,8 @@ ordered, possibly-failing steps.
 The "DevRunningStatus" feature ([`DevRunningStatusFeatureDriver`](DevRunningStatus/DevRunningStatusFeatureDriver.cs), a
 static feature allowed by default) writes `DevRunningStatus.json` in the root party's folder of its store
 (`IParty.SharedFileStore`) while the host runs. It does this only when the environment is `#Dev` **and** the store is
-relative (`ApplicationIdentityServiceConfiguration.IsRelativeStore`: the `#Dev/Store` of a development solution).
+the `#Dev/Store` of the development solution (`ApplicationIdentityServiceConfiguration.IsDevStore`: a host in Development
+that doesn't configure its `StoreRootPath`).
 Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures` switches it off.
 - **The file is written** when the host has started (`OnHostStartedAsync`), rewritten after a change (batched over
   200 ms), and deleted when the host stops. The write is atomic: a temporary file, then a rename.

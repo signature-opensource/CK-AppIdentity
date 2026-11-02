@@ -1,13 +1,21 @@
 <Project>
 
   <!--
-    The "#Dev" folder of a development solution (see the README of CK.AppIdentity.Hosting).
-    A solution opts in by committing a "#Dev/.gitignore". Then the build of each party (an executable that is not a test
-    project and has an appsettings.json, or a project whose CKAppIdentityParty is true) writes its manifest
-    "#Dev/Parties/<Project>.json" and copies the scripts of this package in "#Dev" (Start.ps1).
+    The "#Dev" folder of a development solution (see the README of CK.AppIdentity.Hosting): the folder of its development
+    data, at the root of its git working folder, ignored by git (its ".gitignore" is "*").
+    The build of each party (an executable that is not a test project and has an appsettings.json, or a project whose
+    CKAppIdentityParty is true) creates it, writes its manifest "#Dev/Parties/<Project>.json" and copies the scripts of
+    this package in "#Dev" (Start.ps1). CKAppIdentityDevFolder set to false opts out.
+    The git working folder is found like LocalDevSolution.SolutionFolder (CK.ActivityMonitor) finds it at run time, where
+    the parties in Development use "#Dev/Store": the closest folder above the project with a ".git" folder (a main
+    checkout) or a ".git" file (a linked worktree, a submodule).
   -->
-  <PropertyGroup>
-    <_CKAppIdentityDevRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '#Dev\.gitignore'))</_CKAppIdentityDevRoot>
+  <PropertyGroup Condition=" '$(CKAppIdentityDevFolder)' != 'false' ">
+    <_CKAppIdentityGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git\HEAD'))</_CKAppIdentityGitFolderRoot>
+    <_CKAppIdentityGitFileRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_CKAppIdentityGitFileRoot>
+    <_CKAppIdentityDevRoot>$(_CKAppIdentityGitFolderRoot)</_CKAppIdentityDevRoot>
+    <!-- The closest one: a worktree or a submodule inside a main checkout. -->
+    <_CKAppIdentityDevRoot Condition=" '$(_CKAppIdentityGitFileRoot)' != '' And $(_CKAppIdentityGitFileRoot.Length) &gt; $(_CKAppIdentityDevRoot.Length) ">$(_CKAppIdentityGitFileRoot)</_CKAppIdentityDevRoot>
   </PropertyGroup>
 
   <Target Name="CKAppIdentityDevParty" AfterTargets="Build" Condition=" '$(_CKAppIdentityDevRoot)' != '' ">
@@ -21,6 +29,12 @@
       <_CKAppIdentityJsonDll>$([System.String]::Copy('$(TargetPath)').Replace('\','/'))</_CKAppIdentityJsonDll>
       <_CKAppIdentityJsonExecutable>$([System.String]::Copy('$(_CKAppIdentityAppHost)').Replace('\','/'))</_CKAppIdentityJsonExecutable>
     </PropertyGroup>
+    <!-- Its content is ignored by git: nothing to commit. (The parties build in parallel: the first one writes it.) -->
+    <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' And !Exists('$(_CKAppIdentityDevFolder)\.gitignore') "
+                      File="$(_CKAppIdentityDevFolder)\.gitignore"
+                      Lines="*"
+                      Overwrite="true"
+                      ContinueOnError="true" />
     <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' "
                       File="$(_CKAppIdentityDevFolder)\Parties\$(MSBuildProjectName).json"
                       Lines="{ &quot;ProjectPath&quot;: &quot;$(_CKAppIdentityJsonProjectPath)&quot;, &quot;Executable&quot;: &quot;$(_CKAppIdentityJsonExecutable)&quot;, &quot;Dll&quot;: &quot;$(_CKAppIdentityJsonDll)&quot; }"

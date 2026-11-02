@@ -41,32 +41,39 @@ public class DevRunningStatusTests
         public void Write( Utf8JsonWriter writer ) => writer.WriteString( "Test", IsReady ? "ready" : "not ready" );
     }
 
-    static NormalizedPath StoreFolder => TestHelper.TestProjectFolder.Combine( "TestStore/DevStore" );
+    // The "#Dev/Store" of the tests (the DefaultStoreRootPath is set by the tests: a host in Development doesn't use the
+    // one of the solution).
+    static NormalizedPath StoreFolder => TestHelper.TestProjectFolder.Combine( "TestStore/#Dev/Store" );
 
-    static IHost BuildHost( Action<MutableConfigurationSection>? configure = null )
+    // useDevStore: the configuration is created with the dev store, like a host in Development that runs from a solution.
+    static IHost BuildHost( Action<MutableConfigurationSection>? configure = null, bool useDevStore = true )
     {
-        var config = new MutableConfigurationSection( "DontCare" );
-        var ckApp = config.GetMutableSection( "CK-AppIdentity" );
+        var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
         ckApp["FullName"] = "D/$App/#Dev";
-        // A relative store, resolved against the content root: the "#Dev/Store" of a development solution.
-        ckApp["StoreRootPath"] = "TestStore/DevStore";
         ckApp["Parties:0:PartyName"] = "Incoming";
         ckApp["Parties:1:PartyName"] = "Outgoing";
         ckApp["Parties:1:Address"] = "tcp:127.0.0.1:1";
         configure?.Invoke( ckApp );
+        var configuration = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor,
+                                                                            ckApp,
+                                                                            null,
+                                                                            null,
+                                                                            CoreApplicationIdentity.DefaultEnvironmentName,
+                                                                            TestHelper.TestProjectFolder,
+                                                                            useDevStore ? StoreFolder : default ).ShouldNotBeNull();
         var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings
         {
             DisableDefaults = true,
             ContentRootPath = TestHelper.TestProjectFolder
         } );
-        builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+        builder.Services.AddSingleton( configuration );
         builder.Services.AddSingleton<ApplicationIdentityService>();
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         builder.Services.AddSingleton<DevRunningStatusFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<DevRunningStatusFeatureDriver>() );
         builder.Services.AddSingleton<TestContributor>();
         builder.Services.AddSingleton<IDevRunningStatusContributor>( sp => sp.GetRequiredService<TestContributor>() );
-        return builder.AddApplicationIdentityServiceConfiguration().CKBuild();
+        return builder.CKBuild();
     }
 
     static JsonElement Read( NormalizedPath path ) => JsonDocument.Parse( File.ReadAllText( path ) ).RootElement.Clone();
@@ -130,6 +137,7 @@ public class DevRunningStatusTests
 
     [TestCase( "OtherEnvironment" )]
     [TestCase( "DefaultStore" )]
+    [TestCase( "RelativeStore" )]
     [TestCase( "Disallowed" )]
     [CancelAfter( 10000 )]
     public async Task outside_a_development_solution_the_feature_is_dormant_Async( string reason, CancellationToken cancel )
@@ -139,10 +147,11 @@ public class DevRunningStatusTests
             switch( reason )
             {
                 case "OtherEnvironment": c["FullName"] = "D/$App/#Staging"; break;
-                case "DefaultStore": c["StoreRootPath"] = null; break;
+                // A configured store is not the dev store, even in the solution.
+                case "RelativeStore": c["StoreRootPath"] = "TestStore/#Dev/Store"; break;
                 case "Disallowed": c["Local:DisallowFeatures"] = "DevRunningStatus"; break;
             }
-        } );
+        }, useDevStore: reason != "DefaultStore" );
         await host.StartAsync( cancel );
         var driver = host.Services.GetRequiredService<DevRunningStatusFeatureDriver>();
         driver.IsActive.ShouldBeFalse();
@@ -153,5 +162,38 @@ public class DevRunningStatusTests
             Directory.EnumerateFiles( StoreFolder, DevRunningStatusFeatureDriver.FileName, SearchOption.AllDirectories ).ShouldBeEmpty();
         }
         await host.StopAsync( cancel );
+    }
+
+    [TestCase( true, false, true )]
+    [TestCase( false, false, false )]
+    [TestCase( true, true, false )]
+    public void the_dev_store_is_used_in_Development_unless_the_DefaultStoreRootPath_is_set( bool isDevelopment, bool isDefaultStoreRootPathSet, bool expected )
+    {
+        var solution = new NormalizedPath( "C:/Dev/MySolution" );
+        var p = ApplicationIdentityServiceConfiguration.GetDevStoreRootPath( isDevelopment, isDefaultStoreRootPathSet, solution );
+        p.ShouldBe( expected ? solution.Combine( "#Dev/Store" ) : default );
+        // Not in a solution (a deployed application): no dev store.
+        ApplicationIdentityServiceConfiguration.GetDevStoreRootPath( isDevelopment, isDefaultStoreRootPathSet, default ).IsEmptyPath.ShouldBeTrue();
+    }
+
+    [Test]
+    public void the_dev_store_creates_the_Dev_folder_and_a_configured_store_wins()
+    {
+        var devFolder = TestHelper.TestProjectFolder.Combine( "TestStore/Solution/#Dev" );
+        TestHelper.CleanupFolder( devFolder.RemoveLastPart(), ensureFolderAvailable: false );
+        var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
+        ckApp["FullName"] = "D/$App/#Dev";
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, ckApp, null, null, "#Dev", TestHelper.TestProjectFolder, devFolder.AppendPart( "Store" ) ).ShouldNotBeNull();
+        c.IsDevStore.ShouldBeTrue();
+        c.IsPrivateStore.ShouldBeTrue();
+        c.IsRelativeStore.ShouldBeFalse();
+        c.StoreRootPath.ShouldBe( devFolder.AppendPart( "Store" ) );
+        // Its content is ignored by git.
+        File.ReadAllText( devFolder.AppendPart( ".gitignore" ) ).Trim().ShouldBe( "*" );
+
+        ckApp["StoreRootPath"] = "TestStore/Other";
+        c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, ckApp, null, null, "#Dev", TestHelper.TestProjectFolder, devFolder.AppendPart( "Store" ) ).ShouldNotBeNull();
+        c.IsDevStore.ShouldBeFalse();
+        c.IsRelativeStore.ShouldBeTrue();
     }
 }

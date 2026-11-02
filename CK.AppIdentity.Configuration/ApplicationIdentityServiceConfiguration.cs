@@ -29,6 +29,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     TimeSpan _trashBinRetention = DefaultTrashBinRetention;
     // A string (not a NormalizedPath struct) so that it is read and written atomically.
     static string? _defaultStoreRootPath;
+    static bool _defaultStoreRootPathSet;
     static readonly object _defaultStoreRootPathLock = new object();
 
     /// <summary>
@@ -108,8 +109,9 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// The store holds trust anchors: anyone able to create, delete or rename files in it can repoint the trusted
     /// identity of a remote. When this is not configured, the store is private (see <see cref="IsPrivateStore"/>):
     /// it is restricted to the current account, which is anyway the only account that can share it since the default
-    /// root is in the user's profile. A relative path (resolved against the content root of the host: a folder of the
-    /// application, typically "../../#Dev/Store" in a development solution) is also a private store.
+    /// root is in the user's profile. In Development, a host that runs from a solution uses the "#Dev/Store" of the solution
+    /// instead (see <see cref="IsDevStore"/>). A relative path (resolved against the content root of the host: a folder of
+    /// the application) is also a private store.
     /// When configured with a fully qualified path, the store is shared and its permissions are managed by the
     /// operator: on Unix, folders and files take the owner and group permissions of the root, never the "others" ones
     /// (use a setgid group root like 2770); on Windows, they inherit the root's ACL as-is. Applications sharing a store
@@ -131,10 +133,27 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
 
     /// <summary>
     /// Gets whether <see cref="StoreRootPath"/> has been configured with a relative path, resolved against the content root
-    /// of the host: the store is a folder of the application (typically the "#Dev/Store" of a development solution), not
+    /// of the host: the store is a folder of the application, not
     /// the <see cref="DefaultStoreRootPath"/> that all the applications of the user share. Such a store is private.
     /// </summary>
     public bool IsRelativeStore => _storeFileSystem.IsRelative;
+
+    /// <summary>
+    /// Gets whether the store is the "#Dev/Store" of the development solution (see <see cref="DevFolderName"/>): the host
+    /// runs in Development from a solution and doesn't configure its <see cref="StoreRootPath"/>. Such a store is private.
+    /// </summary>
+    public bool IsDevStore => _storeFileSystem.IsDevStore;
+
+    /// <summary>
+    /// The name of the folder of the development data of a solution, at the root of its git working folder
+    /// (<see cref="LocalDevSolution.SolutionFolder"/>): "#Dev". Its content is ignored by git (its ".gitignore" is "*").
+    /// <para>
+    /// A host in Development (<see cref="Create(IActivityMonitor, IHostEnvironment, IConfigurationSection)"/>) that doesn't
+    /// configure its <see cref="StoreRootPath"/> uses "#Dev/Store" when it runs from a solution (see <see cref="IsDevStore"/>),
+    /// unless the <see cref="DefaultStoreRootPath"/> has been set (by tests).
+    /// </para>
+    /// </summary>
+    public const string DevFolderName = "#Dev";
 
     internal StoreFileSystem StoreFileSystem => _storeFileSystem;
 
@@ -196,6 +215,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                 if( p == null )
                 {
                     Volatile.Write( ref _defaultStoreRootPath, value.Path );
+                    _defaultStoreRootPathSet = true;
                 }
                 else if( p != value.Path )
                 {
@@ -299,7 +319,19 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             env = env.Substring( 0, CoreApplicationIdentity.EnvironmentNameMaxLength );
         }
-        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env, hostEnvironment.ContentRootPath );
+        var devStore = GetDevStoreRootPath( hostEnvironment.IsDevelopment(), _defaultStoreRootPathSet, LocalDevSolution.SolutionFolder );
+        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env, hostEnvironment.ContentRootPath, devStore );
+    }
+
+    /// <summary>
+    /// Gets the "#Dev/Store" of the solution in Development (when the <see cref="DefaultStoreRootPath"/> has not been set),
+    /// or the empty path.
+    /// </summary>
+    internal static NormalizedPath GetDevStoreRootPath( bool isDevelopment, bool isDefaultStoreRootPathSet, NormalizedPath solutionFolder )
+    {
+        return isDevelopment && !isDefaultStoreRootPathSet && !solutionFolder.IsEmptyPath
+                ? solutionFolder.AppendPart( DevFolderName ).AppendPart( "Store" )
+                : default;
     }
 
     /// <summary>
@@ -337,6 +369,18 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                                                    string? defaultPartyName = null,
                                                                    string defaultEnvironmentName = CoreApplicationIdentity.DefaultEnvironmentName,
                                                                    string? basePath = null )
+    {
+        return Create( monitor, configuration, defaultDomainName, defaultPartyName, defaultEnvironmentName, basePath, default );
+    }
+
+    // devStoreRootPath: the "#Dev/Store" used when no StoreRootPath is configured (see GetDevStoreRootPath).
+    internal static ApplicationIdentityServiceConfiguration? Create( IActivityMonitor monitor,
+                                                                     IConfigurationSection configuration,
+                                                                     string? defaultDomainName,
+                                                                     string? defaultPartyName,
+                                                                     string defaultEnvironmentName,
+                                                                     string? basePath,
+                                                                     NormalizedPath devStoreRootPath )
     {
         Throw.CheckNotNullArgument( defaultEnvironmentName );
         using var gLog = monitor.OpenInfo( "Creating root ApplicationIdentityServiceConfiguration service." );
@@ -379,7 +423,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var parties = CreateParties( monitor, root.GetSection( "Parties" ), domainName, environmentName, fullNameIndex );
         success &= parties.HasValue;
 
-        var store = HandleStorePath( monitor, configuration, basePath );
+        var store = HandleStorePath( monitor, configuration, basePath, devStoreRootPath );
         success &= store != null;
 
         var trashBinRetention = DefaultTrashBinRetention;
@@ -405,11 +449,12 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             _trashBinRetention = trashBinRetention
         };
 
-        static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration, string? basePath )
+        static StoreFileSystem? HandleStorePath( IActivityMonitor monitor, IConfigurationSection configuration, string? basePath, NormalizedPath devStoreRootPath )
         {
             var store = configuration[nameof( StoreRootPath )]?.Trim();
             bool isPrivate = string.IsNullOrEmpty( store );
             bool isRelative = false;
+            bool isDevStore = false;
             if( !string.IsNullOrEmpty( store ) )
             {
                 if( FileUtil.IndexOfInvalidPathChars( store ) >= 0 )
@@ -431,11 +476,18 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                     isRelative = true;
                 }
             }
+            else if( !devStoreRootPath.IsEmptyPath )
+            {
+                // The "#Dev" folder of the solution: created with its ".gitignore" (the build of a party also does it).
+                if( !EnsureDevFolder( monitor, devStoreRootPath.RemoveLastPart() ) ) return null;
+                store = devStoreRootPath;
+                isDevStore = true;
+            }
             else
             {
                 store = DefaultStoreRootPath;
             }
-            var fileSystem = new StoreFileSystem( store, isPrivate, isRelative );
+            var fileSystem = new StoreFileSystem( store, isPrivate, isRelative, isDevStore );
             try
             {
                 // Warnings are emitted here, in the scope of the StrictConfigurationMode tracker.
@@ -447,6 +499,26 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                 return null;
             }
             return fileSystem;
+        }
+    }
+
+    static bool EnsureDevFolder( IActivityMonitor monitor, NormalizedPath devFolder )
+    {
+        var gitIgnore = devFolder.AppendPart( ".gitignore" );
+        try
+        {
+            if( !File.Exists( gitIgnore ) )
+            {
+                Directory.CreateDirectory( devFolder );
+                File.WriteAllText( gitIgnore, "*" + Environment.NewLine );
+                monitor.Info( $"Created the development folder '{devFolder}'." );
+            }
+            return true;
+        }
+        catch( Exception ex )
+        {
+            monitor.Error( $"Unable to create the development folder '{devFolder}'.", ex );
+            return false;
         }
     }
 
