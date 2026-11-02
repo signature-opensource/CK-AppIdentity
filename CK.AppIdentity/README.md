@@ -37,7 +37,13 @@ times.
 `InitializationTask` is the handle for anything that must wait: when it completes successfully, every
 configured feature is initialized and available.
 
-**It disposes the graph.** `IAsyncDisposable` tears down the features of every party, in order.
+Then the **static features** start, outside the agent's loop: `StartedAsync` (or `StartAndInitializeAsync`) calls their
+`OnHostStartedAsync` once the initialization is done, and `StoppingAsync` (or `DisposeAsync`) calls their
+`OnHostStoppingAsync` before the agent stops. A code that calls only `IHostedService.StartAsync` doesn't start them.
+See [the static features](Features/README.md#static-features).
+
+**It disposes the graph.** `IAsyncDisposable` stops the static features, then tears down the features of every party, in
+order.
 
 ## Every mutation goes through one agent.
 

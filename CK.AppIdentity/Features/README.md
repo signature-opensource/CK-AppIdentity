@@ -72,6 +72,37 @@ Feature "B", then :
 - `SetupAsync` and `SetupDynamicRemoteAsync` of "A" will be called after the setup methods of "B" have been called.
 - The Teardowns are reversed: "B" will only be called upon after "A" has done its cleaning job. 
 
+## Static features
+
+A **static** feature is allowed only on the parties of the initial configuration: the root, the tenant domains and the
+remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its driver specializes
+[`ApplicationIdentityStaticFeatureDriver`](ApplicationIdentityStaticFeatureDriver.cs) instead of
+`ApplicationIdentityFeatureDriver` (same constructors).
+
+- **Only the parties that ARE the feature are constrained** (`GetFeatureName( p )` is the feature's name): the remotes of
+  a feature with a side can be dynamic.
+  - **A dynamic party that explicitly allows a static feature fails its setup.** Dynamic parties and dynamic tenant
+    domains are still supported: they just cannot have a static feature.
+  - **When the feature is allowed by default, the default doesn't apply to the dynamic parties:** `IsAllowedFeature`
+    returns false for them.
+- **The dynamic remotes of the feature** go through `SetupDynamicFeatureRemoteAsync` and
+  `TeardownDynamicFeatureRemoteAsync` (by default, nothing to do). `SetupDynamicRemoteAsync` and
+  `TeardownDynamicRemoteAsync` are sealed: they check the rule and call them.
+- **Two host hooks bracket its lifetime, outside the agent's loop:**
+
+  | Hook | Called | Order |
+  |---|---|---|
+  | `OnHostStartedAsync` | once the initialization has succeeded (all the features are set up and published): the hosted service's `StartedAsync`, or `StartAndInitializeAsync` | the drivers' order |
+  | `OnHostStoppingAsync` | before the agent stops (before any teardown): the hosted service's `StoppingAsync`, or `DisposeAsync`. Only if `OnHostStartedAsync` succeeded | reverse order |
+
+  This is where a driver opens and closes what makes the party reachable from outside, an HTTP endpoint for instance:
+  the doors open once the party is whole and close while it still is, so the requests in progress can complete.
+  - **A failing `OnHostStartedAsync`** fails the start: the drivers already started are stopped.
+  - **Each hook runs once.** A stop cancels a start that still waits for the initialization.
+  - **Because they run outside the agent's loop,** a hook can wait for an agent job (adding a party, for instance).
+  - **A code that calls only `IHostedService.StartAsync`** (and awaits `InitializationTask`) doesn't call the hooks:
+    `StartAndInitializeAsync` does.
+
 ## Feature configuration
 
 CK.AppIdentity only needs two configuration keys to manage Features: "AllowFeatures" and "DisallowFeatures". Their value can be a string,
