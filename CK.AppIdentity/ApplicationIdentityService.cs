@@ -31,6 +31,12 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     internal TenantDomainParty[] _domains;
     readonly ISystemClock _systemClock;
     internal readonly PerfectEventSender<int> _heartbeat;
+    // The host lifecycle of the static features: started (and stopped) once.
+    readonly object _hostLock;
+    Task? _hostStart;
+    Task? _hostStop;
+    readonly CancellationTokenSource _hostStopping;
+    readonly List<ApplicationIdentityStaticFeatureDriver> _hostStarted;
 
     /// <summary>
     /// Initializes a new <see cref="ApplicationIdentityService"/> bound to a required configuration.
@@ -48,6 +54,9 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         _heartbeat = new PerfectEventSender<int>();
         _allPartyChanged = (PerfectEventSender<IOwnedParty>)_remotesChangedBridge.Target;
         _domains = configuration.TenantDomains.Select( c => new TenantDomainParty( c, false, this ) ).ToArray();
+        _hostLock = new object();
+        _hostStarted = new List<ApplicationIdentityStaticFeatureDriver>();
+        _hostStopping = new CancellationTokenSource();
     }
 
     internal NormalizedPath ComputeSharedStorePath( NormalizedPath fullName )
@@ -194,24 +203,124 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     }
 
     /// <summary>
-    /// Starts this identity service agent and returns the <see cref="InitializationTask"/>.
-    /// When the returned initialization task is successfully completed, all configured features are
-    /// initialized and available.
+    /// Starts this identity service agent and awaits the <see cref="InitializationTask"/>, then starts the static
+    /// features (<see cref="ApplicationIdentityStaticFeatureDriver.OnHostStartedAsync"/>): this is what a host does
+    /// (see <see cref="IHostedLifecycleService"/>).
+    /// When the returned task is successfully completed, all configured features are initialized and available.
     /// <para>
-    /// This can be called safely multiple times and never throws: when the start is refused, the initialization
+    /// This can be called safely multiple times and never throws: when the start is refused, the returned
     /// task is faulted and when the service has been stopped before being started, it is canceled.
     /// </para>
+    /// <para>
+    /// <see cref="DisposeAsync"/> stops the static features before stopping the agent.
+    /// </para>
     /// </summary>
-    /// <returns>The initialization task.</returns>
+    /// <returns>The initialization and start task.</returns>
     public Task StartAndInitializeAsync()
     {
         _agent.Start();
-        return _initialization.Task;
+        return StartStaticFeaturesAsync( default );
+    }
+
+    // Starts the static features once the initialization is done (once).
+    Task StartStaticFeaturesAsync( CancellationToken cancellationToken )
+    {
+        lock( _hostLock )
+        {
+            // A stop before the start: nothing will start.
+            return _hostStart ??= DoStartStaticFeaturesAsync( cancellationToken );
+        }
+    }
+
+    async Task DoStartStaticFeaturesAsync( CancellationToken cancellationToken )
+    {
+        // A stop cancels a pending start (that may wait for the initialization).
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource( cancellationToken, _hostStopping.Token );
+        cancellationToken = linked.Token;
+        await _initialization.Task.WaitAsync( cancellationToken ).ConfigureAwait( false );
+        var drivers = _builders.OfType<ApplicationIdentityStaticFeatureDriver>().ToList();
+        if( drivers.Count == 0 ) return;
+        var monitor = new ActivityMonitor( $"Starting the static features of '{FullName}'." );
+        try
+        {
+            foreach( var d in drivers )
+            {
+                try
+                {
+                    await d.OnHostStartedAsync( monitor, cancellationToken ).ConfigureAwait( false );
+                    _hostStarted.Add( d );
+                }
+                catch( Exception ex )
+                {
+                    monitor.Error( $"While starting the static feature '{d.FeatureName}'.", ex );
+                    await StopStartedStaticFeaturesAsync( monitor, default ).ConfigureAwait( false );
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            monitor.MonitorEnd();
+        }
+    }
+
+    // Stops the static features (once), after their start (if any) completed.
+    Task StopStaticFeaturesAsync( CancellationToken cancellationToken )
+    {
+        lock( _hostLock )
+        {
+            if( _hostStop == null )
+            {
+                var start = _hostStart;
+                // A stop before the start: nothing will start. The start then reflects the initialization (canceled
+                // when the agent is stopped before being started).
+                _hostStart ??= _initialization.Task;
+                _hostStopping.Cancel();
+                _hostStop = DoStopStaticFeaturesAsync( start, cancellationToken );
+            }
+            return _hostStop;
+        }
+    }
+
+    async Task DoStopStaticFeaturesAsync( Task? start, CancellationToken cancellationToken )
+    {
+        if( start != null )
+        {
+            // A failed start has already stopped what it started.
+            try { await start.ConfigureAwait( false ); } catch { }
+        }
+        if( _hostStarted.Count == 0 ) return;
+        var monitor = new ActivityMonitor( $"Stopping the static features of '{FullName}'." );
+        try
+        {
+            await StopStartedStaticFeaturesAsync( monitor, cancellationToken ).ConfigureAwait( false );
+        }
+        finally
+        {
+            monitor.MonitorEnd();
+        }
+    }
+
+    async Task StopStartedStaticFeaturesAsync( IActivityMonitor monitor, CancellationToken cancellationToken )
+    {
+        for( int i = _hostStarted.Count - 1; i >= 0; --i )
+        {
+            var d = _hostStarted[i];
+            try
+            {
+                await d.OnHostStoppingAsync( monitor, cancellationToken ).ConfigureAwait( false );
+            }
+            catch( Exception ex )
+            {
+                monitor.Error( $"While stopping the static feature '{d.FeatureName}'.", ex );
+            }
+        }
+        _hostStarted.Clear();
     }
 
     #region IHostedService
 
-    // StartingAsync is called first, let's start.
+    // StartingAsync is called first: the agent starts and the features are set up in the background.
     Task IHostedLifecycleService.StartingAsync( System.Threading.CancellationToken cancellationToken ) => DoStartAsync( cancellationToken );
 
     // StartAsync is called next, let's start again (this enables psedo host code
@@ -231,28 +340,32 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         return Task.CompletedTask;
     }
 
-    // Called last: this returns the initialization task.
-    Task IHostedLifecycleService.StartedAsync( CancellationToken cancellationToken ) => _initialization.Task.WaitAsync( cancellationToken );
+    // Called last: awaits the initialization, then starts the static features.
+    // (A host that only calls IHostedService.StartAsync doesn't start them: use StartAndInitializeAsync.)
+    Task IHostedLifecycleService.StartedAsync( CancellationToken cancellationToken ) => StartStaticFeaturesAsync( cancellationToken );
 
-    Task IHostedLifecycleService.StoppingAsync( CancellationToken cancellationToken ) => DoStopAsync();
+    Task IHostedLifecycleService.StoppingAsync( CancellationToken cancellationToken ) => DoStopAsync( cancellationToken );
 
-    Task IHostedService.StopAsync( CancellationToken cancellationToken ) => DoStopAsync();
+    Task IHostedService.StopAsync( CancellationToken cancellationToken ) => DoStopAsync( cancellationToken );
 
-    Task DoStopAsync()
+    // Stops the static features (outside the agent's loop, the parties are still there), then the agent.
+    async Task DoStopAsync( CancellationToken cancellationToken )
     {
+        await StopStaticFeaturesAsync( cancellationToken ).ConfigureAwait( false );
         _agent.SendStop();
-        return Task.CompletedTask;
     }
 
     Task IHostedLifecycleService.StoppedAsync( CancellationToken cancellationToken ) => _agent.RunningTask.WaitAsync( cancellationToken );
     #endregion
 
     /// <summary>
-    /// Disposes this application identity service: this stops the micro agent.
+    /// Disposes this application identity service: this stops the static features
+    /// (<see cref="ApplicationIdentityStaticFeatureDriver.OnHostStoppingAsync"/>) and then the micro agent.
     /// </summary>
     /// <returns>The awaitable.</returns>
     public async ValueTask DisposeAsync()
     {
+        await StopStaticFeaturesAsync( default ).ConfigureAwait( false );
         _agent.SendStop();
         await _agent.RunningTask.ConfigureAwait( false );
     }

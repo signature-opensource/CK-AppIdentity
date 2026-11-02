@@ -18,6 +18,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     internal readonly bool _isLocalOrRemote;
     // The role of the application: set for a side, and for the common driver of a feature that has a side.
     bool? _isLocalSide;
+    // Set by ApplicationIdentityStaticFeatureDriver.
+    internal bool _isStatic;
 
     /// <summary>
     /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/>.
@@ -115,10 +117,24 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <para>
     /// The configured name is the one of the role of the party (see <see cref="GetFeatureName(IParty)"/>).
     /// </para>
+    /// <para>
+    /// A static feature (<see cref="ApplicationIdentityStaticFeatureDriver"/>) is never allowed on a dynamic party that
+    /// is the feature.
+    /// </para>
     /// </summary>
     /// <param name="p">The party to test.</param>
     /// <returns>True if this feature is allowed, false otherwise.</returns>
-    public bool IsAllowedFeature( IParty p ) => GetConfiguration( p ).IsAllowedFeature( GetFeatureName( p ), _isAllowedByDefault );
+    public bool IsAllowedFeature( IParty p )
+    {
+        if( _isStatic && IsDynamicFeatureParty( p ) ) return false;
+        return GetConfiguration( p ).IsAllowedFeature( GetFeatureName( p ), _isAllowedByDefault );
+    }
+
+    // A dynamic party that is the feature (not one of its remotes): a static feature cannot be allowed on it.
+    internal bool IsDynamicFeatureParty( IParty p ) => p is IOwnedParty { IsDynamic: true } && !IsRemoteOfTheFeature( p );
+
+    // Whether the configuration of the party explicitly allows this feature (the default doesn't apply).
+    internal bool IsExplicitlyAllowed( IParty p ) => GetConfiguration( p ).IsAllowedFeature( GetFeatureName( p ), false );
 
     /// <summary>
     /// Gets this feature name.
