@@ -373,14 +373,33 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         return Create( monitor, configuration, defaultDomainName, defaultPartyName, defaultEnvironmentName, basePath, default );
     }
 
-    // devStoreRootPath: the "#Dev/Store" used when no StoreRootPath is configured (see GetDevStoreRootPath).
-    internal static ApplicationIdentityServiceConfiguration? Create( IActivityMonitor monitor,
-                                                                     IConfigurationSection configuration,
-                                                                     string? defaultDomainName,
-                                                                     string? defaultPartyName,
-                                                                     string defaultEnvironmentName,
-                                                                     string? basePath,
-                                                                     NormalizedPath devStoreRootPath )
+    /// <summary>
+    /// Tries to create an <see cref="ApplicationIdentityServiceConfiguration"/> instance from a <see cref="IConfigurationSection"/>
+    /// with an explicit "#Dev/Store" (see <see cref="IsDevStore"/>): the store when the <paramref name="configuration"/>
+    /// doesn't configure the "StoreRootPath". A host in Development computes it from the solution: this is for the tests
+    /// (a test assembly sets the <see cref="DefaultStoreRootPath"/>, that disables the dev store of the solution).
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="configuration">The configuration section (typically named "CK-AppIdentity").</param>
+    /// <param name="defaultDomainName">A valid domain name to use if the <paramref name="configuration"/> doesn't specify "DomainName".</param>
+    /// <param name="defaultPartyName">A party name to use if the <paramref name="configuration"/> doesn't specify "PartyName".</param>
+    /// <param name="defaultEnvironmentName">An environment name to use if the <paramref name="configuration"/> doesn't specify "EnvironmentName".</param>
+    /// <param name="basePath">
+    /// The fully qualified path against which a relative "StoreRootPath" is resolved (the content root of the host).
+    /// When null, a relative "StoreRootPath" is an error.
+    /// </param>
+    /// <param name="devStoreRootPath">
+    /// The "#Dev/Store" to use when no "StoreRootPath" is configured (its "#Dev" folder is created with its ".gitignore").
+    /// The empty path uses the <see cref="DefaultStoreRootPath"/>.
+    /// </param>
+    /// <returns>A valid instance on success, null on configuration error (this includes invalid default names).</returns>
+    public static ApplicationIdentityServiceConfiguration? Create( IActivityMonitor monitor,
+                                                                   IConfigurationSection configuration,
+                                                                   string? defaultDomainName,
+                                                                   string? defaultPartyName,
+                                                                   string defaultEnvironmentName,
+                                                                   string? basePath,
+                                                                   NormalizedPath devStoreRootPath )
     {
         Throw.CheckNotNullArgument( defaultEnvironmentName );
         using var gLog = monitor.OpenInfo( "Creating root ApplicationIdentityServiceConfiguration service." );
