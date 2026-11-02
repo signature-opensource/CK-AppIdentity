@@ -114,7 +114,8 @@ generated scripts in `#Dev` (`Start.ps1`). They are generated: don't edit them.
 - **Then it prints their URLs, and opens the browser** on the default client application.
 - **Enter stops the parties like Ctrl+C** in their window: a hidden helper attaches to their console. A party that
   doesn't exit in time is killed with its process tree.
-- **Unless `-SkipBuild`,** it builds the parties first and runs `yarn install` in their `Clients/*` folders.
+- **Unless `-SkipBuild`,** it builds the parties first (the TypeScript integration of the build installs the packages of
+  the client applications when needed).
 - **`-NoBrowser`** doesn't open the browser; **`-Timeout`** sets the seconds to wait (180 by default).
 
 The parties must use a relative store in `#Dev` (`"StoreRootPath": "../../#Dev/Store"`, resolved against their content
