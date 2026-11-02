@@ -95,6 +95,31 @@ await identity.InitializationTask;
 
 Both fallbacks come from [`DomainTests`](../Tests/CK.AppIdentity.Tests/DomainTests.cs).
 
+## The "#Dev" folder of a development solution.
+
+This package ships MSBuild targets (`buildTransitive`): they reach every project that references it, directly or
+transitively. A solution opts in by committing a `#Dev/.gitignore` (`*` and `!.gitignore`) at its root. Then the build of
+each **party** writes its manifest `#Dev/Parties/<Project>.json` (its project folder, its executable) and copies the
+generated scripts in `#Dev` (`Start.ps1`). They are generated: don't edit them.
+
+**A project is a party** when it is an executable (`OutputType` `Exe`), is not a test project, and has an
+`appsettings.json`. In an App/Builder/Host solution, that is the host: the `.App` is a library and the Builder has no
+`appsettings.json`. The optional `<CKAppIdentityParty>true|false</CKAppIdentityParty>` overrides the rule.
+
+**`#Dev/Start.ps1`** starts all the parties at once, in their own window, in the Development environment
+(`DOTNET_ENVIRONMENT`), and waits until they are ready:
+- **The readiness:** each party's `DevRunningStatus.json` (written by the "DevRunningStatus" feature of
+  [CK.AppIdentity](../CK.AppIdentity/README.md) in the party's folder of `#Dev/Store`) says `Ready`. Then its client
+  applications are served.
+- **Then it prints their URLs, and opens the browser** on the default client application.
+- **Enter stops the parties like Ctrl+C** in their window: a hidden helper attaches to their console. A party that
+  doesn't exit in time is killed with its process tree.
+- **Unless `-SkipBuild`,** it builds the parties first and runs `yarn install` in their `Clients/*` folders.
+- **`-NoBrowser`** doesn't open the browser; **`-Timeout`** sets the seconds to wait (180 by default).
+
+The parties must use a relative store in `#Dev` (`"StoreRootPath": "../../#Dev/Store"`, resolved against their content
+root) and the `#Dev` environment: that is what activates their status file.
+
 ## Requires.
 
 - `CK.AppIdentity`, which brings the configuration type transitively, and `CK.Monitoring.Hosting` for

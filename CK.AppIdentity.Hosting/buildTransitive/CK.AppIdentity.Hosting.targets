@@ -1,0 +1,39 @@
+<Project>
+
+  <!--
+    The "#Dev" folder of a development solution (see the README of CK.AppIdentity.Hosting).
+    A solution opts in by committing a "#Dev/.gitignore". Then the build of each party (an executable that is not a test
+    project and has an appsettings.json, or a project whose CKAppIdentityParty is true) writes its manifest
+    "#Dev/Parties/<Project>.json" and copies the scripts of this package in "#Dev" (Start.ps1).
+  -->
+  <PropertyGroup>
+    <_CKAppIdentityDevRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '#Dev\.gitignore'))</_CKAppIdentityDevRoot>
+  </PropertyGroup>
+
+  <Target Name="CKAppIdentityDevParty" AfterTargets="Build" Condition=" '$(_CKAppIdentityDevRoot)' != '' ">
+    <PropertyGroup>
+      <_CKAppIdentityIsParty Condition=" '$(CKAppIdentityParty)' != '' ">$(CKAppIdentityParty)</_CKAppIdentityIsParty>
+      <_CKAppIdentityIsParty Condition=" '$(CKAppIdentityParty)' == '' And '$(OutputType)' == 'Exe' And '$(IsTestProject)' != 'true' And Exists('$(MSBuildProjectDirectory)\appsettings.json') ">true</_CKAppIdentityIsParty>
+      <_CKAppIdentityDevFolder>$(_CKAppIdentityDevRoot)\#Dev</_CKAppIdentityDevFolder>
+      <_CKAppIdentityAppHost Condition="Exists('$(TargetDir)$(AssemblyName).exe')">$(TargetDir)$(AssemblyName).exe</_CKAppIdentityAppHost>
+      <!-- The paths are written with '/': the JSON needs no escaping. -->
+      <_CKAppIdentityJsonProjectPath>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\','/'))</_CKAppIdentityJsonProjectPath>
+      <_CKAppIdentityJsonDll>$([System.String]::Copy('$(TargetPath)').Replace('\','/'))</_CKAppIdentityJsonDll>
+      <_CKAppIdentityJsonExecutable>$([System.String]::Copy('$(_CKAppIdentityAppHost)').Replace('\','/'))</_CKAppIdentityJsonExecutable>
+    </PropertyGroup>
+    <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' "
+                      File="$(_CKAppIdentityDevFolder)\Parties\$(MSBuildProjectName).json"
+                      Lines="{ &quot;ProjectPath&quot;: &quot;$(_CKAppIdentityJsonProjectPath)&quot;, &quot;Executable&quot;: &quot;$(_CKAppIdentityJsonExecutable)&quot;, &quot;Dll&quot;: &quot;$(_CKAppIdentityJsonDll)&quot; }"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <!-- The parties build in parallel and copy the same files. -->
+    <Copy Condition=" '$(_CKAppIdentityIsParty)' == 'true' "
+          SourceFiles="$(MSBuildThisFileDirectory)Start.ps1"
+          DestinationFolder="$(_CKAppIdentityDevFolder)"
+          SkipUnchangedFiles="true"
+          Retries="5"
+          RetryDelayMilliseconds="200"
+          ContinueOnError="WarnAndContinue" />
+  </Target>
+
+</Project>

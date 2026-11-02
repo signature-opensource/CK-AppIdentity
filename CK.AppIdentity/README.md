@@ -104,6 +104,25 @@ approach and the feature configuration.
 [`BasicTrampoline`](Impl/BasicTrampoline/README.md) documents the helper the feature setup uses to run
 ordered, possibly-failing steps.
 
+## The running status of a development party.
+
+The "DevRunningStatus" feature ([`DevRunningStatusFeatureDriver`](DevRunningStatus/DevRunningStatusFeatureDriver.cs), a
+static feature allowed by default) writes `DevRunningStatus.json` in the root party's folder of its store
+(`IParty.SharedFileStore`) while the host runs. It does this only when the environment is `#Dev` **and** the store is
+relative (`ApplicationIdentityServiceConfiguration.IsRelativeStore`: the `#Dev/Store` of a development solution).
+Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures` switches it off.
+- **The file is written** when the host has started (`OnHostStartedAsync`), rewritten after a change (batched over
+  200 ms), and deleted when the host stops. The write is atomic: a temporary file, then a rename.
+- **Its core properties:** `FullName`, `ProcessId`, `ProcessStartTime` (with the pid, they detect a stale file),
+  `ContentRootPath`, `Ready` and the `Remotes` (`FullName`, `Outgoing`).
+- **The packages contribute their own properties** with an `IDevRunningStatusContributor` (CK.AppIdentity.Abstractions):
+  for instance, the transport (the remotes' availability), the HTTP endpoints, the client applications. `Ready` is
+  true when every contributor is ready.
+- **A contributor stays dormant until the writer activates it:** it subscribes to nothing and computes nothing before.
+
+The launcher of the solution, `#Dev/Start.ps1` (see [CK.AppIdentity.Hosting](../CK.AppIdentity.Hosting/README.md)),
+reads these files.
+
 ## Requires.
 
 - `CK.AppIdentity.Abstractions`, and nothing else directly: `CK.AppIdentity.Configuration` and

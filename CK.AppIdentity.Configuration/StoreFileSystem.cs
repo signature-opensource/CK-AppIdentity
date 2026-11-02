@@ -48,16 +48,19 @@ sealed partial class StoreFileSystem
 
     readonly NormalizedPath _root;
     readonly bool _isPrivate;
+    readonly bool _isRelative;
     readonly object _lock;
     UnixFileMode _directoryMode;
     UnixFileMode _fileMode;
     bool _initialized;
     bool _hasSecurityWarning;
 
-    internal StoreFileSystem( NormalizedPath root, bool isPrivate )
+    internal StoreFileSystem( NormalizedPath root, bool isPrivate, bool isRelative = false )
     {
+        Throw.DebugAssert( "A relative store is private.", !isRelative || isPrivate );
         _root = root;
         _isPrivate = isPrivate;
+        _isRelative = isRelative;
         _lock = new object();
     }
 
@@ -70,6 +73,12 @@ sealed partial class StoreFileSystem
     /// Gets whether this store is private (owner-only) or shared.
     /// </summary>
     public bool IsPrivate => _isPrivate;
+
+    /// <summary>
+    /// Gets whether this store has been configured with a relative path (resolved against the content root of the host):
+    /// it is a folder of the application, typically the "#Dev/Store" of a development solution.
+    /// </summary>
+    public bool IsRelative => _isRelative;
 
     /// <summary>
     /// Creates the root if needed, applies the private policy to it and checks it.

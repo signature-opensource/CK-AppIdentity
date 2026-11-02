@@ -129,6 +129,13 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// </summary>
     public bool IsPrivateStore => _storeFileSystem.IsPrivate;
 
+    /// <summary>
+    /// Gets whether <see cref="StoreRootPath"/> has been configured with a relative path, resolved against the content root
+    /// of the host: the store is a folder of the application (typically the "#Dev/Store" of a development solution), not
+    /// the <see cref="DefaultStoreRootPath"/> that all the applications of the user share. Such a store is private.
+    /// </summary>
+    public bool IsRelativeStore => _storeFileSystem.IsRelative;
+
     internal StoreFileSystem StoreFileSystem => _storeFileSystem;
 
     /// <summary>
@@ -402,6 +409,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             var store = configuration[nameof( StoreRootPath )]?.Trim();
             bool isPrivate = string.IsNullOrEmpty( store );
+            bool isRelative = false;
             if( !string.IsNullOrEmpty( store ) )
             {
                 if( FileUtil.IndexOfInvalidPathChars( store ) >= 0 )
@@ -420,13 +428,14 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                     // it is private.
                     store = Path.GetFullPath( Path.Combine( basePath, store ) );
                     isPrivate = true;
+                    isRelative = true;
                 }
             }
             else
             {
                 store = DefaultStoreRootPath;
             }
-            var fileSystem = new StoreFileSystem( store, isPrivate );
+            var fileSystem = new StoreFileSystem( store, isPrivate, isRelative );
             try
             {
                 // Warnings are emitted here, in the scope of the StrictConfigurationMode tracker.
