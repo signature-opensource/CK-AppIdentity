@@ -1,0 +1,219 @@
+using CK.Core;
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Text.Json;
+
+namespace CK.AppIdentity;
+
+/// <summary>
+/// What a party states about itself: its public URL and its client applications. A local party's description comes from
+/// its "Local:PublicUrl" configuration and the <see cref="IPartyDescriptionContributor"/> of the packages; a remote's
+/// description is what the remote announced (see <see cref="IRemoteParty.SetDescription"/>).
+/// <para>
+/// The URL of a client application is derived (<see cref="GetClientApplicationUrl"/>): it is never stored.
+/// </para>
+/// </summary>
+public sealed class PartyDescription : IEquatable<PartyDescription>
+{
+    /// <summary>
+    /// The empty description: no public URL, no client application.
+    /// </summary>
+    public static readonly PartyDescription Empty = new PartyDescription( null, ImmutableArray<ClientApplicationDescription>.Empty );
+
+    /// <summary>
+    /// Initializes a new <see cref="PartyDescription"/>.
+    /// </summary>
+    /// <param name="publicUrl">The public URL (see <see cref="TryParsePublicUrl"/>).</param>
+    /// <param name="clientApplications">The client applications.</param>
+    public PartyDescription( Uri? publicUrl, ImmutableArray<ClientApplicationDescription> clientApplications )
+    {
+        Throw.CheckArgument( publicUrl == null || IsValidPublicUrl( publicUrl, out _ ) );
+        PublicUrl = publicUrl;
+        ClientApplications = clientApplications.IsDefault ? ImmutableArray<ClientApplicationDescription>.Empty : clientApplications;
+    }
+
+    /// <summary>
+    /// Gets the public URL of the party: an absolute "http" or "https" URL without path, query nor fragment.
+    /// Null when the party has no web endpoint.
+    /// </summary>
+    public Uri? PublicUrl { get; }
+
+    /// <summary>
+    /// Gets the client applications served by the party.
+    /// </summary>
+    public ImmutableArray<ClientApplicationDescription> ClientApplications { get; }
+
+    /// <summary>
+    /// Gets the URL of a client application (without trailing slash: "https://acme.com", "https://acme.com/mini-app"),
+    /// or null when there is no <see cref="PublicUrl"/> or no such client application.
+    /// </summary>
+    /// <param name="name">The client application name. Null for the default one (the one served at "/").</param>
+    /// <returns>The URL or null.</returns>
+    public string? GetClientApplicationUrl( string? name = null )
+    {
+        if( PublicUrl == null ) return null;
+        var app = name == null
+                    ? ClientApplications.FirstOrDefault( a => a.IsDefault )
+                    : ClientApplications.FirstOrDefault( a => a.Name == name );
+        if( app == null ) return null;
+        return PublicUrl.GetLeftPart( UriPartial.Authority ) + app.RequestPath.TrimEnd( '/' );
+    }
+
+    /// <summary>
+    /// Parses a public URL: an absolute "http" or "https" URL without user information, path, query nor fragment.
+    /// </summary>
+    /// <param name="value">The string to parse.</param>
+    /// <param name="url">The URL on success.</param>
+    /// <param name="error">The error on failure.</param>
+    /// <returns>True on success, false otherwise.</returns>
+    public static bool TryParsePublicUrl( string? value, [NotNullWhen( true )] out Uri? url, [NotNullWhen( false )] out string? error )
+    {
+        url = null;
+        if( string.IsNullOrWhiteSpace( value ) || !Uri.TryCreate( value.Trim(), UriKind.Absolute, out var u ) )
+        {
+            error = $"Invalid public URL '{value}': an absolute URL is expected.";
+            return false;
+        }
+        if( !IsValidPublicUrl( u, out error ) ) return false;
+        url = u;
+        return true;
+    }
+
+    static bool IsValidPublicUrl( Uri u, [NotNullWhen( false )] out string? error )
+    {
+        if( !u.IsAbsoluteUri || (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps) )
+        {
+            error = $"Invalid public URL '{u}': the scheme must be http or https.";
+            return false;
+        }
+        if( u.UserInfo.Length > 0 || u.AbsolutePath != "/" || u.Query.Length > 0 || u.Fragment.Length > 0 )
+        {
+            error = $"Invalid public URL '{u}': no user information, path, query nor fragment is allowed.";
+            return false;
+        }
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Writes this description as a JSON object.
+    /// </summary>
+    /// <param name="w">The writer.</param>
+    public void Write( Utf8JsonWriter w )
+    {
+        w.WriteStartObject();
+        if( PublicUrl != null ) w.WriteString( "PublicUrl", PublicUrl.ToString() );
+        w.WriteStartArray( "ClientApplications" );
+        foreach( var a in ClientApplications )
+        {
+            w.WriteStartObject();
+            w.WriteString( "Name", a.Name );
+            w.WriteString( "RequestPath", a.RequestPath );
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+        w.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Reads a description written by <see cref="Write"/>.
+    /// </summary>
+    /// <param name="e">The JSON object.</param>
+    /// <param name="description">The description on success.</param>
+    /// <param name="error">The error on failure.</param>
+    /// <returns>True on success, false otherwise.</returns>
+    public static bool TryRead( JsonElement e, [NotNullWhen( true )] out PartyDescription? description, [NotNullWhen( false )] out string? error )
+    {
+        description = null;
+        if( e.ValueKind != JsonValueKind.Object )
+        {
+            error = "A JSON object is expected.";
+            return false;
+        }
+        Uri? url = null;
+        if( e.TryGetProperty( "PublicUrl", out var u ) && !TryParsePublicUrl( u.GetString(), out url, out error ) )
+        {
+            return false;
+        }
+        var apps = ImmutableArray.CreateBuilder<ClientApplicationDescription>();
+        if( e.TryGetProperty( "ClientApplications", out var a ) && a.ValueKind == JsonValueKind.Array )
+        {
+            foreach( var app in a.EnumerateArray() )
+            {
+                var name = app.TryGetProperty( "Name", out var n ) ? n.GetString() : null;
+                var path = app.TryGetProperty( "RequestPath", out var p ) ? p.GetString() : null;
+                if( string.IsNullOrWhiteSpace( name ) || string.IsNullOrWhiteSpace( path ) || path[0] != '/' )
+                {
+                    error = "Invalid client application: a Name and a RequestPath that starts with '/' are expected.";
+                    return false;
+                }
+                apps.Add( new ClientApplicationDescription( name, path ) );
+            }
+        }
+        description = new PartyDescription( url, apps.ToImmutable() );
+        error = null;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool Equals( PartyDescription? other ) => other != null
+                                                     && Equals( PublicUrl, other.PublicUrl )
+                                                     && ClientApplications.SequenceEqual( other.ClientApplications );
+
+    /// <inheritdoc />
+    public override bool Equals( object? obj ) => Equals( obj as PartyDescription );
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine( PublicUrl, ClientApplications.Length );
+
+    /// <inheritdoc />
+    public override string ToString() => $"{PublicUrl?.ToString() ?? "(no public URL)"} [{string.Join( ", ", ClientApplications )}]";
+
+    /// <summary>
+    /// Builds the description of the local party from its configuration and the contributions of the packages.
+    /// </summary>
+    public sealed class Builder
+    {
+        readonly List<ClientApplicationDescription> _apps = new();
+
+        /// <summary>
+        /// Gets or sets the public URL. The "Local:PublicUrl" configuration sets it first: a contributor sets it only
+        /// when it is null.
+        /// </summary>
+        public Uri? PublicUrl { get; set; }
+
+        /// <summary>
+        /// Adds a client application.
+        /// </summary>
+        /// <param name="name">The client application name.</param>
+        /// <param name="requestPath">Its request path ("/" for the default one).</param>
+        public void AddClientApplication( string name, string requestPath )
+        {
+            Throw.CheckNotNullOrWhiteSpaceArgument( name );
+            Throw.CheckArgument( requestPath != null && requestPath.StartsWith( '/' ) );
+            _apps.Add( new ClientApplicationDescription( name, requestPath ) );
+        }
+
+        /// <summary>
+        /// Builds the description.
+        /// </summary>
+        /// <returns>The description.</returns>
+        public PartyDescription Build() => new PartyDescription( PublicUrl, _apps.ToImmutableArray() );
+    }
+}
+
+/// <summary>
+/// A client application of a party (see <see cref="PartyDescription.ClientApplications"/>).
+/// </summary>
+/// <param name="Name">The client application name.</param>
+/// <param name="RequestPath">Its request path: "/" for the default one, "/mini-app" for another one.</param>
+public sealed record ClientApplicationDescription( string Name, string RequestPath )
+{
+    /// <summary>
+    /// Gets whether this is the default client application of the party (served at "/").
+    /// </summary>
+    public bool IsDefault => RequestPath == "/";
+}

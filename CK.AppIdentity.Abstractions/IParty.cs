@@ -80,6 +80,14 @@ public interface IParty
     bool TrySetPartyActorId( IActivityMonitor monitor, int partyActorId );
 
     /// <summary>
+    /// Gets what this party states about itself: its public URL and its client applications. A local party's description
+    /// comes from its "Local:PublicUrl" configuration and the <see cref="IPartyDescriptionContributor"/> (see
+    /// <see cref="ILocalParty.DescriptionChanged"/>); a remote's is its last announcement (see
+    /// <see cref="IRemoteParty.SetDescription"/>). <see cref="PartyDescription.Empty"/> until it is known.
+    /// </summary>
+    PartyDescription Description { get; }
+
+    /// <summary>
     /// Gets the features associated to this <see cref="ApplicationIdentityService"/>, <see cref="IRemoteParty"/> or <see cref="ILocalParty"/>.
     /// </summary>
     IEnumerable<object> Features { get; }

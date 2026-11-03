@@ -21,6 +21,7 @@ public abstract class ApplicationIdentityParty : IParty
     readonly FileStore _sharedStore;
     object[] _features;
     int _partyActorId;
+    PartyDescription _description;
 
     // The folders of a dynamic party are not created by its constructor: they are created by the agent
     // (see CreateFolders) once the new parties have been checked.
@@ -30,6 +31,7 @@ public abstract class ApplicationIdentityParty : IParty
         _appIdentityService = appIdentityService ?? (ApplicationIdentityService)this;
         _configuration = configuration;
         _features = Array.Empty<object>();
+        _description = PartyDescription.Empty;
         _sharedStore = new FileStore( ApplicationIdentityService.Configuration.StoreFileSystem,
                                       ApplicationIdentityService.ComputeSharedStorePath( configuration.FullName ),
                                       createFolder: !isDynamic );
@@ -82,6 +84,23 @@ public abstract class ApplicationIdentityParty : IParty
         if( current == partyActorId ) return true;
         monitor.Warn( ActivityMonitor.Tags.SecurityCritical, $"PartyActorId of '{FullName}' is {current}: it cannot be changed to {partyActorId}." );
         return false;
+    }
+
+    /// <inheritdoc />
+    public PartyDescription Description => _description;
+
+    // Sets the description: returns the previous one, or null when it is the same.
+    private protected PartyDescription? DoSetDescription( PartyDescription description )
+    {
+        Throw.CheckNotNullArgument( description );
+        PartyDescription current;
+        do
+        {
+            current = _description;
+            if( current.Equals( description ) ) return null;
+        }
+        while( Interlocked.CompareExchange( ref _description, description, current ) != current );
+        return current;
     }
 
     /// <inheritdoc />

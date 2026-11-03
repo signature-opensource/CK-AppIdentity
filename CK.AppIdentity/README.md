@@ -124,6 +124,28 @@ Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures
 The launcher of the solution, `#Dev/Start.ps1` (see [CK.AppIdentity.Hosting](../CK.AppIdentity.Hosting/README.md)),
 reads these files.
 
+## The description of a party.
+
+A party states what it is to the others: its public URL and its client applications (`IParty.Description`, a
+`PartyDescription` of CK.AppIdentity.Abstractions). The AuthCenter, for instance, builds the links of its mails with the
+URL of the party through which the user acts, and derives the origins it accepts from the URLs of its remotes.
+
+The "PartyDescription" feature ([`PartyDescriptionFeatureDriver`](PartyDescription/PartyDescriptionFeatureDriver.cs), a
+static feature allowed by default) sets it:
+- **A local party's public URL is its `Local:PublicUrl`** configuration: an absolute `http` or `https` URL without path,
+  query nor fragment (`PartyDescription.TryParsePublicUrl`); an invalid one fails the start.
+- **The root party's description is completed by the packages** with an `IPartyDescriptionContributor`: the HTTP
+  endpoints give the public URL when `Local:PublicUrl` is not configured, the client applications give their names
+  and request paths. It is computed when the party is set up, then after each change once the host has started:
+  `ILocalParty.DescriptionChanged` is raised.
+- **A remote's description is its last announcement** (`IRemoteParty.SetDescription`, called by the channel), persisted
+  in the remote's folder of the shared store (`PartyDescription.json`: it is the remote's own statement, the same for
+  every local party) and read back when the remote is set up, so that it is known while the remote is not connected. A
+  change of its public URL is logged as a warning.
+
+The URL of a client application is derived, never stored: `PartyDescription.GetClientApplicationUrl( name )` (the
+default one, served at `/`, when the name is null).
+
 ## Requires.
 
 - `CK.AppIdentity.Abstractions`, and nothing else directly: `CK.AppIdentity.Configuration` and

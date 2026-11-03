@@ -3,7 +3,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,6 +28,69 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
     }
 
     public new RemotePartyConfiguration Configuration => Unsafe.As<RemotePartyConfiguration>( _configuration );
+
+    /// <summary>
+    /// The file of the announced <see cref="IParty.Description"/>, in the remote's folder of the shared store.
+    /// </summary>
+    internal const string DescriptionFileName = "PartyDescription.json";
+
+    public bool SetDescription( IActivityMonitor monitor, PartyDescription description )
+    {
+        Throw.CheckNotNullArgument( monitor );
+        var previous = DoSetDescription( description );
+        if( previous == null ) return false;
+        if( previous.PublicUrl != null && !Equals( previous.PublicUrl, description.PublicUrl ) )
+        {
+            monitor.Warn( $"The public URL of '{FullName}' changed from '{previous.PublicUrl}' to '{description.PublicUrl?.ToString() ?? "(none)"}'." );
+        }
+        else
+        {
+            monitor.Info( $"Description of '{FullName}': {description}." );
+        }
+        try
+        {
+            SharedFileStore.WriteAtomically( SharedFileStore.FolderPath.AppendPart( DescriptionFileName ), stream =>
+            {
+                using var w = new Utf8JsonWriter( stream, new JsonWriterOptions { Indented = true } );
+                description.Write( w );
+            } );
+        }
+        catch( Exception ex )
+        {
+            monitor.Warn( $"While persisting the description of '{FullName}'.", ex );
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the last persisted description, if any (when the party is set up).
+    /// </summary>
+    internal void LoadDescription( IActivityMonitor monitor )
+    {
+        var path = SharedFileStore.FolderPath.AppendPart( DescriptionFileName );
+        try
+        {
+            using var stream = SharedFileStore.OpenReadStream( path );
+            using var doc = JsonDocument.Parse( stream );
+            if( PartyDescription.TryRead( doc.RootElement, out var d, out var error ) )
+            {
+                DoSetDescription( d );
+                monitor.Trace( $"Last known description of '{FullName}': {d}." );
+            }
+            else
+            {
+                monitor.Warn( $"Invalid '{path}' ignored: {error}" );
+            }
+        }
+        catch( Exception ex ) when( ex is FileNotFoundException or DirectoryNotFoundException )
+        {
+            // Never announced.
+        }
+        catch( Exception ex )
+        {
+            monitor.Warn( $"While reading '{path}' (ignored).", ex );
+        }
+    }
 
     public bool IsExternalParty => Configuration.IsExternalParty;
 

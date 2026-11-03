@@ -20,6 +20,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
 {
     private protected RemoteParty[] _remotes;
     internal readonly PerfectEventSender<IRemoteParty> _remotesChanged;
+    readonly PerfectEventSender<ILocalParty> _descriptionChanged;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly FileStore _privateStore;
     // Changes in contained remotes are propagated to the root AllPartyChanged event.
@@ -33,6 +34,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
         : base( configuration, isDynamic, appIdentityService )
     {
         _remotesChanged = new PerfectEventSender<IRemoteParty>();
+        _descriptionChanged = new PerfectEventSender<ILocalParty>();
         _remotes = remotes.Select( c => new RemoteParty( c, this, isDynamic ) ).ToArray();
         // Creates a relay for RemotesChanged from this group to the root's AllPartyChanged event.
         // Chicken and Egg here: if we are the root, create the AllPartiesChanged event instance
@@ -48,6 +50,19 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
 
     /// <inheritdoc />
     public PerfectEvent<IRemoteParty> AnyRemoteChanged => _remotesChanged.PerfectEvent;
+
+    public PerfectEvent<ILocalParty> DescriptionChanged => _descriptionChanged.PerfectEvent;
+
+    /// <summary>
+    /// Sets the description of this local party (see <see cref="PartyDescriptionFeatureDriver"/>) and raises
+    /// <see cref="DescriptionChanged"/> when it changed.
+    /// </summary>
+    internal async Task SetLocalDescriptionAsync( IActivityMonitor monitor, PartyDescription description )
+    {
+        if( DoSetDescription( description ) == null ) return;
+        monitor.Info( $"Description of '{FullName}': {description}." );
+        await _descriptionChanged.SafeRaiseAsync( monitor, this ).ConfigureAwait( false );
+    }
 
     /// <inheritdoc />
     public IReadOnlyCollection<IRemoteParty> Remotes => _remotes;

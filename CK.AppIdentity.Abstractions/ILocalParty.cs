@@ -58,6 +58,12 @@ public interface ILocalParty : IParty
     Task<IRemoteParty?> AddRemoteAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
 
     /// <summary>
+    /// Raised when the <see cref="IParty.Description"/> of this local party changes (the HTTP endpoints, for instance,
+    /// know their URL once the host has started): the channels announce it again to the remotes.
+    /// </summary>
+    PerfectEvent<ILocalParty> DescriptionChanged { get; }
+
+    /// <summary>
     /// Gets the "Local" configuration section.
     /// </summary>
     ApplicationIdentityLocalConfiguration LocalConfiguration { get; }
