@@ -112,15 +112,16 @@ linked worktree, a submodule): the same rule as `LocalDevSolution.SolutionFolder
 worktree has its own `#Dev`. A build outside a git working folder (a downloaded source archive) does nothing, and
 `<CKAppIdentityDevFolder>false</CKAppIdentityDevFolder>` opts a project out.
 
-**A project is a party** when it is an executable (`OutputType` `Exe`), is not a test project, and has an
-`appsettings.json`. In an App/Builder/Host solution, that is the host: the `.App` is a library and the Builder has no
-`appsettings.json`. The optional `<CKAppIdentityParty>true|false</CKAppIdentityParty>` overrides the rule.
+**A project is a party** when its `CKAppIdentityParty` property is `true`. The host package CK.AppHost (CK-AspNet) sets
+it in the host project that references it: in an App/Builder/Host solution, the party is the host. A project that doesn't
+use CK.AppHost sets `<CKAppIdentityParty>true</CKAppIdentityParty>` itself.
 
 **`#Dev/Start.ps1`** starts all the parties at once, in their own window, in the Development environment
 (`DOTNET_ENVIRONMENT`), and waits until they are ready:
 - **The readiness:** each party's `DevRunningStatus.json` (written by the "DevRunningStatus" feature of
   [CK.AppIdentity](../CK.AppIdentity/README.md) in the party's folder of `#Dev/Store`) says `Ready`. Then its client
-  applications are served.
+  applications are served. A client application that has an `Error` (its dev server failed) stops the wait with that
+  error.
 - **Then it prints their URLs, and opens the browser** on the default client application.
 - **Enter stops the parties like Ctrl+C** in their window: a hidden helper attaches to their console. A party that
   doesn't exit in time is killed with its process tree.

@@ -12,7 +12,8 @@
     3. Starts each party in its own window, in the Development environment (DOTNET_ENVIRONMENT).
     4. Waits until every party is ready: its "DevRunningStatus.json" (in "#Dev/Store", written by the "DevRunningStatus"
        feature of CK.AppIdentity) says "Ready" (the party is started and its outgoing remotes are connected), then
-       until its client applications are served.
+       until its client applications are served. A client application whose dev server failed (its "Error") stops the
+       wait: its error is printed.
     5. Prints the parties and their URLs, opens the browser on the default client application.
     6. Press Enter: the parties are stopped like Ctrl+C in their window (they stop the dev servers they started); a
        party that doesn't exit in time is killed with its process tree.
@@ -170,13 +171,19 @@ try {
     do {
         $statuses = Get-RunningStatuses
         $waiting = @()
+        $failed = @()
         foreach( $party in $parties ) {
             $s = Get-Status $statuses $party
             $party.Status = $s
             foreach( $c in @( Get-Property $s 'Clients' ) ) {
-                if( $c -and -not $c.Serving ) { $waiting += "$($party.Name)/$($c.Name)" }
+                if( -not $c ) { continue }
+                # A client application whose dev server failed has an Error: it will never be served.
+                $clientError = Get-Property $c 'Error'
+                if( $clientError ) { $failed += "$($party.Name)/$($c.Name): $clientError" }
+                elseif( -not $c.Serving ) { $waiting += "$($party.Name)/$($c.Name)" }
             }
         }
+        if( $failed.Count -gt 0 ) { throw "Failed client applications (see the logs of their party):`n$($failed -join "`n")" }
         if( $waiting.Count -eq 0 ) { break }
         if( (Get-Date) -gt $deadline ) { throw "Not served after $Timeout seconds: $($waiting -join ', ')." }
         Start-Sleep -Seconds 1

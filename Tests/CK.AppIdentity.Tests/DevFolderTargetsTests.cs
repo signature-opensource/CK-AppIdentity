@@ -20,7 +20,7 @@ public class DevFolderTargetsTests
 {
     static NormalizedPath TargetsPath => TestHelper.SolutionFolder.Combine( "CK.AppIdentity.Hosting/buildTransitive/CK.AppIdentity.Hosting.targets" );
 
-    static void CreateProject( NormalizedPath folder, string name, bool appSettings, string? partyProperty = null, string? devFolderProperty = null )
+    static void CreateProject( NormalizedPath folder, string name, string? partyProperty = "true", string? devFolderProperty = null )
     {
         var project = folder.AppendPart( name );
         Directory.CreateDirectory( project );
@@ -36,7 +36,6 @@ public class DevFolderTargetsTests
             </Project>
             """ );
         File.WriteAllText( project.AppendPart( "Program.cs" ), "return 0;" );
-        if( appSettings ) File.WriteAllText( project.AppendPart( "appsettings.json" ), "{}" );
     }
 
     static async Task BuildAsync( NormalizedPath project )
@@ -70,19 +69,18 @@ public class DevFolderTargetsTests
         try
         {
             CreateGitFolder( root );
-            CreateProject( root, "Party.Host", appSettings: true );
-            CreateProject( root, "Tool", appSettings: false );
-            CreateProject( root, "NotAParty", appSettings: true, partyProperty: "false" );
-            CreateProject( root, "ForcedParty", appSettings: false, partyProperty: "true" );
-            foreach( var name in (string[])["Party.Host", "Tool", "NotAParty", "ForcedParty"] )
+            CreateProject( root, "Party.Host" );
+            CreateProject( root, "Tool", partyProperty: null );
+            CreateProject( root, "NotAParty", partyProperty: "false" );
+            foreach( var name in (string[])["Party.Host", "Tool", "NotAParty"] )
             {
                 await BuildAsync( root.AppendPart( name ) );
             }
 
             var parties = root.Combine( "#Dev/Parties" );
-            File.Exists( parties.AppendPart( "Tool.json" ) ).ShouldBeFalse( "No appsettings.json: not a party." );
+            // No guess: an executable is a party only when CKAppIdentityParty is true (CK.AppHost sets it).
+            File.Exists( parties.AppendPart( "Tool.json" ) ).ShouldBeFalse( "No CKAppIdentityParty: not a party." );
             File.Exists( parties.AppendPart( "NotAParty.json" ) ).ShouldBeFalse( "CKAppIdentityParty is false." );
-            File.Exists( parties.AppendPart( "ForcedParty.json" ) ).ShouldBeTrue( "CKAppIdentityParty is true." );
 
             var manifest = JsonDocument.Parse( File.ReadAllText( parties.AppendPart( "Party.Host.json" ) ) ).RootElement;
             manifest.GetProperty( "ProjectPath" ).GetString().ShouldBe( root.AppendPart( "Party.Host" ).Path );
@@ -112,7 +110,7 @@ public class DevFolderTargetsTests
             var sub = root.AppendPart( "Sub" );
             Directory.CreateDirectory( sub );
             File.WriteAllText( sub.AppendPart( ".git" ), "gitdir: ../.git/modules/Sub\n" );
-            CreateProject( sub, "Party.Host", appSettings: true );
+            CreateProject( sub, "Party.Host" );
             await BuildAsync( sub.AppendPart( "Party.Host" ) );
             File.Exists( sub.Combine( "#Dev/Parties/Party.Host.json" ) ).ShouldBeTrue();
             Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
@@ -130,12 +128,12 @@ public class DevFolderTargetsTests
         var root = CreateRoot();
         try
         {
-            CreateProject( root, "Party.Host", appSettings: true );
+            CreateProject( root, "Party.Host" );
             await BuildAsync( root.AppendPart( "Party.Host" ) );
             Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
 
             CreateGitFolder( root );
-            CreateProject( root, "OptOut.Host", appSettings: true, devFolderProperty: "false" );
+            CreateProject( root, "OptOut.Host", devFolderProperty: "false" );
             await BuildAsync( root.AppendPart( "OptOut.Host" ) );
             Directory.Exists( root.AppendPart( "#Dev" ) ).ShouldBeFalse();
         }

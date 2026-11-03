@@ -3,8 +3,8 @@
   <!--
     The "#Dev" folder of a development solution (see the README of CK.AppIdentity.Hosting): the folder of its development
     data, at the root of its git working folder, ignored by git (its ".gitignore" is "*").
-    The build of each party (an executable that is not a test project and has an appsettings.json, or a project whose
-    CKAppIdentityParty is true) creates it, writes its manifest "#Dev/Parties/<Project>.json" and copies the scripts of
+    The build of each party (a project whose CKAppIdentityParty is true: the CK.AppHost package sets it in the host
+    project that references it) creates it, writes its manifest "#Dev/Parties/<Project>.json" and copies the scripts of
     this package in "#Dev" (Start.ps1). CKAppIdentityDevFolder set to false opts out.
     The git working folder is found like LocalDevSolution.SolutionFolder (CK.ActivityMonitor) finds it at run time, where
     the parties in Development use "#Dev/Store": the closest folder above the project with a ".git" folder (a main
@@ -20,8 +20,7 @@
 
   <Target Name="CKAppIdentityDevParty" AfterTargets="Build" Condition=" '$(_CKAppIdentityDevRoot)' != '' ">
     <PropertyGroup>
-      <_CKAppIdentityIsParty Condition=" '$(CKAppIdentityParty)' != '' ">$(CKAppIdentityParty)</_CKAppIdentityIsParty>
-      <_CKAppIdentityIsParty Condition=" '$(CKAppIdentityParty)' == '' And '$(OutputType)' == 'Exe' And '$(IsTestProject)' != 'true' And Exists('$(MSBuildProjectDirectory)\appsettings.json') ">true</_CKAppIdentityIsParty>
+      <_CKAppIdentityIsParty>$(CKAppIdentityParty)</_CKAppIdentityIsParty>
       <_CKAppIdentityDevFolder>$(_CKAppIdentityDevRoot)\#Dev</_CKAppIdentityDevFolder>
       <_CKAppIdentityAppHost Condition="Exists('$(TargetDir)$(AssemblyName).exe')">$(TargetDir)$(AssemblyName).exe</_CKAppIdentityAppHost>
       <!-- The paths are written with '/': the JSON needs no escaping. -->
