@@ -160,4 +160,22 @@ public class PartyDescriptionTests
             await host.StopAsync( cancel );
         }
     }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task the_caller_party_is_the_local_party_or_one_of_its_remotes_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost();
+        await host.StartAsync( cancel );
+        var root = host.Services.GetRequiredService<ApplicationIdentityService>();
+        var remote = root.Remotes.Single();
+        // 0: a direct reception by the local party whose PartyActorId is not known.
+        root.FindCallerParty( 0 ).ShouldBeSameAs( root );
+        root.TrySetPartyActorId( TestHelper.Monitor, 3712 ).ShouldBeTrue();
+        remote.TrySetPartyActorId( TestHelper.Monitor, 3713 ).ShouldBeTrue();
+        root.FindCallerParty( 3712 ).ShouldBeSameAs( root );
+        root.FindCallerParty( 3713 ).ShouldBeSameAs( remote );
+        root.FindCallerParty( 42 ).ShouldBeNull();
+        await host.StopAsync( cancel );
+    }
 }
