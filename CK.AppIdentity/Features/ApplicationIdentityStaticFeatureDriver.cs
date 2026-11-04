@@ -11,7 +11,7 @@ namespace CK.AppIdentity;
 /// Its lifetime is the host's one: <see cref="OnHostStartedAsync"/> and <see cref="OnHostStoppingAsync"/> bracket it.
 /// <para>
 /// Only the parties that ARE the feature are constrained (see <see cref="ApplicationIdentityFeatureDriver.GetFeatureName(IParty)"/>):
-/// the remotes of a feature with a side can be dynamic (a front added at run time is a remote of an AuthCenter). Dynamic
+/// the remotes that use an asymmetric feature can be dynamic (a front added at run time is a remote of an AuthCenter). Dynamic
 /// parties (and dynamic tenant domains) are still supported: they just cannot have a static feature. A dynamic party that
 /// explicitly allows it fails its setup; when the feature is allowed by default, the default doesn't apply to them (see
 /// <see cref="ApplicationIdentityFeatureDriver.IsAllowedFeature(IParty)"/>).
@@ -31,13 +31,15 @@ public abstract class ApplicationIdentityStaticFeatureDriver : ApplicationIdenti
     }
 
     /// <summary>
-    /// Initializes a new <see cref="ApplicationIdentityStaticFeatureDriver"/> that is the "Local" or the "Remote" side of a feature.
+    /// Initializes a new <see cref="ApplicationIdentityStaticFeatureDriver"/> of an asymmetric feature.
     /// See <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService, string?, bool)"/>.
     /// </summary>
     /// <param name="s">The application identity service.</param>
-    /// <param name="featureName">The name of the feature: this type name without the "Local" or "Remote" prefix.</param>
-    /// <param name="isAllowedByDefault">Whether the feature is opt-in or opt-out.</param>
-    protected ApplicationIdentityStaticFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault )
+    /// <param name="featureName">The name of an asymmetric feature (null for a symmetric one).</param>
+    /// <param name="isAllowedByDefault">
+    /// Whether the feature is opt-in or opt-out. For an asymmetric feature, true makes little sense and must be exceptional.
+    /// </param>
+    protected ApplicationIdentityStaticFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault = false )
         : base( s, featureName, isAllowedByDefault )
     {
         _isStatic = true;

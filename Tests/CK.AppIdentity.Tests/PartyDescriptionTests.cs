@@ -45,7 +45,7 @@ public class PartyDescriptionTests
         }
     }
 
-    static IHost BuildHost( Action<MutableConfigurationSection>? configure = null )
+    static IHost BuildHost( Action<MutableConfigurationSection>? configure = null, params Type[] drivers )
     {
         var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
         ckApp["FullName"] = "Descr/$App";
@@ -60,6 +60,11 @@ public class PartyDescriptionTests
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         builder.Services.AddSingleton<TestContributor>();
         builder.Services.AddSingleton<IPartyDescriptionContributor>( sp => sp.GetRequiredService<TestContributor>() );
+        foreach( var t in drivers )
+        {
+            builder.Services.AddSingleton( t );
+            builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
+        }
         return builder.CKBuild();
     }
 
@@ -176,6 +181,63 @@ public class PartyDescriptionTests
         root.FindCallerParty( 3712 ).ShouldBeSameAs( root );
         root.FindCallerParty( 3713 ).ShouldBeSameAs( remote );
         root.FindCallerParty( 42 ).ShouldBeNull();
+        await host.StopAsync( cancel );
+    }
+
+    [Test]
+    public void the_roles_are_sorted_deduplicated_and_persisted()
+    {
+        var d = new PartyDescription( null, default, ["B", "A", "B"] );
+        d.Roles.ShouldBe( ["A", "B"] );
+        d.ToString().ShouldContain( "(Roles: A, B)" );
+        using var stream = new MemoryStream();
+        using( var w = new System.Text.Json.Utf8JsonWriter( stream ) ) d.Write( w );
+        using var doc = System.Text.Json.JsonDocument.Parse( stream.ToArray() );
+        PartyDescription.TryRead( doc.RootElement, out var back, out _ ).ShouldBeTrue();
+        back.ShouldBe( d );
+        back.ShouldNotBe( d.WithRoles( null ) );
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task the_roles_of_a_local_party_are_the_asymmetric_features_it_is_Async( CancellationToken cancel )
+    {
+        // The Local side is installed and the root allows "Asym": it is the "Asym".
+        using( var host = BuildHost( c => c["Local:AllowFeatures"] = "Asym", typeof( FeatureBuilderInitializationTests.LocalAsymFeatureDriver ) ) )
+        {
+            await host.StartAsync( cancel );
+            host.Services.GetRequiredService<ApplicationIdentityService>().Description.Roles.ShouldBe( ["Asym"] );
+            await host.StopAsync( cancel );
+        }
+        // Only the Remote side: the root cannot be the "Asym".
+        using( var host = BuildHost( c => c["Local:AllowFeatures"] = "Asym", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) ) )
+        {
+            await host.StartAsync( cancel );
+            host.Services.GetRequiredService<ApplicationIdentityService>().Description.Roles.ShouldBeEmpty();
+            await host.StopAsync( cancel );
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_remote_to_which_a_feature_is_relayed_must_announce_it_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost( c => c["Parties:0:AllowFeatures"] = "AsymRemote", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) );
+        await host.StartAsync( cancel );
+        var remote = host.Services.GetRequiredService<ApplicationIdentityService>().Remotes.Single();
+        remote.SharedFileStore.TryTrash( TestHelper.Monitor, remote.SharedFileStore.FolderPath.AppendPart( "PartyDescription.json" ), immediateDelete: true );
+        using( TestHelper.Monitor.CollectEntries( out var entries, LogLevelFilter.Warn ) )
+        {
+            // The remote forgot the "Asym" of its "Local".
+            remote.SetDescription( TestHelper.Monitor, new PartyDescription( null, default, ["Other"] ) ).ShouldBeTrue();
+            entries.ShouldContain( e => e.MaskedLevel == LogLevel.Error
+                                        && e.Text.Contains( "relays the 'Asym' feature to 'Descr/$Remote/#Dev' (it allows 'AsymRemote') but 'Descr/$Remote/#Dev' doesn't announce being the 'Asym'" ) );
+        }
+        using( TestHelper.Monitor.CollectEntries( out var entries, LogLevelFilter.Warn ) )
+        {
+            remote.SetDescription( TestHelper.Monitor, new PartyDescription( null, default, ["Asym"] ) ).ShouldBeTrue();
+            entries.ShouldBeEmpty();
+        }
         await host.StopAsync( cancel );
     }
 }

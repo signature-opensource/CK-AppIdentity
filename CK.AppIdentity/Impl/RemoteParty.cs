@@ -39,6 +39,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         Throw.CheckNotNullArgument( monitor );
         var previous = DoSetDescription( description );
         if( previous == null ) return false;
+        ApplicationIdentityService.CheckRelayedRoles( monitor, this, isAnnouncement: true );
         if( previous.PublicUrl != null && !Equals( previous.PublicUrl, description.PublicUrl ) )
         {
             monitor.Warn( $"The public URL of '{FullName}' changed from '{previous.PublicUrl}' to '{description.PublicUrl?.ToString() ?? "(none)"}'." );
@@ -76,6 +77,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
             {
                 DoSetDescription( d );
                 monitor.Trace( $"Last known description of '{FullName}': {d}." );
+                ApplicationIdentityService.CheckRelayedRoles( monitor, this, isAnnouncement: false );
             }
             else
             {

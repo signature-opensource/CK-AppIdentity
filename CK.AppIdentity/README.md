@@ -126,8 +126,8 @@ reads these files.
 
 ## The description of a party.
 
-A party states what it is to the others: its public URL and its client applications (`IParty.Description`, a
-`PartyDescription` of CK.AppIdentity.Abstractions). The AuthCenter, for instance, builds the links of its mails with the
+A party states what it is to the others: its public URL, its client applications and its roles (`IParty.Description`,
+a `PartyDescription` of CK.AppIdentity.Abstractions). The AuthCenter, for instance, builds the links of its mails with the
 URL of the party through which the user acts, and derives the origins it accepts from the URLs of its remotes.
 
 The "PartyDescription" feature ([`PartyDescriptionFeatureDriver`](PartyDescription/PartyDescriptionFeatureDriver.cs), a
@@ -138,6 +138,10 @@ static feature allowed by default) sets it:
   endpoints give the public URL when `Local:PublicUrl` is not configured, the client applications give their names
   and request paths. It is computed when the party is set up, then after each change once the host has started:
   `ILocalParty.DescriptionChanged` is raised.
+- **The roles of a local party are the [asymmetric features](Features/README.md#asymmetric-features) it is** (their
+  Local side is installed and its `Local` allows them). A local party that relays an asymmetric feature to a remote
+  checks that the remote announces it. No other feature name is announced: the description is what the other parties
+  act on.
 - **A remote's description is its last announcement** (`IRemoteParty.SetDescription`, called by the channel), persisted
   in the remote's folder of the shared store (`PartyDescription.json`: it is the remote's own statement, the same for
   every local party) and read back when the remote is set up, so that it is known while the remote is not connected. A

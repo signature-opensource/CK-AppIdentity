@@ -222,6 +222,36 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
         return StartStaticFeaturesAsync( default );
     }
 
+    // The roles of a local party: the asymmetric features it IS (their Local side is installed and the party allows them).
+    internal IEnumerable<string> GetRoles( ILocalParty local )
+    {
+        return _builders.Where( d => d._asymmetric?.Local == d && d.IsAllowedFeature( local ) ).Select( d => d.FeatureName );
+    }
+
+    // A local party that relays an asymmetric feature to a remote (the Remote side is installed, the local party doesn't
+    // allow the feature, the remote allows "XXXRemote") checks that the remote announces being it: the forgotten "XXX"
+    // in the "Local" of the remote can only be seen here. An announcement is an error, the last known description
+    // (it may be stale) a warning.
+    internal void CheckRelayedRoles( IActivityMonitor monitor, RemoteParty remote, bool isAnnouncement )
+    {
+        var roles = remote.Description.Roles;
+        foreach( var d in _builders )
+        {
+            if( d._asymmetric?.Remote != d
+                || d.IsAllowedFeature( remote.Owner )
+                || !d.IsAllowedFeature( remote )
+                || roles.Contains( d.FeatureName ) )
+            {
+                continue;
+            }
+            var text = $"'{remote.Owner}' relays the '{d.FeatureName}' feature to '{remote}' (it allows '{d.GetFeatureName( remote )}') but '{remote}' "
+                       + $"doesn't announce being the '{d.FeatureName}': its \"Local\" must allow '{d.FeatureName}' (or, when '{remote.Owner}' is the '{d.FeatureName}', "
+                       + $"its \"Local\" must allow it).";
+            if( isAnnouncement ) monitor.Error( text );
+            else monitor.Warn( $"Last known description: {text}" );
+        }
+    }
+
     // Starts the static features once the initialization is done (once).
     Task StartStaticFeaturesAsync( CancellationToken cancellationToken )
     {

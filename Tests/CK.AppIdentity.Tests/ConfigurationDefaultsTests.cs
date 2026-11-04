@@ -133,13 +133,13 @@ public class ConfigurationDefaultsTests
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "Acme/$App";
-            c["Defaults:AllowFeatures"] = "Singleton";
+            c["Defaults:AllowFeatures"] = "Asym";
             c["Parties:0:PartyName"] = "R1";
             c["Parties:1:PartyName"] = "R2";
-            c["Parties:1:DisallowFeatures"] = "Singleton";
+            c["Parties:1:DisallowFeatures"] = "Asym";
         } ).ShouldNotBeNull();
         var s = new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
-        var driver = new FeatureBuilderInitializationTests.SingletonFeatureDriver( s, isAllowedByDefault: false );
+        var driver = new FeatureBuilderInitializationTests.AsymFeatureDriver( s, isAllowedByDefault: false, featureName: null );
         driver.IsRootAllowed.ShouldBeTrue();
         driver.IsAllowedFeature( s ).ShouldBeTrue();
         driver.IsAllowedFeature( s.Remotes.Single( r => r.PartyName == "$R1" ) ).ShouldBeTrue();
@@ -149,11 +149,11 @@ public class ConfigurationDefaultsTests
         var c2 = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "Acme/$App";
-            c["Local:AllowFeatures"] = "Singleton";
+            c["Local:AllowFeatures"] = "Asym";
             c["Parties:0:PartyName"] = "R1";
         } ).ShouldNotBeNull();
         var s2 = new ApplicationIdentityService( c2, new ServiceCollection().BuildServiceProvider() );
-        var driver2 = new FeatureBuilderInitializationTests.SingletonFeatureDriver( s2, isAllowedByDefault: false );
+        var driver2 = new FeatureBuilderInitializationTests.AsymFeatureDriver( s2, isAllowedByDefault: false, featureName: null );
         driver2.IsAllowedFeature( s2 ).ShouldBeTrue();
         driver2.IsAllowedFeature( s2.Remotes.Single() ).ShouldBeFalse();
     }

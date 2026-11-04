@@ -37,40 +37,73 @@ Configuration then takes over via "Allow/DisallowFeatures", which control the fi
 
 - The feature name is deduced from the driver type: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
   used in the configuration.
-- A feature that is a **singleton within a domain** (one party of the domain implements it, the others use it: the
-  AuthCenter for instance) is split in a "Local" side (this application implements it) and a "Remote" side (this
-  application uses a remote one), in different packages. Their drivers, `LocalXXXFeatureDriver` and
-  `RemoteXXXFeatureDriver`, manage the same "*XXX*" feature: they give it explicitly to the base constructor
-  `ApplicationIdentityFeatureDriver( s, "XXX", isAllowedByDefault )` (the prefix is never removed implicitly: a
-  `LocalStorageFeatureDriver` manages "*LocalStorage*"). A common `XXXFeatureDriver` can exist too. The rules, checked
-  when the drivers are created:
-  - an application has **one role**: the Local and the Remote drivers of a feature cannot be both registered (until
-    the endpoints are subordinated to their local party, a Local or Remote role per local party);
-  - the drivers of a feature agree on `isAllowedByDefault`;
-  - two drivers can never manage the same feature otherwise.
-
-  The configuration **names what a party is**: "*XXX*" on the party that is the feature, "*XXXRemote*" on the parties
-  that are its remotes (`GetFeatureName( IParty p )` gives the name of a party, the common driver reads the same names
-  as its side):
-
-  | | Local side (the application is "*XXX*") | Remote side (the application is a remote of "*XXX*") |
-  |---|---|---|
-  | Its `Local` | `"AllowFeatures": "XXX"` | `"AllowFeatures": "XXXRemote"` |
-  | A remote | `"AllowFeatures": "XXXRemote"` | `"AllowFeatures": "XXX"` (the remote that is "*XXX*") |
-
-  A party that allows only the name of the other role (the configuration of the other role) is an error: the setup
-  of the side fails. Allowing both names is not an error (a "Defaults" may apply to the `Local` and to the remotes).
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which will give it the final result of the
   Allow/Disallow configurations for the given Party according to the configuration sections (up to the configuration root).
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they
-  throw, this is of course handled). 
-- Teardown methods are not expected to fail. 
+  throw, this is of course handled).
+- Teardown methods are not expected to fail.
 
 The order in which driver methods are called respects the dependencies between drivers: if the driver in Feature "A" depends on
 Feature "B", then :
 
 - `SetupAsync` and `SetupDynamicRemoteAsync` of "A" will be called after the setup methods of "B" have been called.
-- The Teardowns are reversed: "B" will only be called upon after "A" has done its cleaning job. 
+- The Teardowns are reversed: "B" will only be called upon after "A" has done its cleaning job.
+
+## Asymmetric features
+
+An **asymmetric feature** is implemented by one party and used by others, which relay it to that party: an
+Authentication Center, or a mail sender that holds the mail server's configuration and its secrets for the parties
+that send mails through it.
+
+### The packages
+
+For the asymmetric feature "*XXX*":
+
+| Package | Content |
+|---|---|
+| CK.AppIdentity.XXX.Local | The core code: the `LocalXXXFeatureDriver`, the implementation of the feature. |
+| CK.IO.XXX | The Cris commands (public or internal) that the remotes send to the local party that is the feature. |
+| CK.AppIdentity.XXX.Remote | The `RemoteXXXFeatureDriver` and the code that relays the feature to the remote that is the feature. |
+| CK.AppIdentity.XXX | Optional: the common implementation. |
+
+The two drivers give the feature name explicitly to the base constructor `ApplicationIdentityFeatureDriver( s, "XXX" )`
+(the prefix is never removed implicitly: a `LocalStorageFeatureDriver` manages "*LocalStorage*"). A common
+`XXXFeatureDriver` is possible but optional: it is only useful when consumers that ignore the side need one driver to
+depend on (the AuthCenter and the MailSender have none). The drivers of a feature agree on `isAllowedByDefault`: it
+defaults to false, and true makes little sense (every local party would be the feature and every remote one of its
+callers): it must be exceptional. Two drivers can never manage the same feature otherwise.
+
+### The configuration
+
+The name is "*XXX*" in the `Local` of a local party (the root or a tenant domain) and "*XXXRemote*" on a remote
+(`GetFeatureName( IParty p )` gives the name of a party). The "*XXX*" of the `Local` gives the role of the local party:
+
+| | The local party allows "*XXX*": it **is** the feature | The local party doesn't allow "*XXX*" |
+|---|---|---|
+| The Local side (`LocalXXXFeatureDriver`) | implements the feature. The remotes that allow "*XXXRemote*" are the ones that can call it (a "Defaults" that allows "*XXXRemote*" lets all of them call it): the calls of a remote that doesn't allow it are refused. | does nothing (as if it was not there). |
+| The Remote side (`RemoteXXXFeatureDriver`) | does nothing (as if it was not there). | relays the feature to **the** remote that allows "*XXXRemote*", if any: this remote is the feature. |
+
+- **The feature can be configured on both sides of the relationship:** the `Local:XXX` section configures the feature,
+  and a remote can have a "*XXXRemote*" section that configures how the remote is used or considered.
+- **A local party uses at most one remote that is the feature:** more than one remote that allows "*XXXRemote*" (when
+  the local party doesn't allow "*XXX*") is an error. `TryGetFeatureRemote` gives this remote.
+- **The Local and the Remote sides can coexist in the same process:** the "*XXX*" of each local party gives its role
+  in its tenant domain.
+- **A configuration that uses the name of the other kind of party is an error:** a `Local` that allows only
+  "*XXXRemote*", or a remote that allows only "*XXX*", fails the setup of the feature. Allowing both names is not an
+  error (a "Defaults" applies to the `Local` and to the remotes).
+- **A remote added later can be the feature** of a local party that doesn't allow "*XXX*": the Remote side handles it
+  like a remote of the initial configuration.
+- **The roles are announced:** the [description of a local party](../README.md#the-description-of-a-party) carries the
+  asymmetric features it is (`PartyDescription.Roles`). A local party that relays "*XXX*" to a remote checks that the
+  remote announces being "*XXX*": the forgotten "*XXX*" of the remote's `Local` is an error when the remote announces
+  its description, a warning for its last known description at setup. No setup-time rule can see it: the mistaken
+  configuration is a valid one of the Remote side.
+
+`IsAsymmetric`, `HasLocalSide` and `HasRemoteSide` tell a driver which drivers of the feature are registered.
+
+A **singleton asymmetric feature** exists only once in a tenant: there is one Authentication Center in a tenant,
+whereas there can be several mail senders. This is a documented variation of the pattern: nothing checks it.
 
 ## Static features
 
@@ -79,8 +112,8 @@ remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its dr
 [`ApplicationIdentityStaticFeatureDriver`](ApplicationIdentityStaticFeatureDriver.cs) instead of
 `ApplicationIdentityFeatureDriver` (same constructors).
 
-- **Only the parties that ARE the feature are constrained** (`GetFeatureName( p )` is the feature's name): the remotes of
-  a feature with a side can be dynamic.
+- **Only the parties that ARE the feature are constrained:** the remotes that use an asymmetric feature can be dynamic
+  (a remote is the feature when its local party is not).
   - **A dynamic party that explicitly allows a static feature fails its setup.** Dynamic parties and dynamic tenant
     domains are still supported: they just cannot have a static feature.
   - **When the feature is allowed by default, the default doesn't apply to the dynamic parties:** `IsAllowedFeature`

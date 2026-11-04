@@ -100,7 +100,7 @@ public class StaticFeatureTests
         public SDFeatureDriver( ApplicationIdentityService s ) : base( s, isAllowedByDefault: true ) { }
     }
 
-    // The Local side of the "SC" feature: its remotes ("SCRemote") can be dynamic.
+    // The Local side of the "SC" asymmetric feature: the remotes that use it ("SCRemote") can be dynamic.
     public class LocalSCFeatureDriver : RecordingStaticFeatureDriver
     {
         public LocalSCFeatureDriver( ApplicationIdentityService s ) : base( s, "SC" ) { }
@@ -247,6 +247,8 @@ public class StaticFeatureTests
 
         // A dynamic tenant domain that would be the feature fails.
         (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D1/$D1"; c["Local:AllowFeatures"] = "SC"; } )).ShouldBeNull();
+        // A dynamic remote that would be the feature (its local party is not the "SC") fails.
+        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D2/$D2"; c["Parties:0:PartyName"] = "X"; c["Parties:0:AllowFeatures"] = "SCRemote"; } )).ShouldBeNull();
         await host.StopAsync( cancel );
     }
 }

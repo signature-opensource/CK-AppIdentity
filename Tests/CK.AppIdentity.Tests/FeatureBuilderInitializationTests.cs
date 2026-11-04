@@ -352,19 +352,20 @@ public class FeatureBuilderInitializationTests
         protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
-    public sealed class SingletonFeatureDriver : NoopFeatureDriver
+    // The "Asym" asymmetric feature: its common driver and its two sides.
+    public sealed class AsymFeatureDriver : NoopFeatureDriver
     {
-        public SingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, null, isAllowedByDefault ) { }
+        public AsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string? featureName = "Asym" ) : base( s, featureName, isAllowedByDefault ) { }
     }
 
-    public sealed class LocalSingletonFeatureDriver : NoopFeatureDriver
+    public sealed class LocalAsymFeatureDriver : NoopFeatureDriver
     {
-        public LocalSingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string featureName = "Singleton" ) : base( s, featureName, isAllowedByDefault ) { }
+        public LocalAsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string featureName = "Asym" ) : base( s, featureName, isAllowedByDefault ) { }
     }
 
-    public sealed class RemoteSingletonFeatureDriver : NoopFeatureDriver
+    public sealed class RemoteAsymFeatureDriver : NoopFeatureDriver
     {
-        public RemoteSingletonFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, "Singleton", isAllowedByDefault ) { }
+        public RemoteAsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, "Asym", isAllowedByDefault ) { }
     }
 
     public sealed class LocalStorageFeatureDriver : NoopFeatureDriver
@@ -383,81 +384,105 @@ public class FeatureBuilderInitializationTests
     }
 
     [Test]
-    public void the_configured_name_is_the_role_of_the_party()
+    public void an_asymmetric_feature_is_XXX_on_a_local_party_and_XXXRemote_on_a_remote()
     {
-        // The Local side: the application is the "Singleton", its remotes are "SingletonRemote".
+        // The local party is the "Asym": its remotes that allow "AsymRemote" use it.
         var s = CreateService( c =>
         {
-            c["Local:AllowFeatures"] = "Singleton";
+            c["Local:AllowFeatures"] = "Asym";
             c["Parties:0:PartyName"] = "AllowsTheRemoteName";
-            c["Parties:0:AllowFeatures"] = "SingletonRemote";
+            c["Parties:0:AllowFeatures"] = "AsymRemote";
             c["Parties:1:PartyName"] = "AllowsTheFeatureName";
-            c["Parties:1:AllowFeatures"] = "Singleton";
+            c["Parties:1:AllowFeatures"] = "Asym";
         } );
-        var common = new SingletonFeatureDriver( s );
-        var local = new LocalSingletonFeatureDriver( s );
+        var common = new AsymFeatureDriver( s );
+        var local = new LocalAsymFeatureDriver( s );
+        var remote = new RemoteAsymFeatureDriver( s );
         var byRemote = s.Remotes.ToDictionary( r => r.PartyName );
-        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, local } )
+        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, local, remote } )
         {
-            d.IsLocalSide.ShouldBe( true );
-            d.GetFeatureName( s ).ShouldBe( "Singleton" );
-            d.GetFeatureName( byRemote["$AllowsTheRemoteName"] ).ShouldBe( "SingletonRemote" );
+            d.IsAsymmetric.ShouldBeTrue();
+            d.HasLocalSide.ShouldBeTrue();
+            d.HasRemoteSide.ShouldBeTrue();
+            d.GetFeatureName( s ).ShouldBe( "Asym" );
+            d.GetFeatureName( byRemote["$AllowsTheRemoteName"] ).ShouldBe( "AsymRemote" );
             d.IsRootAllowed.ShouldBeTrue();
             d.IsAllowedFeature( byRemote["$AllowsTheRemoteName"] ).ShouldBeTrue();
             d.IsAllowedFeature( byRemote["$AllowsTheFeatureName"] ).ShouldBeFalse();
+            d.TryGetFeatureRemote( TestHelper.Monitor, s, out var featureRemote ).ShouldBeTrue();
+            featureRemote.ShouldBeNull( "The local party is the feature." );
         }
 
-        // The Remote side: the application is a "SingletonRemote", the remote that is the feature is "Singleton".
-        // The common driver created after its side has its role too.
+        // The local party is not the "Asym": the remote that allows "AsymRemote" is the "Asym".
         s = CreateService( c =>
         {
-            c["Local:AllowFeatures"] = "SingletonRemote";
-            c["Parties:0:PartyName"] = "TheSingleton";
-            c["Parties:0:AllowFeatures"] = "Singleton";
+            c["Parties:0:PartyName"] = "TheAsym";
+            c["Parties:0:AllowFeatures"] = "AsymRemote";
+            c["Parties:1:PartyName"] = "Other";
         } );
-        var remote = new RemoteSingletonFeatureDriver( s );
-        common = new SingletonFeatureDriver( s );
-        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, remote } )
-        {
-            d.IsLocalSide.ShouldBe( false );
-            d.GetFeatureName( s ).ShouldBe( "SingletonRemote" );
-            d.GetFeatureName( s.Remotes.Single() ).ShouldBe( "Singleton" );
-            d.IsRootAllowed.ShouldBeTrue();
-            d.IsAllowedFeature( s.Remotes.Single() ).ShouldBeTrue();
-        }
+        remote = new RemoteAsymFeatureDriver( s );
+        remote.HasLocalSide.ShouldBeFalse();
+        remote.HasRemoteSide.ShouldBeTrue();
+        remote.IsRootAllowed.ShouldBeFalse();
+        remote.TryGetFeatureRemote( TestHelper.Monitor, s, out var theAsym ).ShouldBeTrue();
+        theAsym.ShouldNotBeNull().PartyName.ShouldBe( "$TheAsym" );
 
-        // Without a side, there is no role: the feature name everywhere.
+        // Without any "AsymRemote", there is no feature remote.
         s = CreateService( c => c["Parties:0:PartyName"] = "R" );
-        common = new SingletonFeatureDriver( s );
-        common.IsLocalSide.ShouldBeNull();
-        common.GetFeatureName( s ).ShouldBe( "Singleton" );
-        common.GetFeatureName( s.Remotes.Single() ).ShouldBe( "Singleton" );
+        remote = new RemoteAsymFeatureDriver( s );
+        remote.TryGetFeatureRemote( TestHelper.Monitor, s, out theAsym ).ShouldBeTrue();
+        theAsym.ShouldBeNull();
+
+        // A symmetric feature has the same name everywhere.
+        s = CreateService( c => c["Parties:0:PartyName"] = "R" );
+        var symmetric = new LocalStorageFeatureDriver( s );
+        symmetric.IsAsymmetric.ShouldBeFalse();
+        symmetric.GetFeatureName( s ).ShouldBe( "LocalStorage" );
+        symmetric.GetFeatureName( s.Remotes.Single() ).ShouldBe( "LocalStorage" );
+        Should.Throw<InvalidOperationException>( () => symmetric.TryGetFeatureRemote( TestHelper.Monitor, s, out _ ) );
+    }
+
+    [Test]
+    public void a_local_party_can_use_only_one_feature_remote()
+    {
+        var s = CreateService( c =>
+        {
+            c["Defaults:AllowFeatures"] = "AsymRemote";
+            c["Parties:0:PartyName"] = "A";
+            c["Parties:1:PartyName"] = "B";
+        } );
+        var remote = new RemoteAsymFeatureDriver( s );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            remote.TryGetFeatureRemote( TestHelper.Monitor, s, out var r ).ShouldBeFalse();
+            r.ShouldBeNull();
+            texts.ShouldContain( t => t.Contains( "it can use only one remote that is the 'Asym' but the remotes 'FakeDomain/$A/#Dev', 'FakeDomain/$B/#Dev' allow 'AsymRemote'" ) );
+        }
     }
 
     [TestCase( "Local" )]
     [TestCase( "Remote" )]
     [CancelAfter( 2000 )]
-    public async Task a_party_that_allows_only_the_name_of_the_other_role_is_an_error_Async( string side, CancellationToken cancellation )
+    public async Task a_local_party_that_allows_XXXRemote_or_a_remote_that_allows_XXX_is_an_error_Async( string side, CancellationToken cancellation )
     {
-        // The configuration of the other role: the Local side reads a Remote side's configuration and conversely.
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "FakeDomain/$FakeApp";
-            c["Local:AllowFeatures"] = side == "Local" ? "SingletonRemote" : "Singleton";
+            c["Local:AllowFeatures"] = "AsymRemote";
             c["Parties:0:PartyName"] = "Other";
-            c["Parties:0:AllowFeatures"] = side == "Local" ? "Singleton" : "SingletonRemote";
-            // A "Defaults" that allows the name of the other role too is fine when the party allows its own name.
+            c["Parties:0:AllowFeatures"] = "Asym";
+            // Allowing both names is fine (a "Defaults" applies to the local party and to the remotes).
             c["Parties:1:PartyName"] = "Both";
-            c["Parties:1:AllowFeatures:0"] = "Singleton";
-            c["Parties:1:AllowFeatures:1"] = "SingletonRemote";
+            c["Parties:1:AllowFeatures:0"] = "Asym";
+            c["Parties:1:AllowFeatures:1"] = "AsymRemote";
         } ).ShouldNotBeNull();
         var services = new ServiceCollection();
         services.AddSingleton( c );
         services.AddSingleton<ApplicationIdentityService>();
-        var t = side == "Local" ? typeof( LocalSingletonFeatureDriver ) : typeof( RemoteSingletonFeatureDriver );
+        var t = side == "Local" ? typeof( LocalAsymFeatureDriver ) : typeof( RemoteAsymFeatureDriver );
         services.AddSingleton( t, sp => side == "Local"
-                                            ? new LocalSingletonFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() )
-                                            : new RemoteSingletonFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() ) );
+                                            ? new LocalAsymFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() )
+                                            : new RemoteAsymFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() ) );
         services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
 
         using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
@@ -469,65 +494,71 @@ public class FeatureBuilderInitializationTests
                 _ = ((IHostedService)s).StartAsync( cancellation );
                 return s.InitializationTask.WaitAsync( cancellation );
             } );
-            if( side == "Local" )
-            {
-                ( await WaitForLogAsync( logs,
-                    "'Application: FakeDomain/$FakeApp/#Dev' allows the 'SingletonRemote' feature but, in this application ('LocalSingletonFeatureDriver' is the Local side of the 'Singleton' feature), it is the 'Singleton': it must allow 'Singleton'.",
-                    "'FakeDomain/$Other/#Dev' allows the 'Singleton' feature but, in this application ('LocalSingletonFeatureDriver' is the Local side of the 'Singleton' feature), it is a remote of the 'Singleton': it must allow 'SingletonRemote'." ) ).ShouldBeTrue();
-            }
-            else
-            {
-                ( await WaitForLogAsync( logs,
-                    "'Application: FakeDomain/$FakeApp/#Dev' allows the 'Singleton' feature but, in this application ('RemoteSingletonFeatureDriver' is the Remote side of the 'Singleton' feature), it is a remote of the 'Singleton': it must allow 'SingletonRemote'.",
-                    "'FakeDomain/$Other/#Dev' allows the 'SingletonRemote' feature but, in this application ('RemoteSingletonFeatureDriver' is the Remote side of the 'Singleton' feature), it is the 'Singleton': it must allow 'Singleton'." ) ).ShouldBeTrue();
-            }
+            ( await WaitForLogAsync( logs,
+                "'Application: FakeDomain/$FakeApp/#Dev' allows the 'AsymRemote' feature in its \"Local\": 'AsymRemote' is allowed on a remote. The 'Asym' feature is asymmetric: a local party that is the 'Asym' allows 'Asym', a local party that uses a remote 'Asym' allows nothing.",
+                "'FakeDomain/$Other/#Dev' allows the 'Asym' feature: 'Asym' is allowed in the \"Local\" of a local party. The 'Asym' feature is asymmetric: a remote that is the 'Asym' (or that uses the local 'Asym') allows 'AsymRemote'." ) ).ShouldBeTrue();
         }
     }
 
     [Test]
-    public void Local_and_Remote_sides_share_the_feature_name()
+    public void the_drivers_of_an_asymmetric_feature_share_its_name()
     {
         var s = CreateService();
-        new SingletonFeatureDriver( s ).FeatureName.ShouldBe( "Singleton" );
-        new LocalSingletonFeatureDriver( s ).FeatureName.ShouldBe( "Singleton" );
+        new AsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
+        new LocalAsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
+        new RemoteAsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
         // Without the explicit feature name, the prefix is kept.
         new LocalStorageFeatureDriver( s ).FeatureName.ShouldBe( "LocalStorage" );
-
-        new RemoteSingletonFeatureDriver( CreateService() ).FeatureName.ShouldBe( "Singleton" );
     }
 
     [Test]
-    public void an_application_is_the_Local_or_the_Remote_side_not_both()
+    public void the_Local_and_the_Remote_sides_can_be_both_registered()
     {
         var s = CreateService();
-        new LocalSingletonFeatureDriver( s );
-        Should.Throw<InvalidOperationException>( () => new RemoteSingletonFeatureDriver( s ) )
-              .Message.ShouldContain( "an application is the Local or the Remote side of the 'Singleton' feature, not both" );
+        var local = new LocalAsymFeatureDriver( s );
+        var remote = new RemoteAsymFeatureDriver( s );
+        local.HasRemoteSide.ShouldBeTrue();
+        remote.HasLocalSide.ShouldBeTrue();
+        Should.Throw<InvalidOperationException>( () => new RemoteAsymFeatureDriver( s ) )
+              .Message.ShouldContain( "both manage the 'Asym' feature" );
     }
 
     [Test]
     public void the_drivers_of_a_feature_must_agree_on_isAllowedByDefault()
     {
         var s = CreateService();
-        new SingletonFeatureDriver( s, isAllowedByDefault: false );
-        Should.Throw<InvalidOperationException>( () => new LocalSingletonFeatureDriver( s, isAllowedByDefault: true ) )
-              .Message.ShouldContain( "disagree on whether the 'Singleton' feature is allowed by default" );
+        new AsymFeatureDriver( s, isAllowedByDefault: false );
+        Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( s, isAllowedByDefault: true ) )
+              .Message.ShouldContain( "disagree on whether the 'Asym' feature is allowed by default" );
+    }
+
+    [Test]
+    public void the_drivers_of_an_asymmetric_feature_must_give_its_name()
+    {
+        var s = CreateService();
+        new AsymFeatureDriver( s, featureName: null );
+        Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( s ) )
+              .Message.ShouldContain( "'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.AsymFeatureDriver' doesn't give the feature name to the base constructor" );
     }
 
     [Test]
     public void the_explicit_feature_name_must_match_the_type_name()
     {
-        Should.Throw<InvalidOperationException>( () => new LocalSingletonFeatureDriver( CreateService(), featureName: "Other" ) )
-              .Message.ShouldContain( "it must be 'LocalOtherFeatureDriver' or 'RemoteOtherFeatureDriver'" );
+        Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( CreateService(), featureName: "Other" ) )
+              .Message.ShouldContain( "it must be 'OtherFeatureDriver', 'LocalOtherFeatureDriver' or 'RemoteOtherFeatureDriver'" );
     }
 
     [Test]
     public void two_drivers_of_the_same_feature_name_are_an_error()
     {
         var s = CreateService();
-        new SingletonFeatureDriver( s );
-        Should.Throw<InvalidOperationException>( () => new SingletonFeatureDriver( s ) )
-              .Message.ShouldContain( "both manage the 'Singleton' feature" );
+        new AsymFeatureDriver( s );
+        Should.Throw<InvalidOperationException>( () => new AsymFeatureDriver( s ) )
+              .Message.ShouldContain( "both manage the 'Asym' feature" );
+        s = CreateService();
+        new LocalStorageFeatureDriver( s );
+        Should.Throw<InvalidOperationException>( () => new LocalStorageFeatureDriver( s ) )
+              .Message.ShouldContain( "both manage the 'LocalStorage' feature" );
     }
 
 }

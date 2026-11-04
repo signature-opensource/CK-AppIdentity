@@ -9,9 +9,9 @@ using System.Text.Json;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// What a party states about itself: its public URL and its client applications. A local party's description comes from
-/// its "Local:PublicUrl" configuration and the <see cref="IPartyDescriptionContributor"/> of the packages; a remote's
-/// description is what the remote announced (see <see cref="IRemoteParty.SetDescription"/>).
+/// What a party states about itself: its public URL, its client applications and its roles. A local party's description
+/// comes from its "Local:PublicUrl" configuration, the <see cref="IPartyDescriptionContributor"/> of the packages and its
+/// asymmetric features; a remote's description is what the remote announced (see <see cref="IRemoteParty.SetDescription"/>).
 /// <para>
 /// The URL of a client application is derived (<see cref="GetClientApplicationUrl"/>): it is never stored.
 /// </para>
@@ -19,7 +19,7 @@ namespace CK.AppIdentity;
 public sealed class PartyDescription : IEquatable<PartyDescription>
 {
     /// <summary>
-    /// The empty description: no public URL, no client application.
+    /// The empty description: no public URL, no client application, no role.
     /// </summary>
     public static readonly PartyDescription Empty = new PartyDescription( null, ImmutableArray<ClientApplicationDescription>.Empty );
 
@@ -28,12 +28,30 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// </summary>
     /// <param name="publicUrl">The public URL (see <see cref="TryParsePublicUrl"/>).</param>
     /// <param name="clientApplications">The client applications.</param>
-    public PartyDescription( Uri? publicUrl, ImmutableArray<ClientApplicationDescription> clientApplications )
+    /// <param name="roles">The roles (see <see cref="Roles"/>): they are sorted and deduplicated.</param>
+    public PartyDescription( Uri? publicUrl, ImmutableArray<ClientApplicationDescription> clientApplications, IEnumerable<string>? roles = null )
     {
         Throw.CheckArgument( publicUrl == null || IsValidPublicUrl( publicUrl, out _ ) );
         PublicUrl = publicUrl;
         ClientApplications = clientApplications.IsDefault ? ImmutableArray<ClientApplicationDescription>.Empty : clientApplications;
+        Roles = roles == null
+                    ? ImmutableArray<string>.Empty
+                    : roles.Where( r => !string.IsNullOrWhiteSpace( r ) ).Distinct( StringComparer.Ordinal ).Order( StringComparer.Ordinal ).ToImmutableArray();
     }
+
+    /// <summary>
+    /// Gets the roles of the party: the asymmetric features that the party IS (its "Local" allows them and their
+    /// Local side is installed), sorted. A party that relays an asymmetric feature to a remote checks that the remote
+    /// announces it.
+    /// </summary>
+    public ImmutableArray<string> Roles { get; }
+
+    /// <summary>
+    /// Returns this description with other <see cref="Roles"/>.
+    /// </summary>
+    /// <param name="roles">The roles.</param>
+    /// <returns>The description.</returns>
+    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles );
 
     /// <summary>
     /// Gets the public URL of the party: an absolute "http" or "https" URL without path, query nor fragment.
@@ -115,6 +133,12 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             w.WriteEndObject();
         }
         w.WriteEndArray();
+        if( Roles.Length > 0 )
+        {
+            w.WriteStartArray( "Roles" );
+            foreach( var r in Roles ) w.WriteStringValue( r );
+            w.WriteEndArray();
+        }
         w.WriteEndObject();
     }
 
@@ -153,7 +177,22 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                 apps.Add( new ClientApplicationDescription( name, path ) );
             }
         }
-        description = new PartyDescription( url, apps.ToImmutable() );
+        List<string>? roles = null;
+        if( e.TryGetProperty( "Roles", out var rs ) && rs.ValueKind == JsonValueKind.Array )
+        {
+            roles = new List<string>();
+            foreach( var r in rs.EnumerateArray() )
+            {
+                var role = r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+                if( string.IsNullOrWhiteSpace( role ) )
+                {
+                    error = "Invalid role: a non empty string is expected.";
+                    return false;
+                }
+                roles.Add( role );
+            }
+        }
+        description = new PartyDescription( url, apps.ToImmutable(), roles );
         error = null;
         return true;
     }
@@ -161,7 +200,8 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// <inheritdoc />
     public bool Equals( PartyDescription? other ) => other != null
                                                      && Equals( PublicUrl, other.PublicUrl )
-                                                     && ClientApplications.SequenceEqual( other.ClientApplications );
+                                                     && ClientApplications.SequenceEqual( other.ClientApplications )
+                                                     && Roles.SequenceEqual( other.Roles );
 
     /// <inheritdoc />
     public override bool Equals( object? obj ) => Equals( obj as PartyDescription );
@@ -170,7 +210,9 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     public override int GetHashCode() => HashCode.Combine( PublicUrl, ClientApplications.Length );
 
     /// <inheritdoc />
-    public override string ToString() => $"{PublicUrl?.ToString() ?? "(no public URL)"} [{string.Join( ", ", ClientApplications )}]";
+    public override string ToString() => Roles.Length == 0
+                                            ? $"{PublicUrl?.ToString() ?? "(no public URL)"} [{string.Join( ", ", ClientApplications )}]"
+                                            : $"{PublicUrl?.ToString() ?? "(no public URL)"} [{string.Join( ", ", ClientApplications )}] (Roles: {string.Join( ", ", Roles )})";
 
     /// <summary>
     /// Builds the description of the local party from its configuration and the contributions of the packages.

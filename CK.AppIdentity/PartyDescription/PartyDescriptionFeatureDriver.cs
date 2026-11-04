@@ -9,7 +9,9 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// The "PartyDescription" static feature: it sets the <see cref="IParty.Description"/> of the local parties and loads the
-/// last known description of the remotes.
+/// last known description of the remotes. The <see cref="PartyDescription.Roles"/> of a local party are the asymmetric
+/// features it is: a remote to which a local party relays an asymmetric feature must announce it (an error when it
+/// announces its description, a warning for its last known one).
 /// <list type="bullet">
 ///   <item>
 ///   A local party's public URL is its "Local:PublicUrl" configuration (an invalid one fails the setup). The root party's
@@ -64,7 +66,7 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
             }
             else
             {
-                await ((LocalParty)local).SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default ) ).ConfigureAwait( false );
+                await ((LocalParty)local).SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default, ApplicationIdentityService.GetRoles( local ) ) ).ConfigureAwait( false );
             }
         }
         foreach( var remote in context.GetAllRemotes() )
@@ -85,7 +87,7 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
         if( party is TenantDomainParty domain )
         {
             if( !TryReadPublicUrl( context.Monitor, domain, out var url ) ) return false;
-            await domain.SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default ) ).ConfigureAwait( false );
+            await domain.SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default, ApplicationIdentityService.GetRoles( domain ) ) ).ConfigureAwait( false );
             foreach( var r in domain.Remotes ) ((RemoteParty)r).LoadDescription( context.Monitor );
         }
         return true;
@@ -126,7 +128,8 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
             {
                 c.Contribute( builder );
             }
-            await ApplicationIdentityService.SetLocalDescriptionAsync( monitor, builder.Build() ).ConfigureAwait( false );
+            var description = builder.Build().WithRoles( ApplicationIdentityService.GetRoles( ApplicationIdentityService ) );
+            await ApplicationIdentityService.SetLocalDescriptionAsync( monitor, description ).ConfigureAwait( false );
         }
         finally
         {
