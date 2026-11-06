@@ -146,6 +146,37 @@ public class FileStoreTests
     }
 
     [Test]
+    public async Task a_file_that_is_gone_reads_as_null_and_a_reader_never_blocks_a_writer_Async()
+    {
+        await using var s = CreateService( storeRootPath: null );
+        var store = s.SharedFileStore;
+        var folder = store.FolderPath.AppendPart( Guid.NewGuid().ToString() );
+        var file = folder.AppendPart( "Data.bin" );
+
+        store.TryReadAllBytes( file ).ShouldBeNull( "The folder doesn't exist." );
+        StoreFileReader.TryReadAllBytes( file ).ShouldBeNull();
+        Should.Throw<DirectoryNotFoundException>( () => store.ReadAllBytes( file ) );
+
+        store.WriteAllBytes( file, new byte[] { 1, 2 } );
+        store.ReadAllBytes( file ).ShouldBe( [1, 2] );
+        StoreFileReader.ReadAllBytes( file ).ShouldBe( [1, 2] );
+
+        // A reader that opened the file the way the store reads it doesn't prevent its replacement nor its trash.
+        using( var reader = new FileStream( file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete ) )
+        {
+            store.WriteAllBytes( file, new byte[] { 3 } );
+            store.ReadAllBytes( file ).ShouldBe( [3] );
+            store.TryTrash( TestHelper.Monitor, file ).ShouldBeTrue();
+            File.Exists( file ).ShouldBeFalse();
+            reader.ReadByte().ShouldBe( 1, "The reader still reads the content it opened." );
+        }
+        store.TryReadAllBytes( file ).ShouldBeNull( "The file is gone." );
+        StoreFileReader.TryReadAllBytes( file ).ShouldBeNull();
+        Should.Throw<FileNotFoundException>( () => store.ReadAllBytes( file ) );
+        Directory.Delete( folder, recursive: true );
+    }
+
+    [Test]
     public async Task paths_outside_the_store_are_rejected_Async()
     {
         await using var s = CreateService( storeRootPath: null );

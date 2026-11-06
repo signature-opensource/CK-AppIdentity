@@ -60,6 +60,15 @@ Typically, this is where you'll find a Remote's public keys.
 If different local applications (different processes) interact with the same remote, then the work of obtaining public keys
 will be "mutualized": this directory is a cache that **can be updated by any of the local applications** as they interact with it.
 
+Since the files of a store can change under a reader, they are read and written through the store:
+- `WriteAllBytes` (or `WriteAtomically`) replaces a file atomically: a reader sees the previous file or the new one,
+  never a partial one.
+- `ReadAllBytes` (or `OpenReadStream`) opens the file shared for reading and deleting: on Windows, a reader that doesn't
+  share the deletion prevents the file from being replaced or trashed. Code outside the store (a test, a tool) reads
+  with [`StoreFileReader`](StoreFileReader.cs).
+- A file listed in a folder can be gone when it is read: `TryReadAllBytes` returns null for a file that is gone.
+  It is not an invalid file, it must not be treated like one (a list of files is read again instead).
+
 Each LocalParty exposes a **LocalFileStore**: this space is dedicated to information that is (and should be) of interest only to
 the local Party. 
 
