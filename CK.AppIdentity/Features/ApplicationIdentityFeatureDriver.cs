@@ -313,6 +313,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// This is called in the same order as this driver has been instantiated: any dependent feature drivers have been initialized.
     /// </para>
     /// <para>
+    /// The <paramref name="party"/> being set up is not yet in the <see cref="ILocalParty.Remotes"/> of its local party: a driver
+    /// that looks for remotes there doesn't see it and must handle this party directly.
+    /// </para>
+    /// <para>
     /// The setup of a party fails if any driver returns false or throws. All the drivers are called anyway: when it fails,
     /// <see cref="TeardownDynamicRemoteAsync(FeatureLifetimeContext, IOwnedParty)"/> is NOT called for this party. A driver that
     /// must undo its work registers a <see cref="BasicTrampoline.OnError(System.Action)"/> handler on the <see cref="FeatureLifetimeContext.Trampoline"/>
