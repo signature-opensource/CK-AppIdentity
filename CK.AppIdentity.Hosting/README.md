@@ -4,13 +4,13 @@ One extension method. It reads the `"CK-AppIdentity"` configuration section, reg
 configuration as a singleton, and initializes `CoreApplicationIdentity` from it.
 
 ```csharp
-public static T AddApplicationIdentityServiceConfiguration<T>( this T builder,
-                                                               string? contextDescriptor = null )
-    where T : IHostApplicationBuilder
+public static HostApplicationBuilder AddApplicationIdentityServiceConfiguration( this HostApplicationBuilder builder,
+                                                                                 string? contextDescriptor = null )
 ```
 
-Note the constraint: it is `IHostApplicationBuilder`, so it works for a web application, a worker and a
-console alike. It is not on `IHostBuilder`.
+It extends the `HostApplicationBuilder` of a host: a party is a Generic Host (its web servers are the "HttpEndpoint"
+feature, see CK.AppIdentity.HttpEndpoint), and a builder created inside a running host (the web application of an
+endpoint) must not initialize the identity.
 
 ## What it actually does.
 

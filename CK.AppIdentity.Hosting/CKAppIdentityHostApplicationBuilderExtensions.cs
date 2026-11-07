@@ -6,7 +6,7 @@ using System;
 namespace Microsoft.Extensions.Hosting;
 
 /// <summary>
-/// Adds extension methods on <see cref="IHostApplicationBuilder"/>.
+/// Adds extension methods on the <see cref="HostApplicationBuilder"/> of a host.
 /// </summary>
 public static class CKAppIdentityHostApplicationBuilderExtensions
 {
@@ -18,16 +18,17 @@ public static class CKAppIdentityHostApplicationBuilderExtensions
     /// This can called multiple times: the last <paramref name="contextDescriptor"/> wins.
     /// </para>
     /// </summary>
-    /// <param name="builder">This application builder</param>
+    /// <param name="builder">The builder of the host.</param>
     /// <param name="contextDescriptor">Defaults to <see cref="Environment.CommandLine"/>.</param>
     /// <returns>This builder.</returns>
-    public static T AddApplicationIdentityServiceConfiguration<T>( this T builder, string? contextDescriptor = null ) where T : IHostApplicationBuilder
+    public static HostApplicationBuilder AddApplicationIdentityServiceConfiguration( this HostApplicationBuilder builder, string? contextDescriptor = null )
     {
         // The default ContextDescriptor is the command line.
         contextDescriptor ??= Environment.CommandLine;
 
         var uniqueKey = typeof( ApplicationIdentityServiceConfiguration );
-        if( builder.Properties.TryGetValue( uniqueKey, out var existingCtx ) )
+        var properties = ((IHostApplicationBuilder)builder).Properties;
+        if( properties.TryGetValue( uniqueKey, out var existingCtx ) )
         {
             // Useless if CoreApplicationIdentity is already initialized.
             if( !CoreApplicationIdentity.IsInitialized )
@@ -37,20 +38,20 @@ public static class CKAppIdentityHostApplicationBuilderExtensions
                 {
                     builder.GetBuilderMonitor().Info( $"Change identity ContextDescriptor from '{exists}' to '{contextDescriptor}'." );
                 }
-                builder.Properties[uniqueKey] = contextDescriptor;
+                properties[uniqueKey] = contextDescriptor;
             }
             return builder;
         }
-        builder.Properties.Add( uniqueKey, contextDescriptor );
+        properties.Add( uniqueKey, contextDescriptor );
         builder.AddAutoConfigure( DoConfigure );
         return builder;
 
-        static void DoConfigure( IActivityMonitor monitor, T builder )
+        static void DoConfigure( IActivityMonitor monitor, HostApplicationBuilder builder )
         {
             var config = ApplicationIdentityServiceConfiguration.Create( monitor, builder.Environment, builder.Configuration.GetSection( "CK-AppIdentity" ) );
             if( config != null )
             {
-                string contextDescriptor = (string)builder.Properties[typeof( ApplicationIdentityServiceConfiguration )];
+                string contextDescriptor = (string)((IHostApplicationBuilder)builder).Properties[typeof( ApplicationIdentityServiceConfiguration )];
                 if( CoreApplicationIdentity.TryConfigure( identity =>
                 {
                     identity.DomainName = config.DomainName;
