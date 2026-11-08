@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageReference Include="CK.StObj.Engine" Version="36.0.0-0.cris-auth.1.ci.39" />
     <!-- The options of an owner are ordered by a ResourceSpace island. -->
-    <PackageReference Include="CK.ResourceSpace" Version="3.0.0-0.cris-auth.1.ci.40" />
+    <PackageReference Include="CK.ResourceSpace" Version="3.0.0-0.cris-auth.1.ci.41" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CK.AppIdentity\CK.AppIdentity.csproj" />
