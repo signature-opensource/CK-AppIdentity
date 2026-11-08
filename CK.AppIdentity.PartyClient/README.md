@@ -60,3 +60,12 @@ applies to `TClient` and to the clients derived from it. See
 domains) in its description (`PartyDescription.ClientApplications`, see the description of a party in
 [CK.AppIdentity](../CK.AppIdentity/README.md)): the clients that have a `PartyClient.Description` (a local tool has
 none: it is not announced).
+
+## The facts of a client
+
+A type that a client is built from states facts about it with [`[PartyClientFact( "..." )]`](PartyClientFactAttribute.cs)
+(repeatable, not inherited): a TypeScript package that is an approval page states `[PartyClientFact( "Enlistment" )]`.
+The engine that builds a kind of client unions the facts of the types each client is built from, once per build (the
+TypeScript engine does it for the client applications, from their selected packages). The result is a `CKTrait` of
+`ClientApplicationDescription.FactContext` ("Admin|Enlistment"): the `Facts` of the client's description, announced
+with it. Nothing is configured, nothing is computed at run time: what a client is comes from what it is built from.

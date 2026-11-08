@@ -194,6 +194,27 @@ public class PartyDescriptionTests
     }
 
     [Test]
+    public void the_facts_of_a_client_application_are_a_trait_compared_and_persisted()
+    {
+        var facts = ClientApplicationDescription.FactContext.FindOrCreate( "Enlistment|Admin" );
+        var app = new ClientApplicationDescription( "App", "/", facts );
+        app.Facts.ToString().ShouldBe( "Admin|Enlistment", "A trait is sorted." );
+        app.ShouldBe( new ClientApplicationDescription( "App", "/", ClientApplicationDescription.FactContext.FindOrCreate( "Admin|Enlistment" ) ) );
+        app.ShouldNotBe( new ClientApplicationDescription( "App", "/" ), "The facts are compared." );
+        new ClientApplicationDescription( "App", "/" ).Facts.IsEmpty.ShouldBeTrue();
+        app.ToString().ShouldBe( "App (/, Facts: Admin|Enlistment)" );
+        Should.Throw<ArgumentException>( () => new ClientApplicationDescription( "App", "/", CKTraitContext.Create( "Other" ).FindOrCreate( "X" ) ) );
+
+        var d = new PartyDescription( null, [app, new ClientApplicationDescription( "MiniApp", "/mini-app" )] );
+        using var stream = new MemoryStream();
+        using( var w = new System.Text.Json.Utf8JsonWriter( stream ) ) d.Write( w );
+        using var doc = System.Text.Json.JsonDocument.Parse( stream.ToArray() );
+        PartyDescription.TryRead( doc.RootElement, out var back, out _ ).ShouldBeTrue();
+        back.ShouldBe( d );
+        back.ClientApplications[0].Facts.ShouldBeSameAs( facts );
+    }
+
+    [Test]
     public void the_roles_are_sorted_deduplicated_and_persisted()
     {
         var d = new PartyDescription( null, default, ["B", "A", "B"] );

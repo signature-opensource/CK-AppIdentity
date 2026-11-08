@@ -269,4 +269,22 @@ public class PartyClientFeatureTests
         domain.Description.GetClientApplicationUrl( "Admin" ).ShouldBe( "https://d1.acme.com/admin" );
         await host.StopAsync( cancel );
     }
+
+    [TestCase( "Enlistment", true )]
+    [TestCase( "", false )]
+    [TestCase( "A|B", false )]
+    [TestCase( "A B", false )]
+    public void a_fact_is_an_atomic_name( string fact, bool isValid )
+    {
+        if( isValid )
+        {
+            var a = new PartyClientFactAttribute( fact );
+            a.Trait.IsAtomic.ShouldBeTrue();
+            a.Trait.Context.ShouldBeSameAs( ClientApplicationDescription.FactContext );
+        }
+        else
+        {
+            Should.Throw<ArgumentException>( () => new PartyClientFactAttribute( fact ) );
+        }
+    }
 }

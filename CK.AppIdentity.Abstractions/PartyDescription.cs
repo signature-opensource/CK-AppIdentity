@@ -130,6 +130,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             w.WriteStartObject();
             w.WriteString( "Name", a.Name );
             w.WriteString( "RequestPath", a.RequestPath );
+            if( !a.Facts.IsEmpty ) w.WriteString( "Facts", a.Facts.ToString() );
             w.WriteEndObject();
         }
         w.WriteEndArray();
@@ -174,7 +175,10 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                     error = "Invalid client application: a Name and a RequestPath that starts with '/' are expected.";
                     return false;
                 }
-                apps.Add( new ClientApplicationDescription( name, path ) );
+                var facts = app.TryGetProperty( "Facts", out var f ) && f.ValueKind == JsonValueKind.String
+                                ? ClientApplicationDescription.FactContext.FindOrCreate( f.GetString() )
+                                : null;
+                apps.Add( new ClientApplicationDescription( name, path, facts ) );
             }
         }
         List<string>? roles = null;
@@ -240,6 +244,16 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         }
 
         /// <summary>
+        /// Adds a client application, with its facts.
+        /// </summary>
+        /// <param name="application">The client application.</param>
+        public void AddClientApplication( ClientApplicationDescription application )
+        {
+            Throw.CheckNotNullArgument( application );
+            _apps.Add( application );
+        }
+
+        /// <summary>
         /// Builds the description.
         /// </summary>
         /// <returns>The description.</returns>
@@ -248,14 +262,69 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
 }
 
 /// <summary>
-/// A client application of a party (see <see cref="PartyDescription.ClientApplications"/>).
+/// A client application of a party (see <see cref="PartyDescription.ClientApplications"/>): its name, its request path
+/// and its facts.
 /// </summary>
-/// <param name="Name">The client application name.</param>
-/// <param name="RequestPath">Its request path: "/" for the default one, "/mini-app" for another one.</param>
-public sealed record ClientApplicationDescription( string Name, string RequestPath )
+public sealed class ClientApplicationDescription : IEquatable<ClientApplicationDescription>
 {
+    /// <summary>
+    /// The context of the <see cref="Facts"/> of the client applications ("PartyClientFact", separator '|'). The facts of a
+    /// client come from what it is built from: the PartyClientFact attribute of CK.AppIdentity.PartyClient on its types.
+    /// </summary>
+    public static readonly CKTraitContext FactContext = CKTraitContext.Create( "PartyClientFact" );
+
+    /// <summary>
+    /// Initializes a new client application description.
+    /// </summary>
+    /// <param name="name">The client application name.</param>
+    /// <param name="requestPath">Its request path: "/" for the default one, "/mini-app" for another one.</param>
+    /// <param name="facts">Its facts (a trait of the <see cref="FactContext"/>). Null for none.</param>
+    public ClientApplicationDescription( string name, string requestPath, CKTrait? facts = null )
+    {
+        Throw.CheckNotNullOrWhiteSpaceArgument( name );
+        Throw.CheckNotNullArgument( requestPath );
+        Throw.CheckArgument( facts == null || facts.Context == FactContext );
+        Name = name;
+        RequestPath = requestPath;
+        Facts = facts ?? FactContext.EmptyTrait;
+    }
+
+    /// <summary>
+    /// Gets the client application name.
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets its request path: "/" for the default one, "/mini-app" for another one.
+    /// </summary>
+    public string RequestPath { get; }
+
+    /// <summary>
+    /// Gets its facts: what the client is, stated by what it is built from (the PartyClientFact attribute of
+    /// CK.AppIdentity.PartyClient). Never null, <see cref="CKTrait.IsEmpty"/> when it has none.
+    /// </summary>
+    public CKTrait Facts { get; }
+
     /// <summary>
     /// Gets whether this is the default client application of the party (served at "/").
     /// </summary>
     public bool IsDefault => RequestPath == "/";
+
+    /// <inheritdoc />
+    public bool Equals( ClientApplicationDescription? other ) => other != null
+                                                                 && Name == other.Name
+                                                                 && RequestPath == other.RequestPath
+                                                                 && Facts == other.Facts;
+
+    /// <inheritdoc />
+    public override bool Equals( object? obj ) => Equals( obj as ClientApplicationDescription );
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine( Name, RequestPath, Facts );
+
+    /// <summary>
+    /// Returns "Name (RequestPath)", followed by the facts when there are some.
+    /// </summary>
+    /// <returns>A readable string.</returns>
+    public override string ToString() => Facts.IsEmpty ? $"{Name} ({RequestPath})" : $"{Name} ({RequestPath}, Facts: {Facts})";
 }

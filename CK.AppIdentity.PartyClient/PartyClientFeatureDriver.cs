@@ -81,7 +81,7 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         if( feature == null ) return;
         foreach( var c in feature.Clients )
         {
-            if( c.Description is { } d ) builder.AddClientApplication( d.Name, d.RequestPath );
+            if( c.Description is { } d ) builder.AddClientApplication( d );
         }
     }
 
