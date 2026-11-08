@@ -7,7 +7,7 @@ namespace CK.AppIdentity;
 /// that is the only base class to use to implement a feature driver.
 /// </summary>
 [IsMultiple]
-public interface IApplicationIdentityFeatureDriver : ISingletonAutoService
+public interface IApplicationIdentityFeatureDriver : ISingletonAutoService, IPartyComponent
 {
     /// <summary>
     /// Gets this feature name.

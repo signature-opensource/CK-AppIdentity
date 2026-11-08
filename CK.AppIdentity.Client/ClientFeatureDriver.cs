@@ -1,0 +1,142 @@
+using CK.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace CK.AppIdentity;
+
+/// <summary>
+/// The "Client" feature: the clients of the local parties (the root and the tenant domains, initial or dynamic).
+/// It is allowed by default: "DisallowFeatures": "Client" makes a party without clients.
+/// <para>
+/// A client is built by a package (an <see cref="IPartyClientFactory"/> knows the names of the clients it builds) and
+/// <b>declared</b> by a party, in its "Local:Client:{Name}" section: only the configuration says which party uses which
+/// client. The declaration holds what the build can't know (the deployment facts, the options); the rest is derived.
+/// </para>
+/// <list type="bullet">
+///   <item>A declared client that no package builds is an error.</item>
+///   <item>A client whose package requires a feature that the party doesn't allow is an error.</item>
+///   <item>A built client that a party doesn't declare is not a client of this party (an information says what to add).</item>
+///   <item>A party that doesn't allow the feature but declares clients is an error.</item>
+/// </list>
+/// </summary>
+public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
+{
+    /// <summary>
+    /// The configuration section of the clients, in the "Local" section of a local party.
+    /// </summary>
+    public const string ClientSectionName = "Client";
+
+    readonly IReadOnlyList<IPartyClientFactory> _factories;
+
+    /// <summary>
+    /// Initializes a new <see cref="ClientFeatureDriver"/>.
+    /// </summary>
+    /// <param name="s">The application identity service.</param>
+    /// <param name="factories">The client factories.</param>
+    public ClientFeatureDriver( ApplicationIdentityService s, IEnumerable<IPartyClientFactory> factories )
+        : base( s, isAllowedByDefault: true )
+    {
+        _factories = factories.ToArray();
+    }
+
+    /// <inheritdoc />
+    protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
+    {
+        if( !TryGetBuiltClients( context.Monitor, out var built ) ) return Task.FromResult( false );
+        bool success = true;
+        foreach( var local in context.GetAllLocals() )
+        {
+            success &= SetupLocal( context.Monitor, local, built );
+        }
+        return Task.FromResult( success );
+    }
+
+    /// <inheritdoc />
+    protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+    {
+        // A dynamic tenant domain has its clients. A remote has none: its clients are known by its description.
+        if( party is not ILocalParty local ) return Task.FromResult( true );
+        if( !TryGetBuiltClients( context.Monitor, out var built ) ) return Task.FromResult( false );
+        return Task.FromResult( SetupLocal( context.Monitor, local, built ) );
+    }
+
+    /// <inheritdoc />
+    protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+
+    bool TryGetBuiltClients( IActivityMonitor monitor, out Dictionary<string, IPartyClientFactory> built )
+    {
+        built = new Dictionary<string, IPartyClientFactory>( StringComparer.Ordinal );
+        bool success = true;
+        foreach( var f in _factories )
+        {
+            foreach( var name in f.ClientNames )
+            {
+                if( !built.TryAdd( name, f ) )
+                {
+                    monitor.Error( $"The client '{name}' is built by '{built[name].GetType().ToCSharpName()}' and by '{f.GetType().ToCSharpName()}': a client name is built by one package only." );
+                    success = false;
+                }
+            }
+        }
+        return success;
+    }
+
+    bool SetupLocal( IActivityMonitor monitor, ILocalParty local, Dictionary<string, IPartyClientFactory> built )
+    {
+        // The declaration is read on the party only (no "Defaults"): a party declares its own clients.
+        var section = local.LocalConfiguration.Configuration.TryGetSection( ClientSectionName );
+        var declared = section?.GetChildren() ?? [];
+        if( !IsAllowedFeature( local ) )
+        {
+            if( declared.Count > 0 )
+            {
+                monitor.Error( $"'{local.FullName}' declares clients ('{declared.Select( c => c.Key ).Concatenate( "', '" )}') but doesn't allow the '{FeatureName}' feature." );
+                return false;
+            }
+            return true;
+        }
+        bool success = true;
+        var clients = new List<PartyClient>( declared.Count );
+        foreach( var c in declared )
+        {
+            if( !built.TryGetValue( c.Key, out var factory ) )
+            {
+                monitor.Error( $"The client '{c.Key}' is declared by '{local.FullName}' but no package builds it." );
+                success = false;
+                continue;
+            }
+            var missing = factory.RequiredFeatures.Where( d => !d.IsAllowedFeature( local ) ).Select( d => d.FeatureName ).ToList();
+            if( missing.Count > 0 )
+            {
+                monitor.Error( $"The client '{c.Key}' of '{local.FullName}' requires the feature(s) '{missing.Concatenate( "', '" )}' that '{local.FullName}' doesn't allow." );
+                success = false;
+                continue;
+            }
+            var client = factory.Create( monitor, local, c.Key, c );
+            if( client == null )
+            {
+                success = false;
+                continue;
+            }
+            if( client.Name != c.Key || client.Party != local )
+            {
+                monitor.Error( $"The factory '{factory.GetType().ToCSharpName()}' created '{client}' instead of the client '{c.Key}' of '{local.FullName}'." );
+                success = false;
+                continue;
+            }
+            clients.Add( client );
+        }
+        if( !success ) return false;
+        foreach( var name in built.Keys.Where( n => !clients.Any( c => c.Name == n ) ) )
+        {
+            monitor.Info( $"The client '{name}' is built but not declared by '{local.FullName}': it is not a client of this party. Add \"Local:{ClientSectionName}:{name}\" to its configuration to make it one." );
+        }
+        local.AddFeature( new ClientFeature( local, clients ) );
+        return true;
+    }
+}

@@ -114,3 +114,7 @@ This package only exposes how a party carries them (`IParty.AddFeature`, `GetFea
 `GetRequiredFeature<T>`). The feature drivers that create and configure them are implemented by `CK.AppIdentity`,
 which depends on this package: see its [Features](../CK.AppIdentity/Features/README.md) documentation.
 
+**The party components.** `IPartyComponent` marks a configurable component of a party: the feature drivers
+(`IApplicationIdentityFeatureDriver` is one) and the clients of a party (the `PartyClient` of CK.AppIdentity.Client).
+A party component is configured in its party's configuration and can receive options from other packages.
+
