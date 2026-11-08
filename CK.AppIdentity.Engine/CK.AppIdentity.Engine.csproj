@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <Description>The engine of CK.AppIdentity: generates the PartyComponentOptionDirectory (the ordered options of each party component owner type).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CK.StObj.Engine" Version="36.0.0-0.cris-auth.1.ci.39" />
+    <!-- The options of an owner are ordered by a ResourceSpace island. -->
+    <PackageReference Include="CK.ResourceSpace" Version="3.0.0-0.cris-auth.1.ci.40" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CK.AppIdentity\CK.AppIdentity.csproj" />
+  </ItemGroup>
+</Project>

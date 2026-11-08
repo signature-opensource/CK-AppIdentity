@@ -4,6 +4,8 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The generated PartyComponentOptionDirectory (ContextBoundDelegation). -->
+    <PackageReference Include="CK.StObj.Model" Version="36.0.0-0.cris-auth.1.ci.39" />
     <ProjectReference Include="..\CK.AppIdentity.Abstractions\CK.AppIdentity.Abstractions.csproj" />
   </ItemGroup>
 </Project>

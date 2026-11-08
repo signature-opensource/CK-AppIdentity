@@ -47,6 +47,13 @@ The rules fail closed:
 
 The declarations are read on the party only: a "Defaults" section doesn't declare clients.
 
+## The options of a client
+
+A package can add an option to a kind of client: a class decorated with `[PartyClientOption]`
+([`PartyClientOptionAttribute`](PartyClientOptionAttribute.cs)) that implements `IPartyComponentOption<TClient>`. It
+applies to `TClient` and to the clients derived from it. See
+[the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
+
 ## The description of the party
 
 [`PartyClientDescriptionContributor`](PartyClientDescriptionContributor.cs) announces the clients of the root party in

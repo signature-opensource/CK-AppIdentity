@@ -101,6 +101,10 @@ store of a remote, exposing a third-party API, carrying a transport - arrives as
 are described in [`Features/README.md`](Features/README.md), which also covers the "Package First"
 approach and the feature configuration.
 
+Other packages can add options to a feature driver (or to any party component): the
+[`PartyComponentOptionDirectory`](PartyComponentOptions/README.md) knows them, in their order, and selects those that a
+party's configuration enables.
+
 [`BasicTrampoline`](Impl/BasicTrampoline/README.md) documents the helper the feature setup uses to run
 ordered, possibly-failing steps.
 
@@ -157,5 +161,6 @@ by a remote always carries the remote's identifier.
 
 ## Requires.
 
-- `CK.AppIdentity.Abstractions`, and nothing else directly: `CK.AppIdentity.Configuration` and
-  `Microsoft.Extensions.Hosting.Abstractions` arrive through it.
+- `CK.AppIdentity.Abstractions`: `CK.AppIdentity.Configuration` and `Microsoft.Extensions.Hosting.Abstractions` arrive
+  through it.
+- `CK.StObj.Model`: the `PartyComponentOptionDirectory` is implemented by the engine (CK.AppIdentity.Engine).
