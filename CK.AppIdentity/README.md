@@ -138,10 +138,12 @@ The "PartyDescription" feature ([`PartyDescriptionFeatureDriver`](PartyDescripti
 static feature allowed by default) sets it:
 - **A local party's public URL is its `Local:PublicUrl`** configuration: an absolute `http` or `https` URL without path,
   query nor fragment (`PartyDescription.TryParsePublicUrl`); an invalid one fails the start.
-- **The root party's description is completed by the packages** with an `IPartyDescriptionContributor`: the HTTP
-  endpoints give the public URL when `Local:PublicUrl` is not configured, the client applications give their names
-  and request paths. It is computed when the party is set up, then after each change once the host has started:
-  `ILocalParty.DescriptionChanged` is raised.
+- **The feature drivers complete the description of every local party** (the root and the tenant domains alike): a
+  driver overrides `ApplicationIdentityFeatureDriver.ContributeDescription( party, builder )`. The HTTP endpoints give
+  the public URL of the root party when `Local:PublicUrl` is not configured, the "Client" feature gives the client
+  applications of each party. It is computed once all the drivers have set up the party, in their order, then each
+  time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
+  changed.
 - **The roles of a local party are the [asymmetric features](Features/README.md#asymmetric-features) it is** (their
   Local side is installed and its `Local` allows them). A local party that relays an asymmetric feature to a remote
   checks that the remote announces it. No other feature name is announced: the description is what the other parties

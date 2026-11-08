@@ -81,7 +81,7 @@ public interface IParty
 
     /// <summary>
     /// Gets what this party states about itself: its public URL and its client applications. A local party's description
-    /// comes from its "Local:PublicUrl" configuration and the <see cref="IPartyDescriptionContributor"/> (see
+    /// comes from its "Local:PublicUrl" configuration and the contributions of the feature drivers (see
     /// <see cref="ILocalParty.DescriptionChanged"/>); a remote's is its last announcement (see
     /// <see cref="IRemoteParty.SetDescription"/>). <see cref="PartyDescription.Empty"/> until it is known.
     /// </summary>

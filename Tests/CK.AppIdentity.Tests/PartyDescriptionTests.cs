@@ -17,25 +17,34 @@ namespace CK.AppIdentity.Tests;
 [TestFixture]
 public class PartyDescriptionTests
 {
-    public sealed class TestContributor : IPartyDescriptionContributor
+    // Contributes to the root party's description, once it has set it up: the description driver, that comes first,
+    // describes the parties once all the drivers have set them up.
+    public sealed class TestContributorFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
-        Action? _onChanged;
+        bool _isSetup;
+
+        public TestContributorFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
 
         public Uri? PublicUrl { get; set; }
 
         public string[] Applications { get; set; } = ["App:/"];
 
-        public void Change( Uri? publicUrl, params string[] applications )
+        public Task ChangeAsync( Uri? publicUrl, params string[] applications )
         {
             PublicUrl = publicUrl;
             Applications = applications;
-            _onChanged?.Invoke();
+            return OnDescriptionChangedAsync( TestHelper.Monitor, ApplicationIdentityService );
         }
 
-        public void Activate( IActivityMonitor monitor, Action onChanged ) => _onChanged = onChanged;
-
-        public void Contribute( PartyDescription.Builder builder )
+        protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
         {
+            _isSetup = true;
+            return Task.FromResult( true );
+        }
+
+        protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+        {
+            if( party != ApplicationIdentityService || !_isSetup ) return;
             builder.PublicUrl ??= PublicUrl;
             foreach( var a in Applications )
             {
@@ -58,8 +67,8 @@ public class PartyDescriptionTests
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         builder.Services.AddSingleton<PartyDescriptionFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
-        builder.Services.AddSingleton<TestContributor>();
-        builder.Services.AddSingleton<IPartyDescriptionContributor>( sp => sp.GetRequiredService<TestContributor>() );
+        builder.Services.AddSingleton<TestContributorFeatureDriver>();
+        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<TestContributorFeatureDriver>() );
         foreach( var t in drivers )
         {
             builder.Services.AddSingleton( t );
@@ -97,7 +106,7 @@ public class PartyDescriptionTests
     public async Task the_configured_public_URL_wins_and_the_contributions_complete_the_description_Async( CancellationToken cancel )
     {
         using var host = BuildHost( c => c["Local:PublicUrl"] = "https://acme.com" );
-        var contributor = host.Services.GetRequiredService<TestContributor>();
+        var contributor = host.Services.GetRequiredService<TestContributorFeatureDriver>();
         contributor.PublicUrl = new Uri( "http://localhost:5300" );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
@@ -107,7 +116,7 @@ public class PartyDescriptionTests
         // A changed contribution changes the description, and DescriptionChanged is raised.
         var changed = new TaskCompletionSource<PartyDescription>( TaskCreationOptions.RunContinuationsAsynchronously );
         root.DescriptionChanged.Async += ( monitor, p, c ) => { changed.TrySetResult( p.Description ); return Task.CompletedTask; };
-        contributor.Change( null, "App:/", "MiniApp:/mini-app" );
+        await contributor.ChangeAsync( null, "App:/", "MiniApp:/mini-app" );
         var d = await changed.Task.WaitAsync( cancel );
         d.GetClientApplicationUrl( "MiniApp" ).ShouldBe( "https://acme.com/mini-app" );
         await host.StopAsync( cancel );
@@ -118,7 +127,7 @@ public class PartyDescriptionTests
     public async Task without_configuration_the_contributed_public_URL_is_used_Async( CancellationToken cancel )
     {
         using var host = BuildHost();
-        host.Services.GetRequiredService<TestContributor>().PublicUrl = new Uri( "http://localhost:5300" );
+        host.Services.GetRequiredService<TestContributorFeatureDriver>().PublicUrl = new Uri( "http://localhost:5300" );
         await host.StartAsync( cancel );
         host.Services.GetRequiredService<ApplicationIdentityService>().Description.GetClientApplicationUrl().ShouldBe( "http://localhost:5300" );
         await host.StopAsync( cancel );

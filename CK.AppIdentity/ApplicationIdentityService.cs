@@ -26,6 +26,8 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
 {
     readonly AppIdentityAgent _agent;
     internal readonly List<ApplicationIdentityFeatureDriver> _builders;
+    // Set by the PartyDescriptionFeatureDriver's constructor.
+    internal PartyDescriptionFeatureDriver? _descriptionDriver;
     internal TaskCompletionSource _initialization;
     readonly internal PerfectEventSender<IOwnedParty> _allPartyChanged;
     internal TenantDomainParty[] _domains;

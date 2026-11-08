@@ -14,10 +14,12 @@ namespace CK.AppIdentity;
 /// announces its description, a warning for its last known one).
 /// <list type="bullet">
 ///   <item>
-///   A local party's public URL is its "Local:PublicUrl" configuration (an invalid one fails the setup). The root party's
-///   description is completed by the <see cref="IPartyDescriptionContributor"/> of the packages (the URL of the HTTP
-///   endpoints when "Local:PublicUrl" is not configured, the client applications): it is computed when the party is
-///   set up, then each time a contribution changes once the host has started (<see cref="ILocalParty.DescriptionChanged"/>).
+///   The description of a local party (the root and the tenant domains alike) starts with its "Local:PublicUrl"
+///   configuration (an invalid one fails the setup), then each feature driver contributes to it, in the order of the
+///   drivers (<see cref="ApplicationIdentityFeatureDriver.ContributeDescription(ILocalParty, PartyDescription.Builder)"/>):
+///   the URL of the HTTP endpoints when "Local:PublicUrl" is not configured, the client applications... It is computed
+///   once all the drivers have set up the party, then each time a driver signals a change
+///   (<see cref="ILocalParty.DescriptionChanged"/> is raised when it changed).
 ///   </item>
 ///   <item>
 ///   A remote's description is its last announcement (<see cref="IRemoteParty.SetDescription"/>), persisted in its
@@ -32,80 +34,76 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
     /// </summary>
     public const string PublicUrlKey = "PublicUrl";
 
-    readonly IReadOnlyList<IPartyDescriptionContributor> _contributors;
-    readonly SemaphoreSlim _rootLock;
-    Uri? _rootPublicUrl;
+    readonly SemaphoreSlim _lock;
+    volatile bool _ready;
 
     /// <summary>
     /// Initializes a new <see cref="PartyDescriptionFeatureDriver"/>.
     /// </summary>
     /// <param name="s">The application identity service.</param>
-    /// <param name="contributors">The contributors to the root party's description.</param>
-    public PartyDescriptionFeatureDriver( ApplicationIdentityService s, IEnumerable<IPartyDescriptionContributor> contributors )
+    public PartyDescriptionFeatureDriver( ApplicationIdentityService s )
         : base( s, isAllowedByDefault: true )
     {
-        _contributors = contributors.ToArray();
-        _rootLock = new SemaphoreSlim( 1 );
+        _lock = new SemaphoreSlim( 1 );
+        s._descriptionDriver = this;
     }
 
     /// <inheritdoc />
-    protected internal override async Task<bool> SetupAsync( FeatureLifetimeContext context )
+    protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context )
     {
         bool success = true;
-        foreach( var local in context.GetAllLocals() )
+        var locals = context.GetAllLocals().ToList();
+        foreach( var local in locals )
         {
-            if( !TryReadPublicUrl( context.Monitor, local, out var url ) )
-            {
-                success = false;
-                continue;
-            }
-            if( local == ApplicationIdentityService )
-            {
-                _rootPublicUrl = url;
-                await SetRootDescriptionAsync( context.Monitor ).ConfigureAwait( false );
-            }
-            else
-            {
-                await ((LocalParty)local).SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default, ApplicationIdentityService.GetRoles( local ) ) ).ConfigureAwait( false );
-            }
+            success &= TryReadPublicUrl( context.Monitor, local, out _ );
         }
         foreach( var remote in context.GetAllRemotes() )
         {
             ((RemoteParty)remote).LoadDescription( context.Monitor );
         }
-        return success;
+        if( success )
+        {
+            // Deferred: the drivers that come after this one set up the parties first.
+            context.Trampoline.Add( () => DescribeInitialAsync( context.Monitor, locals ) );
+        }
+        return Task.FromResult( success );
     }
 
     /// <inheritdoc />
-    protected override async Task<bool> SetupDynamicFeatureRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+    protected override Task<bool> SetupDynamicFeatureRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
     {
         if( party is RemoteParty remote )
         {
             remote.LoadDescription( context.Monitor );
-            return true;
+            return Task.FromResult( true );
         }
         if( party is TenantDomainParty domain )
         {
-            if( !TryReadPublicUrl( context.Monitor, domain, out var url ) ) return false;
-            await domain.SetLocalDescriptionAsync( context.Monitor, new PartyDescription( url, default, ApplicationIdentityService.GetRoles( domain ) ) ).ConfigureAwait( false );
+            if( !TryReadPublicUrl( context.Monitor, domain, out _ ) ) return Task.FromResult( false );
             foreach( var r in domain.Remotes ) ((RemoteParty)r).LoadDescription( context.Monitor );
+            // Deferred: the drivers that come after this one set up the domain first.
+            context.Trampoline.Add( () => DescribeAsync( context.Monitor, [domain] ) );
         }
-        return true;
-    }
-
-    /// <inheritdoc />
-    protected internal override async Task OnHostStartedAsync( IActivityMonitor monitor, CancellationToken cancel )
-    {
-        foreach( var c in _contributors )
-        {
-            c.Activate( monitor, OnContributionChanged );
-        }
-        // The contributions may have changed since the setup (the HTTP endpoints are started).
-        await SetRootDescriptionAsync( monitor ).ConfigureAwait( false );
+        return Task.FromResult( true );
     }
 
     /// <inheritdoc />
     protected internal override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+
+    async Task DescribeInitialAsync( IActivityMonitor monitor, IEnumerable<ILocalParty> locals )
+    {
+        await DescribeAsync( monitor, locals ).ConfigureAwait( false );
+        _ready = true;
+    }
+
+    internal Task RefreshAsync( IActivityMonitor monitor, ILocalParty? party )
+    {
+        if( !_ready ) return Task.CompletedTask;
+        IEnumerable<ILocalParty> locals = party != null
+                                            ? [party]
+                                            : ((IEnumerable<ILocalParty>)ApplicationIdentityService.TenantDomains).Prepend( ApplicationIdentityService );
+        return DescribeAsync( monitor, locals );
+    }
 
     static bool TryReadPublicUrl( IActivityMonitor monitor, ILocalParty local, out Uri? url )
     {
@@ -117,43 +115,28 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
         return false;
     }
 
-    async Task SetRootDescriptionAsync( IActivityMonitor monitor )
+    async Task DescribeAsync( IActivityMonitor monitor, IEnumerable<ILocalParty> locals )
     {
-        await _rootLock.WaitAsync().ConfigureAwait( false );
+        await _lock.WaitAsync().ConfigureAwait( false );
         try
         {
-            // The configuration first: a contributor sets the public URL only when it is not configured.
-            var builder = new PartyDescription.Builder { PublicUrl = _rootPublicUrl };
-            foreach( var c in _contributors )
+            foreach( var local in locals )
             {
-                c.Contribute( builder );
+                if( local is IOwnedParty { IsDestroyed: true } ) continue;
+                // The configuration first (checked by the setup): a contribution sets the public URL only when it is not configured.
+                TryReadPublicUrl( monitor, local, out var url );
+                var builder = new PartyDescription.Builder { PublicUrl = url };
+                foreach( var d in ApplicationIdentityService._builders )
+                {
+                    d.ContributeDescription( local, builder );
+                }
+                var description = builder.Build().WithRoles( ApplicationIdentityService.GetRoles( local ) );
+                await ((LocalParty)local).SetLocalDescriptionAsync( monitor, description ).ConfigureAwait( false );
             }
-            var description = builder.Build().WithRoles( ApplicationIdentityService.GetRoles( ApplicationIdentityService ) );
-            await ApplicationIdentityService.SetLocalDescriptionAsync( monitor, description ).ConfigureAwait( false );
         }
         finally
         {
-            _rootLock.Release();
+            _lock.Release();
         }
-    }
-
-    void OnContributionChanged()
-    {
-        _ = Task.Run( async () =>
-        {
-            var monitor = new ActivityMonitor( nameof( PartyDescriptionFeatureDriver ) );
-            try
-            {
-                await SetRootDescriptionAsync( monitor ).ConfigureAwait( false );
-            }
-            catch( Exception ex )
-            {
-                monitor.Error( "While updating the description of the root party.", ex );
-            }
-            finally
-            {
-                monitor.MonitorEnd();
-            }
-        } );
     }
 }

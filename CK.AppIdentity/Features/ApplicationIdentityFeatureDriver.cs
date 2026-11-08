@@ -360,4 +360,34 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <param name="context">The lifetime context.</param>
     /// <returns>The awaitable.</returns>
     internal protected abstract Task TeardownAsync( FeatureLifetimeContext context );
+
+    /// <summary>
+    /// Contributes to the <see cref="IParty.Description"/> of a local party (the root or a tenant domain): what this
+    /// feature states about the party (its client applications, its public URL...). Does nothing by default.
+    /// <para>
+    /// This is called once all the drivers have set up the party, in the order of the drivers, and again each time a driver
+    /// signals that its contribution changed (see <see cref="OnDescriptionChangedAsync(IActivityMonitor, ILocalParty?)"/>).
+    /// The <paramref name="builder"/> starts with the configured "Local:PublicUrl", when there is one: a contribution
+    /// doesn't override it.
+    /// </para>
+    /// </summary>
+    /// <param name="party">The local party to describe.</param>
+    /// <param name="builder">The description builder.</param>
+    protected internal virtual void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+    {
+    }
+
+    /// <summary>
+    /// Signals that the contribution of this driver to the description of a local party changed (see
+    /// <see cref="ContributeDescription(ILocalParty, PartyDescription.Builder)"/>): the description is computed again and
+    /// <see cref="ILocalParty.DescriptionChanged"/> is raised when it changed. Before the descriptions are computed for
+    /// the first time (during the setup), this does nothing.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="party">The local party to describe again. Null for all the local parties.</param>
+    /// <returns>The awaitable.</returns>
+    protected Task OnDescriptionChangedAsync( IActivityMonitor monitor, ILocalParty? party = null )
+    {
+        return _s._descriptionDriver?.RefreshAsync( monitor, party ) ?? Task.CompletedTask;
+    }
 }

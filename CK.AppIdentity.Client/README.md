@@ -56,8 +56,7 @@ applies to `TClient` and to the clients derived from it. See
 
 ## The description of the party
 
-[`PartyClientDescriptionContributor`](PartyClientDescriptionContributor.cs) announces the clients of the root party in
-its description (`PartyDescription.ClientApplications`, see the description of a party in
+[`ClientFeatureDriver`](ClientFeatureDriver.cs) announces the clients of each local party (the root and the tenant
+domains) in its description (`PartyDescription.ClientApplications`, see the description of a party in
 [CK.AppIdentity](../CK.AppIdentity/README.md)): the clients that have a `PartyClient.Description` (a local tool has
-none: it is not announced). The description contributors complete the root party's description only: the clients of
-the tenant domains are not described.
+none: it is not announced).

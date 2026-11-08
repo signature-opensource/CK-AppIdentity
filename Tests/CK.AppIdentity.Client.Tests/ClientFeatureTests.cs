@@ -98,6 +98,9 @@ public class ClientFeatureTests
         builder.Services.AddSingleton<ApplicationIdentityService>();
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         // The order of the drivers is their dependencies' one (the engine does it in a real application).
+        // The description driver comes first: it describes the parties once all the drivers have set them up.
+        builder.Services.AddSingleton<PartyDescriptionFeatureDriver>();
+        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         builder.Services.AddSingleton<ServingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ServingFeatureDriver>() );
         foreach( var f in factories )
@@ -107,10 +110,6 @@ public class ClientFeatureTests
         }
         builder.Services.AddSingleton<ClientFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ClientFeatureDriver>() );
-        builder.Services.AddSingleton<PartyClientDescriptionContributor>();
-        builder.Services.AddSingleton<IPartyDescriptionContributor>( sp => sp.GetRequiredService<PartyClientDescriptionContributor>() );
-        builder.Services.AddSingleton<PartyDescriptionFeatureDriver>();
-        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         return builder.CKBuild();
     }
 
@@ -246,6 +245,28 @@ public class ClientFeatureTests
         } );
         domain.ShouldNotBeNull();
         domain.GetRequiredFeature<ClientFeature>().Clients.Single().ShouldBeOfType<LocalClient>().Party.ShouldBe( domain );
+        await host.StopAsync( cancel );
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task the_clients_of_a_tenant_domain_are_in_its_description_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost( c => c["Local:AllowFeatures"] = "Serving", typeof( ServedClientFactory ) );
+        await host.StartAsync( cancel );
+        var root = host.Services.GetRequiredService<ApplicationIdentityService>();
+        root.Description.ClientApplications.ShouldBeEmpty();
+
+        var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
+        {
+            s["FullName"] = "D1/$D1";
+            s["Local:AllowFeatures"] = "Serving";
+            s["Local:PublicUrl"] = "https://d1.acme.com";
+            s["Local:Client:Admin"] = "";
+        } );
+        domain.ShouldNotBeNull();
+        domain.Description.ClientApplications.ShouldBe( [new ClientApplicationDescription( "Admin", "/admin" )] );
+        domain.Description.GetClientApplicationUrl( "Admin" ).ShouldBe( "https://d1.acme.com/admin" );
         await host.StopAsync( cancel );
     }
 }

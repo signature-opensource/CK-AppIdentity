@@ -68,6 +68,23 @@ public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
     /// <inheritdoc />
     protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
 
+    /// <summary>
+    /// Contributes the clients of the party to its description (<see cref="PartyDescription.ClientApplications"/>): the
+    /// clients that have a <see cref="PartyClient.Description"/>. The clients of a party are created by its setup: they
+    /// never change.
+    /// </summary>
+    /// <param name="party">The local party to describe.</param>
+    /// <param name="builder">The description builder.</param>
+    protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+    {
+        var feature = party.GetFeature<ClientFeature>();
+        if( feature == null ) return;
+        foreach( var c in feature.Clients )
+        {
+            if( c.Description is { } d ) builder.AddClientApplication( d.Name, d.RequestPath );
+        }
+    }
+
     bool TryGetBuiltClients( IActivityMonitor monitor, out Dictionary<string, IPartyClientFactory> built )
     {
         built = new Dictionary<string, IPartyClientFactory>( StringComparer.Ordinal );

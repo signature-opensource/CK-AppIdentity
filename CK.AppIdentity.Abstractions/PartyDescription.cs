@@ -10,7 +10,7 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// What a party states about itself: its public URL, its client applications and its roles. A local party's description
-/// comes from its "Local:PublicUrl" configuration, the <see cref="IPartyDescriptionContributor"/> of the packages and its
+/// comes from its "Local:PublicUrl" configuration, the contributions of the feature drivers and its
 /// asymmetric features; a remote's description is what the remote announced (see <see cref="IRemoteParty.SetDescription"/>).
 /// <para>
 /// The URL of a client application is derived (<see cref="GetClientApplicationUrl"/>): it is never stored.
