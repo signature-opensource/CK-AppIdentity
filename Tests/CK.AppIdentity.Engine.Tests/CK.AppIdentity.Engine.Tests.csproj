@@ -11,6 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\CK.AppIdentity.Engine\CK.AppIdentity.Engine.csproj" />
-    <ProjectReference Include="..\..\CK.AppIdentity.Client\CK.AppIdentity.Client.csproj" />
+    <ProjectReference Include="..\..\CK.AppIdentity.PartyClient\CK.AppIdentity.PartyClient.csproj" />
   </ItemGroup>
 </Project>

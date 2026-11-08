@@ -10,7 +10,7 @@
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.1" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\CK.AppIdentity.Client\CK.AppIdentity.Client.csproj" />
+    <ProjectReference Include="..\..\CK.AppIdentity.PartyClient\CK.AppIdentity.PartyClient.csproj" />
     <ProjectReference Include="..\..\CK.AppIdentity.Hosting\CK.AppIdentity.Hosting.csproj" />
   </ItemGroup>
 </Project>

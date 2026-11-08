@@ -14,7 +14,7 @@ component it applies to, and is decorated with the attribute of its kind of owne
 | Owner | Attribute | Package |
 |---|---|---|
 | A feature driver (`IApplicationIdentityFeatureDriver`) | `[FeatureOption]` | CK.AppIdentity.Abstractions |
-| A party client (`PartyClient`) | `[PartyClientOption]` | CK.AppIdentity.Client |
+| A party client (`PartyClient`) | `[PartyClientOption]` | CK.AppIdentity.PartyClient |
 
 ```csharp
 [FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]

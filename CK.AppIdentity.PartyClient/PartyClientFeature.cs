@@ -4,11 +4,11 @@ using System.Linq;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// The "Client" feature of a local party: its clients (see <see cref="ClientFeatureDriver"/>).
+/// The "PartyClient" feature of a local party: its clients (see <see cref="PartyClientFeatureDriver"/>).
 /// </summary>
-public sealed class ClientFeature
+public sealed class PartyClientFeature
 {
-    internal ClientFeature( ILocalParty party, IReadOnlyList<PartyClient> clients )
+    internal PartyClientFeature( ILocalParty party, IReadOnlyList<PartyClient> clients )
     {
         Party = party;
         Clients = clients;

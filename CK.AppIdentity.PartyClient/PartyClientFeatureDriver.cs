@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// The "Client" feature: the clients of the local parties (the root and the tenant domains, initial or dynamic).
-/// It is allowed by default: "DisallowFeatures": "Client" makes a party without clients.
+/// The "PartyClient" feature: the clients of the local parties (the root and the tenant domains, initial or dynamic).
+/// It is allowed by default: "DisallowFeatures": "PartyClient" makes a party without clients.
 /// <para>
 /// A client is built by a package (an <see cref="IPartyClientFactory"/> knows the names of the clients it builds) and
-/// <b>declared</b> by a party, in its "Local:Client:{Name}" section: only the configuration says which party uses which
+/// <b>declared</b> by a party, in its "Local:PartyClient:{Name}" section: only the configuration says which party uses which
 /// client. The declaration holds what the build can't know (the deployment facts, the options); the rest is derived.
 /// </para>
 /// <list type="bullet">
@@ -21,21 +21,21 @@ namespace CK.AppIdentity;
 ///   <item>A party that doesn't allow the feature but declares clients is an error.</item>
 /// </list>
 /// </summary>
-public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
+public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
 {
     /// <summary>
     /// The configuration section of the clients, in the "Local" section of a local party.
     /// </summary>
-    public const string ClientSectionName = "Client";
+    public const string PartyClientSectionName = "PartyClient";
 
     readonly IReadOnlyList<IPartyClientFactory> _factories;
 
     /// <summary>
-    /// Initializes a new <see cref="ClientFeatureDriver"/>.
+    /// Initializes a new <see cref="PartyClientFeatureDriver"/>.
     /// </summary>
     /// <param name="s">The application identity service.</param>
     /// <param name="factories">The client factories.</param>
-    public ClientFeatureDriver( ApplicationIdentityService s, IEnumerable<IPartyClientFactory> factories )
+    public PartyClientFeatureDriver( ApplicationIdentityService s, IEnumerable<IPartyClientFactory> factories )
         : base( s, isAllowedByDefault: true )
     {
         _factories = factories.ToArray();
@@ -77,7 +77,7 @@ public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
     /// <param name="builder">The description builder.</param>
     protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
     {
-        var feature = party.GetFeature<ClientFeature>();
+        var feature = party.GetFeature<PartyClientFeature>();
         if( feature == null ) return;
         foreach( var c in feature.Clients )
         {
@@ -106,7 +106,7 @@ public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
     bool SetupLocal( IActivityMonitor monitor, ILocalParty local, Dictionary<string, IPartyClientFactory> built )
     {
         // The declaration is read on the party only (no "Defaults"): a party declares its own clients.
-        var section = local.LocalConfiguration.Configuration.TryGetSection( ClientSectionName );
+        var section = local.LocalConfiguration.Configuration.TryGetSection( PartyClientSectionName );
         var declared = section?.GetChildren() ?? [];
         if( !IsAllowedFeature( local ) )
         {
@@ -151,9 +151,9 @@ public sealed class ClientFeatureDriver : ApplicationIdentityFeatureDriver
         if( !success ) return false;
         foreach( var name in built.Keys.Where( n => !clients.Any( c => c.Name == n ) ) )
         {
-            monitor.Info( $"The client '{name}' is built but not declared by '{local.FullName}': it is not a client of this party. Add \"Local:{ClientSectionName}:{name}\" to its configuration to make it one." );
+            monitor.Info( $"The client '{name}' is built but not declared by '{local.FullName}': it is not a client of this party. Add \"Local:{PartyClientSectionName}:{name}\" to its configuration to make it one." );
         }
-        local.AddFeature( new ClientFeature( local, clients ) );
+        local.AddFeature( new PartyClientFeature( local, clients ) );
         return true;
     }
 }

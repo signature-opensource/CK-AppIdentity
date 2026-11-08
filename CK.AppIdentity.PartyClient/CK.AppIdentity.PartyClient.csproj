@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>true</IsPackable>
-    <Description>The "Client" feature: the clients of a party (the applications that send commands to it on behalf of users).</Description>
+    <Description>The "PartyClient" feature: the clients of a party (the applications that send commands to it on behalf of users).</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\CK.AppIdentity\CK.AppIdentity.csproj" />

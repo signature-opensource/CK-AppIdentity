@@ -8,7 +8,7 @@ namespace CK.AppIdentity;
 /// is not a remote.
 /// <para>
 /// Its type is its kind: a package that brings a kind of client specializes this class and creates its instances
-/// (see <see cref="IPartyClientFactory"/>). A client is configured in the "Local:Client:{Name}" section of its party.
+/// (see <see cref="IPartyClientFactory"/>). A client is configured in the "Local:PartyClient:{Name}" section of its party.
 /// </para>
 /// </summary>
 public abstract class PartyClient : IPartyComponent
@@ -18,7 +18,7 @@ public abstract class PartyClient : IPartyComponent
     /// </summary>
     /// <param name="party">The local party of this client.</param>
     /// <param name="name">The client name (unique in its party).</param>
-    /// <param name="configuration">Its "Local:Client:{Name}" configuration section.</param>
+    /// <param name="configuration">Its "Local:PartyClient:{Name}" configuration section.</param>
     protected PartyClient( ILocalParty party, string name, ImmutableConfigurationSection configuration )
     {
         Throw.CheckNotNullArgument( party );
@@ -40,7 +40,7 @@ public abstract class PartyClient : IPartyComponent
     public string Name { get; }
 
     /// <summary>
-    /// Gets the "Local:Client:{Name}" configuration section of this client.
+    /// Gets the "Local:PartyClient:{Name}" configuration section of this client.
     /// </summary>
     public ImmutableConfigurationSection Configuration { get; }
 

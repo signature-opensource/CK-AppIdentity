@@ -142,7 +142,7 @@ static feature allowed by default) sets it:
   query nor fragment (`PartyDescription.TryParsePublicUrl`); an invalid one fails the start.
 - **The feature drivers complete the description of every local party** (the root and the tenant domains alike): a
   driver overrides `ApplicationIdentityFeatureDriver.ContributeDescription( party, builder )`. The HTTP endpoints give
-  the public URL of the root party when `Local:PublicUrl` is not configured, the "Client" feature gives the client
+  the public URL of the root party when `Local:PublicUrl` is not configured, the "PartyClient" feature gives the client
   applications of each party. It is computed once all the drivers have set up the party, in their order, then each
   time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
   changed.

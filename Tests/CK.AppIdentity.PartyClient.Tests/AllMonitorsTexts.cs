@@ -8,7 +8,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
 
-namespace CK.AppIdentity.Client.Tests;
+namespace CK.AppIdentity.PartyClientTests;
 
 /// <summary>
 /// Collects the texts written by any monitor (the agent of the application identity service has its own): a memory

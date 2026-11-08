@@ -4,7 +4,7 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// An option of a party component: an option of a feature driver (decorated with <see cref="FeatureOptionAttribute"/>)
-/// or of a party client (decorated with the PartyClientOption attribute of CK.AppIdentity.Client). It applies to its
+/// or of a party client (decorated with the PartyClientOption attribute of CK.AppIdentity.PartyClient). It applies to its
 /// <typeparamref name="TOwner"/> and to the owners derived from it.
 /// <para>
 /// An option is a plain class (not an auto service): it is created from the services of its owner when the owner applies

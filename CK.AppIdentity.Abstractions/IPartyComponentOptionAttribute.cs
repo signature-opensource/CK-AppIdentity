@@ -5,7 +5,7 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// The attribute of an <see cref="IPartyComponentOption{TOwner}"/>: <see cref="FeatureOptionAttribute"/>
-/// or the PartyClientOption attribute of CK.AppIdentity.Client. It is also the embedded resource attribute that the
+/// or the PartyClientOption attribute of CK.AppIdentity.PartyClient. It is also the embedded resource attribute that the
 /// ordering of the options requires.
 /// </summary>
 public interface IPartyComponentOptionAttribute : IEmbeddedResourceTypeAttribute
