@@ -60,6 +60,8 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         {
             monitor.Warn( $"While persisting the description of '{FullName}'.", ex );
         }
+        // The agent's loop raises ILocalParty.RemoteDescriptionChanged: this stays synchronous.
+        ApplicationIdentityService.Agent.OnRemoteDescriptionChanged( this );
         return true;
     }
 

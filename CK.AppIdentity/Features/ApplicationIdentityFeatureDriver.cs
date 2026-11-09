@@ -378,6 +378,21 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     }
 
     /// <summary>
+    /// The second phase of the description of a local party: derives values from what the first phase states (see
+    /// <see cref="ContributeDescription(ILocalParty, PartyDescription.Builder)"/>), the routes for instance. Does nothing
+    /// by default.
+    /// <para>
+    /// This is called for every driver after the first phase of every driver, in the order of the drivers. A derived value
+    /// derives from the first phase only.
+    /// </para>
+    /// </summary>
+    /// <param name="party">The local party to describe.</param>
+    /// <param name="builder">The second phase of the description.</param>
+    protected internal virtual void ContributeDerivedDescription( ILocalParty party, PartyDescription.DerivedBuilder builder )
+    {
+    }
+
+    /// <summary>
     /// Signals that the contribution of this driver to the description of a local party changed (see
     /// <see cref="ContributeDescription(ILocalParty, PartyDescription.Builder)"/>): the description is computed again and
     /// <see cref="ILocalParty.DescriptionChanged"/> is raised when it changed. Before the descriptions are computed for

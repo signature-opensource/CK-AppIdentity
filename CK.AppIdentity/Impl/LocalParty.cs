@@ -21,6 +21,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     private protected RemoteParty[] _remotes;
     internal readonly PerfectEventSender<IRemoteParty> _remotesChanged;
     readonly PerfectEventSender<ILocalParty> _descriptionChanged;
+    readonly PerfectEventSender<IRemoteParty> _remoteDescriptionChanged;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly FileStore _privateStore;
     // Changes in contained remotes are propagated to the root AllPartyChanged event.
@@ -35,6 +36,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     {
         _remotesChanged = new PerfectEventSender<IRemoteParty>();
         _descriptionChanged = new PerfectEventSender<ILocalParty>();
+        _remoteDescriptionChanged = new PerfectEventSender<IRemoteParty>();
         _remotes = remotes.Select( c => new RemoteParty( c, this, isDynamic ) ).ToArray();
         // Creates a relay for RemotesChanged from this group to the root's AllPartyChanged event.
         // Chicken and Egg here: if we are the root, create the AllPartiesChanged event instance
@@ -52,6 +54,12 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     public PerfectEvent<IRemoteParty> AnyRemoteChanged => _remotesChanged.PerfectEvent;
 
     public PerfectEvent<ILocalParty> DescriptionChanged => _descriptionChanged.PerfectEvent;
+
+    /// <inheritdoc />
+    public PerfectEvent<IRemoteParty> RemoteDescriptionChanged => _remoteDescriptionChanged.PerfectEvent;
+
+    // Called by the agent's loop (see RemoteParty.SetDescription): the subscribers' exceptions are logged.
+    internal Task RaiseRemoteDescriptionChangedAsync( IActivityMonitor monitor, RemoteParty remote ) => _remoteDescriptionChanged.SafeRaiseAsync( monitor, remote );
 
     /// <summary>
     /// Sets the description of this local party (see <see cref="PartyDescriptionFeatureDriver"/>) and raises

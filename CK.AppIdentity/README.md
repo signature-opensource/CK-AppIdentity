@@ -146,6 +146,18 @@ static feature allowed by default) sets it:
   applications of each party. It is computed once all the drivers have set up the party, in their order, then each
   time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
   changed.
+- **It is built in two phases.** The first one (`ContributeDescription`, a `PartyDescription.Builder`) states the
+  facts: the public URL, the client applications, the data announcements (`SetData( name, value )`) and the routes
+  that the party hosts (`HostRoute( name, target )`). The second one (`ContributeDerivedDescription`, a
+  `PartyDescription.DerivedBuilder`) reads the first one and sets what derives from it: the routes (`SetRoute`).
+- **Data announcements and routes are an extensible part of the description.** `PartyDescription.Data` holds named
+  strings (announced, compared, persisted). `PartyDescription.Routes` holds named [`PartyRoute`](../CK.AppIdentity.Abstractions/PartyRoute.cs)s:
+  the route to the party that hosts something (its `Target`, a mere string: an URL, the name of a command...) and the
+  `Path` of the parties to it. A party finds its own name in no path it uses (no loop), takes the shortest one
+  (`SelectBest`) and extends it with its name (`Extend`). The routes are announced and compared, never persisted: a
+  route counts only from a connected remote.
+- **`ILocalParty.RemoteDescriptionChanged`** is raised when a remote announces another description (by the agent's
+  loop: `IRemoteParty.SetDescription` stays synchronous). The last known description read at set up raises nothing.
 - **The roles of a local party are the [asymmetric features](Features/README.md#asymmetric-features) it is** (their
   Local side is installed and its `Local` allows them). A local party that relays an asymmetric feature to a remote
   checks that the remote announces it. No other feature name is announced: the description is what the other parties

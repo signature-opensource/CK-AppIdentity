@@ -206,6 +206,10 @@ public sealed class AppIdentityAgent : MicroAgent
 
     internal void OnDestroy( IOwnedPartyInternal owned ) => PushTypedJob( owned );
 
+    record class RemoteDescriptionChangedJob( RemoteParty Remote );
+
+    internal void OnRemoteDescriptionChanged( RemoteParty remote ) => PushTypedJob( new RemoteDescriptionChangedJob( remote ) );
+
     internal Task<bool> InitializeDynamicPartiesAsync( AddedDynamicParties parties )
     {
         var cts = new TaskCompletionSource<bool>( TaskCreationOptions.RunContinuationsAsynchronously );
@@ -225,6 +229,10 @@ public sealed class AppIdentityAgent : MicroAgent
         switch( job )
         {
             case IOwnedPartyInternal destroyed: return HandleDestroyAsync( monitor, destroyed );
+            case RemoteDescriptionChangedJob changed:
+                return changed.Remote.IsDestroyed
+                        ? default
+                        : new ValueTask( changed.Remote.Owner.RaiseRemoteDescriptionChangedAsync( monitor, changed.Remote ) );
             case InitializeDynamicPartiesJob init:
                 if( Status == RunningStatus.Running )
                 {

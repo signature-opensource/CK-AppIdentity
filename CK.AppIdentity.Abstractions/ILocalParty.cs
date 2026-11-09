@@ -64,6 +64,13 @@ public interface ILocalParty : IParty
     PerfectEvent<ILocalParty> DescriptionChanged { get; }
 
     /// <summary>
+    /// Raised when the <see cref="IParty.Description"/> of one of the <see cref="Remotes"/> changes: the remote announced
+    /// another description (the last known description read when the remote is set up raises nothing). It is raised by
+    /// the loop of the application identity agent, one change at a time, in their order.
+    /// </summary>
+    PerfectEvent<IRemoteParty> RemoteDescriptionChanged { get; }
+
+    /// <summary>
     /// Gets the "Local" configuration section.
     /// </summary>
     ApplicationIdentityLocalConfiguration LocalConfiguration { get; }

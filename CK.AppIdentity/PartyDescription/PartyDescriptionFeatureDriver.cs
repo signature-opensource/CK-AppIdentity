@@ -126,11 +126,17 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
                 // The configuration first (checked by the setup): a contribution sets the public URL only when it is not configured.
                 TryReadPublicUrl( monitor, local, out var url );
                 var builder = new PartyDescription.Builder { PublicUrl = url };
+                // The first phase states the facts, the second one derives from them.
                 foreach( var d in ApplicationIdentityService._builders )
                 {
                     d.ContributeDescription( local, builder );
                 }
-                var description = builder.Build().WithRoles( ApplicationIdentityService.GetRoles( local ) );
+                var derived = new PartyDescription.DerivedBuilder( builder );
+                foreach( var d in ApplicationIdentityService._builders )
+                {
+                    d.ContributeDerivedDescription( local, derived );
+                }
+                var description = derived.Build().WithRoles( ApplicationIdentityService.GetRoles( local ) );
                 await ((LocalParty)local).SetLocalDescriptionAsync( monitor, description ).ConfigureAwait( false );
             }
         }

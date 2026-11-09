@@ -193,6 +193,69 @@ public class PartyDescriptionTests
         await host.StopAsync( cancel );
     }
 
+    // The first phase hosts a route and announces a data, the second one derives a route from the first phase.
+    public sealed class RoutingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
+    {
+        public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+
+        protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+        {
+            builder.HostRoute( "Hosted", "Some.Command" );
+            builder.SetData( "Region", "eu-west" );
+        }
+
+        protected override void ContributeDerivedDescription( ILocalParty party, PartyDescription.DerivedBuilder builder )
+        {
+            foreach( var (name, target) in builder.HostedRoutes )
+            {
+                builder.SetRoute( name, PartyRoute.Hosted( target, party.FullName ) );
+            }
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task the_second_phase_derives_from_the_first_one_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost( null, typeof( RoutingFeatureDriver ) );
+        await host.StartAsync( cancel );
+        var root = host.Services.GetRequiredService<ApplicationIdentityService>();
+        root.Description.Data["Region"].ShouldBe( "eu-west" );
+        root.Description.Routes["Hosted"].ShouldBe( PartyRoute.Hosted( "Some.Command", root.FullName ) );
+        await host.StopAsync( cancel );
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_changed_announcement_raises_RemoteDescriptionChanged_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost();
+        await host.StartAsync( cancel );
+        var root = host.Services.GetRequiredService<ApplicationIdentityService>();
+        var remote = root.Remotes.Single();
+        var raised = new System.Collections.Concurrent.ConcurrentQueue<IRemoteParty>();
+        var signal = new SemaphoreSlim( 0 );
+        root.RemoteDescriptionChanged.Sync += ( monitor, r ) => { raised.Enqueue( r ); signal.Release(); };
+
+        // A fresh start (a previous run persisted a description): this is a change too.
+        remote.SharedFileStore.TryTrash( TestHelper.Monitor, remote.SharedFileStore.FolderPath.AppendPart( "PartyDescription.json" ), immediateDelete: true );
+        if( remote.SetDescription( TestHelper.Monitor, PartyDescription.Empty ) )
+        {
+            (await signal.WaitAsync( 5000, cancel )).ShouldBeTrue();
+        }
+        raised.Clear();
+
+        PartyDescription.TryParsePublicUrl( "https://remote.acme.com", out var url, out _ ).ShouldBeTrue();
+        var announced = new PartyDescription( url, [new ClientApplicationDescription( "App", "/" )] );
+        remote.SetDescription( TestHelper.Monitor, announced ).ShouldBeTrue();
+        (await signal.WaitAsync( 5000, cancel )).ShouldBeTrue( "Raised by the agent's loop." );
+        raised.ShouldHaveSingleItem().ShouldBeSameAs( remote );
+
+        remote.SetDescription( TestHelper.Monitor, announced ).ShouldBeFalse( "The same description." );
+        (await signal.WaitAsync( 300, cancel )).ShouldBeFalse( "Nothing changed: nothing is raised." );
+        await host.StopAsync( cancel );
+    }
+
     [Test]
     public void the_facts_of_a_client_application_are_a_trait_compared_and_persisted()
     {
