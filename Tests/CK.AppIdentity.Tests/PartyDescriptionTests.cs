@@ -292,6 +292,27 @@ public class PartyDescriptionTests
     }
 
     [Test]
+    public void the_encryption_key_is_compared_and_not_persisted()
+    {
+        var key = new PartyEncryptionKey( [1, 2, 3], [4, 5] );
+        key.ShouldBe( new PartyEncryptionKey( [1, 2, 3], [4, 5] ), "Compared by content." );
+        key.ShouldNotBe( new PartyEncryptionKey( [1, 2, 3], [4, 6] ) );
+        Should.Throw<ArgumentException>( () => new PartyEncryptionKey( [], [4, 5] ) );
+
+        var d = new PartyDescription( null, default, ["A"], encryptionKey: key );
+        d.EncryptionKey.ShouldBe( key );
+        d.WithRoles( ["B"] ).EncryptionKey.ShouldBe( key, "Kept by WithRoles." );
+        d.ShouldNotBe( new PartyDescription( null, default, ["A"] ), "The encryption key is compared." );
+        d.ToString().ShouldContain( $"(EncryptionKey: {key})" );
+
+        using var stream = new MemoryStream();
+        using( var w = new System.Text.Json.Utf8JsonWriter( stream ) ) d.Write( w );
+        using var doc = System.Text.Json.JsonDocument.Parse( stream.ToArray() );
+        PartyDescription.TryRead( doc.RootElement, out var back, out _ ).ShouldBeTrue();
+        back.EncryptionKey.ShouldBeNull( "A short-lived key is not persisted: it counts only from a connected remote." );
+    }
+
+    [Test]
     [CancelAfter( 10000 )]
     public async Task the_roles_of_a_local_party_are_the_asymmetric_features_it_is_Async( CancellationToken cancel )
     {

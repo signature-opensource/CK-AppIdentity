@@ -132,7 +132,7 @@ reads these files.
 
 ## The description of a party.
 
-A party states what it is to the others: its public URL, its client applications and its roles (`IParty.Description`,
+A party states what it is to the others: its public URL, its client applications, its roles and its encryption key (`IParty.Description`,
 a `PartyDescription` of CK.AppIdentity.Abstractions). The AuthCenter, for instance, builds the links of its mails with the
 URL of the party through which the user acts, and derives the origins it accepts from the URLs of its remotes.
 
@@ -156,6 +156,10 @@ static feature allowed by default) sets it:
   `Path` of the parties to it. A party finds its own name in no path it uses (no loop), takes the shortest one
   (`SelectBest`) and extends it with its name (`Extend`). The routes are announced and compared, never persisted: a
   route counts only from a connected remote.
+- **The encryption key of the party** (`PartyDescription.EncryptionKey`, a [`PartyEncryptionKey`](../CK.AppIdentity.Abstractions/PartyEncryptionKey.cs)):
+  its public key and the signature of this public key by the party's identity key, set by the key management
+  (`PartyDescription.Builder.EncryptionKey`). Only bytes here: its verification and its use belong to the key
+  management. Short-lived, it is announced and compared, never persisted (like the routes).
 - **`ILocalParty.RemoteDescriptionChanged`** is raised when a remote announces another description (by the agent's
   loop: `IRemoteParty.SetDescription` stays synchronous). The last known description read at set up raises nothing.
 - **The roles of a local party are the [asymmetric features](Features/README.md#asymmetric-features) it is** (their

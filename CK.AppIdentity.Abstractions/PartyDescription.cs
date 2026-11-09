@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// What a party states about itself: its public URL, its client applications and its roles. A local party's description
+/// What a party states about itself: its public URL, its client applications, its roles and its encryption key. A local party's description
 /// comes from its "Local:PublicUrl" configuration, the contributions of the feature drivers and its
 /// asymmetric features; a remote's description is what the remote announced (see <see cref="IRemoteParty.SetDescription"/>).
 /// <para>
@@ -31,12 +31,15 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// <param name="roles">The roles (see <see cref="Roles"/>): they are sorted and deduplicated.</param>
     /// <param name="data">The data announcements (see <see cref="Data"/>).</param>
     /// <param name="routes">The routes (see <see cref="Routes"/>).</param>
+    /// <param name="encryptionKey">The encryption key (see <see cref="EncryptionKey"/>).</param>
     public PartyDescription( Uri? publicUrl,
                              ImmutableArray<ClientApplicationDescription> clientApplications,
                              IEnumerable<string>? roles = null,
                              IEnumerable<KeyValuePair<string, string>>? data = null,
-                             IEnumerable<KeyValuePair<string, PartyRoute>>? routes = null )
+                             IEnumerable<KeyValuePair<string, PartyRoute>>? routes = null,
+                             PartyEncryptionKey? encryptionKey = null )
     {
+        EncryptionKey = encryptionKey;
         Throw.CheckArgument( publicUrl == null || IsValidPublicUrl( publicUrl, out _ ) );
         PublicUrl = publicUrl;
         ClientApplications = clientApplications.IsDefault ? ImmutableArray<ClientApplicationDescription>.Empty : clientApplications;
@@ -82,6 +85,13 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     public ImmutableSortedDictionary<string, PartyRoute> Routes { get; }
 
     /// <summary>
+    /// Gets the current encryption key of the party, signed by it (see <see cref="PartyEncryptionKey"/>): what another
+    /// party encrypts for it with. Null when the party publishes none. Announced and compared, never persisted: a key is
+    /// short-lived, it counts only from a connected remote.
+    /// </summary>
+    public PartyEncryptionKey? EncryptionKey { get; }
+
+    /// <summary>
     /// Gets the roles of the party: the asymmetric features that the party IS (its "Local" allows them and their
     /// Local side is installed), sorted. A party that relays an asymmetric feature to a remote checks that the remote
     /// announces it.
@@ -93,7 +103,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// </summary>
     /// <param name="roles">The roles.</param>
     /// <returns>The description.</returns>
-    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, Routes );
+    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, Routes, EncryptionKey );
 
     /// <summary>
     /// Gets the public URL of the party: an absolute "http" or "https" URL without path, query nor fragment.
@@ -182,7 +192,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             foreach( var r in Roles ) w.WriteStringValue( r );
             w.WriteEndArray();
         }
-        // The routes are not persisted: a route counts only from a connected remote.
+        // The routes and the encryption key are not persisted: they count only from a connected remote.
         if( Data.Count > 0 )
         {
             w.WriteStartObject( "Data" );
@@ -270,7 +280,8 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                                                      && ClientApplications.SequenceEqual( other.ClientApplications )
                                                      && Roles.SequenceEqual( other.Roles )
                                                      && Data.SequenceEqual( other.Data )
-                                                     && Routes.SequenceEqual( other.Routes );
+                                                     && Routes.SequenceEqual( other.Routes )
+                                                     && Equals( EncryptionKey, other.EncryptionKey );
 
     /// <inheritdoc />
     public override bool Equals( object? obj ) => Equals( obj as PartyDescription );
@@ -285,6 +296,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         if( Roles.Length > 0 ) s += $" (Roles: {string.Join( ", ", Roles )})";
         if( Data.Count > 0 ) s += $" (Data: {string.Join( ", ", Data.Keys )})";
         if( Routes.Count > 0 ) s += $" (Routes: {string.Join( ", ", Routes.Select( r => $"{r.Key}: {r.Value}" ) )})";
+        if( EncryptionKey != null ) s += $" (EncryptionKey: {EncryptionKey})";
         return s;
     }
 
@@ -344,6 +356,12 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         /// when it is null.
         /// </summary>
         public Uri? PublicUrl { get; set; }
+
+        /// <summary>
+        /// Gets or sets the encryption key of the party (see <see cref="PartyDescription.EncryptionKey"/>): set by the key
+        /// management.
+        /// </summary>
+        public PartyEncryptionKey? EncryptionKey { get; set; }
 
         /// <summary>
         /// Adds a client application.
@@ -429,7 +447,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         /// Builds the description.
         /// </summary>
         /// <returns>The description.</returns>
-        public PartyDescription Build() => new PartyDescription( _facts.PublicUrl, _facts.ClientApplications.ToImmutableArray(), null, _facts.Data, _routes );
+        public PartyDescription Build() => new PartyDescription( _facts.PublicUrl, _facts.ClientApplications.ToImmutableArray(), null, _facts.Data, _routes, _facts.EncryptionKey );
     }
 }
 
