@@ -170,10 +170,9 @@ static feature allowed by default) sets it:
 The URL of a client application is derived, never stored: `PartyDescription.GetClientApplicationUrl( name )` (the
 default one, served at `/`, when the name is null).
 
-**The caller party** of a call (the `CallerPartyId` of its authentication information) is found with
-`CallerPartyExtensions.FindCallerParty` on the local party that received it: the local party itself or one of its remotes.
-A caller party identifier of 0 is a direct reception by the local party whose `PartyActorId` is not known: a call relayed
-by a remote always carries the remote's identifier.
+**The caller party** of a call (the `CallerPartyFullName` of its authentication information) is found with
+`CallerPartyExtensions.FindCallerParty` on the local party that received it: the local party itself or one of its remotes
+(ordinal comparison of the full names). A null caller party (unknown or not applicable) finds nothing.
 
 ## Requires.
 

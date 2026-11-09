@@ -183,13 +183,13 @@ public class PartyDescriptionTests
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         var remote = root.Remotes.Single();
-        // 0: a direct reception by the local party whose PartyActorId is not known.
-        root.FindCallerParty( 0 ).ShouldBeSameAs( root );
-        root.TrySetPartyActorId( TestHelper.Monitor, 3712 ).ShouldBeTrue();
-        remote.TrySetPartyActorId( TestHelper.Monitor, 3713 ).ShouldBeTrue();
-        root.FindCallerParty( 3712 ).ShouldBeSameAs( root );
-        root.FindCallerParty( 3713 ).ShouldBeSameAs( remote );
-        root.FindCallerParty( 42 ).ShouldBeNull();
+        // Null: unknown or not applicable.
+        root.FindCallerParty( null ).ShouldBeNull();
+        root.FindCallerParty( root.FullName ).ShouldBeSameAs( root );
+        root.FindCallerParty( remote.FullName ).ShouldBeSameAs( remote );
+        // The comparison is ordinal.
+        root.FindCallerParty( remote.FullName.Path.ToUpperInvariant() ).ShouldBeNull();
+        root.FindCallerParty( "Acme/$Unknown" ).ShouldBeNull();
         await host.StopAsync( cancel );
     }
 

@@ -23,12 +23,10 @@ type (this is why the 3 fundamental objects that are `IRemoteParty`, `ITenantDom
 and `IApplicationIdentityService` all expose their respective `RemotePartyConfiguration`,
 `TenantDomainPartyConfiguration` and `ApplicationIdentityServiceConfiguration` Configuration property.
 
-Every party also has a `PartyActorId`: its identifier in the actors model (its PartyActor), 0 until it is resolved.
+The identity of a party across the System is its `FullName`: it is unique, and the keys of the party are bound to it.
 It is the identity of the party when it calls another one, or when it receives a command directly (the caller party of
-the authentication information). This package holds only the value, with no authentication logic: an initialization
-step sets it once with `TrySetPartyActorId`: the PartyActor registrar of CK.DB.AppIdentity where the actors database
-is available, otherwise the party asks its authentication center. It can only go from 0 to an identifier, never
-change afterwards, and the change is logged.
+the authentication information). A party that has an actors database maps it to an actor where it needs one (the
+PartyActor of CK.DB.AppIdentity): no actor identifier is distributed across the System.
 
 ## The FileStore
 
