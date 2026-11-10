@@ -122,7 +122,8 @@ Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures
   `ContentRootPath`, `Ready` and the `Remotes` (`FullName`, `Outgoing`).
 - **The packages contribute their own properties** with an `IDevRunningStatusContributor` (CK.AppIdentity.Abstractions):
   for instance, the transport (the remotes' availability), the HTTP endpoints, the client applications. `Ready` is
-  true when every contributor is ready. A feature driver implements it itself (explicitly: it doesn't add to its
+  true when every contributor is ready. A section can hold a `Pending` array: what an operator must do for the party
+  (an approval, for instance), printed by the launcher; what waits for an operator doesn't make a party not ready. A feature driver implements it itself (explicitly: it doesn't add to its
   public API), as the transport and the HTTP endpoints do; a separate contributor is for a package that has state of
   its own and no driver (the client applications).
 - **A contributor stays dormant until the writer activates it:** it subscribes to nothing and computes nothing before.

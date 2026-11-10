@@ -122,7 +122,9 @@ use CK.AppHost sets `<CKAppIdentityParty>true</CKAppIdentityParty>` itself.
   [CK.AppIdentity](../CK.AppIdentity/README.md) in the party's folder of `#Dev/Store`) says `Ready`. Then its client
   applications are served. A client application that has an `Error` (its dev server failed) stops the wait with that
   error.
-- **Then it prints their URLs, and opens the browser** on the default client application.
+- **Then it prints their URLs, and opens the browser** on the default client application. It also prints what an
+  operator must do for a party: the `Pending` messages of the sections of its `DevRunningStatus.json` (a party that waits
+  for an approval is ready, its approval is pending).
 - **Enter stops the parties like Ctrl+C** in their window: a hidden helper attaches to their console. A party that
   doesn't exit in time is killed with its process tree.
 - **Unless `-SkipBuild`,** it builds the parties first (the TypeScript integration of the build installs the packages of

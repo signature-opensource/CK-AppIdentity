@@ -14,7 +14,8 @@
        feature of CK.AppIdentity) says "Ready" (the party is started and its outgoing remotes are connected), then
        until its client applications are served. A client application whose dev server failed (its "Error") stops the
        wait: its error is printed.
-    5. Prints the parties and their URLs, opens the browser on the default client application.
+    5. Prints the parties and their URLs, and what an operator must do for them (the "Pending" messages of the sections
+       of their "DevRunningStatus.json": an approval, for instance), opens the browser on the default client application.
     6. Press Enter: the parties are stopped like Ctrl+C in their window (they stop the dev servers they started); a
        party that doesn't exit in time is killed with its process tree.
 
@@ -202,6 +203,23 @@ try {
             if( $c.Kind -eq 'DefaultApp' -and -not $browserUrl ) { $browserUrl = $url }
         }
         if( -not $browserUrl -and $defaultUrl ) { $browserUrl = $defaultUrl }
+    }
+    # What an operator must do: the "Pending" messages of the sections, read again (they may have appeared since).
+    $statuses = Get-RunningStatuses
+    $pendingMessages = @()
+    foreach( $party in $parties ) {
+        $s = Get-Status $statuses $party
+        if( -not $s ) { continue }
+        foreach( $section in $s.PSObject.Properties ) {
+            if( $section.Value -isnot [System.Management.Automation.PSCustomObject] ) { continue }
+            foreach( $m in @( Get-Property $section.Value 'Pending' ) ) {
+                if( $m ) { $pendingMessages += "$($party.Name): $m" }
+            }
+        }
+    }
+    if( $pendingMessages.Count -gt 0 ) {
+        Write-Step 'Waiting for an operator'
+        foreach( $m in $pendingMessages ) { Write-Host $m -ForegroundColor Cyan }
     }
     if( -not $NoBrowser -and $browserUrl ) { Start-Process $browserUrl }
     Write-Host "`nPress Enter to stop the parties." -ForegroundColor Yellow
