@@ -54,6 +54,21 @@ A package can add an option to a kind of client: a class decorated with `[PartyC
 applies to `TClient` and to the clients derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 
+- **The feature selects them, for every kind of client:** once a factory has created a client, `PartyClientFeatureDriver`
+  selects the options of the client's type from its `Local:PartyClient:{Name}` section (their key is their name), creates
+  them from the services and gives them to the client: `PartyClient.Options`, in their order.
+- **The client applies them:** `PartyClient.InitializeOptions( monitor, options )` is called once with the options and
+  their configuration section. It accepts them by default; a kind of client that has options checks there that they are
+  the ones it expects (a base type of its own) and initializes them.
+- **A factory ignores the option keys** of the section it receives: it refuses only a key that is neither one of its
+  own nor an option name of its client type (`PartyComponentOptionDirectory.IsOptionName`).
+
+```json
+"PartyClient": {
+  "Admin": { "Caching": true }
+}
+```
+
 ## The description of the party
 
 [`PartyClientFeatureDriver`](PartyClientFeatureDriver.cs) announces the clients of each local party (the root and the tenant

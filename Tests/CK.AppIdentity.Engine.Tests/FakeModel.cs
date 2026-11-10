@@ -1,4 +1,6 @@
 using CK.Core;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CK.AppIdentity.Engine.Tests.Fake;
@@ -68,4 +70,34 @@ public sealed class CachingOption : IPartyComponentOption<FakeClient>
 [PartyClientOption, Requires<CachingOption>]
 public sealed class DerivedOnlyOption : IPartyComponentOption<FakeDerivedClient>
 {
+}
+
+/// <summary>
+/// Builds the "Fake" client (a <see cref="FakeClient"/>) and the "Derived" one (a <see cref="FakeDerivedClient"/>). Like
+/// the factories of real clients, it refuses a key of the client section that is not an option of the client: the
+/// options are selected by the PartyClient feature.
+/// </summary>
+public sealed class FakeClientFactory : IPartyClientFactory
+{
+    readonly PartyComponentOptionDirectory _options;
+
+    public FakeClientFactory( PartyComponentOptionDirectory options ) => _options = options;
+
+    public IReadOnlyCollection<string> ClientNames => ["Fake", "Derived"];
+
+    public IReadOnlyList<ApplicationIdentityFeatureDriver> RequiredFeatures => [];
+
+    public PartyClient? Create( IActivityMonitor monitor, ILocalParty party, string name, ImmutableConfigurationSection configuration )
+    {
+        var type = name == "Derived" ? typeof( FakeDerivedClient ) : typeof( FakeClient );
+        var unknown = configuration.GetChildren().Where( c => !_options.IsOptionName( type, c.Key ) ).Select( c => c.Key ).ToList();
+        if( unknown.Count > 0 )
+        {
+            monitor.Error( $"Unexpected '{unknown.Concatenate( "', '" )}' in \"Local:PartyClient:{name}\": a fake client has only options." );
+            return null;
+        }
+        return name == "Derived"
+                ? new FakeDerivedClient( party, name, configuration )
+                : new FakeClient( party, name, configuration );
+    }
 }
