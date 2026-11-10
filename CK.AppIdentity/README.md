@@ -147,15 +147,23 @@ static feature allowed by default) sets it:
   time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
   changed.
 - **It is built in two phases.** The first one (`ContributeDescription`, a `PartyDescription.Builder`) states the
-  facts: the public URL, the client applications, the data announcements (`SetData( name, value )`) and the routes
-  that the party hosts (`HostRoute( name, target )`). The second one (`ContributeDerivedDescription`, a
-  `PartyDescription.DerivedBuilder`) reads the first one and sets what derives from it: the routes (`SetRoute`).
+  facts: the public URL, the client applications, the data announcements (`SetData( name, value )`), the routes
+  that the party hosts (`HostRoute( name, target )`) and the items it states along a route (`Collect( name, value )`).
+  The second one (`ContributeDerivedDescription`, a `PartyDescription.DerivedBuilder`) reads the first one and sets
+  what derives from it: the routes (`SetRoute`) and the collected items (`SetCollected`).
 - **Data announcements and routes are an extensible part of the description.** `PartyDescription.Data` holds named
   strings (announced, compared, persisted). `PartyDescription.Routes` holds named [`PartyRoute`](../CK.AppIdentity.Abstractions/PartyRoute.cs)s:
   the route to the party that hosts something (its `Target`, a mere string: an URL, the name of a command...) and the
   `Path` of the parties to it. A party finds its own name in no path it uses (no loop), takes the shortest one
   (`SelectBest`) and extends it with its name (`Extend`). The routes are announced and compared, never persisted: a
   route counts only from a connected remote.
+- **Items travel a route toward its host.** `PartyDescription.Collected` holds, per route name, the
+  [`CollectedItem`](../CK.AppIdentity.Abstractions/CollectedItem.cs)s of the party and the ones its remotes announce on
+  their way to the host of the route: an opaque `Value` (a mere string, like a route's `Target`) and the `Path` from
+  the party that states it (the `Holder`) to the announcing one. A party accepts an item from the remote that is the
+  last of its path (`TryAccept`: no loop, shorter than `PartyRoute.MaxLength`) and appends its name (`Extend`): the
+  reversed path is the way back to the holder. At most `CollectedItem.MaxCount` items per route name, each value of at
+  most `CollectedItem.MaxValueLength` characters. Announced and compared, never persisted, like the routes.
 - **The encryption key of the party** (`PartyDescription.EncryptionKey`, a [`PartyEncryptionKey`](../CK.AppIdentity.Abstractions/PartyEncryptionKey.cs)):
   its public key and the signature of this public key by the party's identity key, set by the key management
   (`PartyDescription.Builder.EncryptionKey`). Only bytes here: its verification and its use belong to the key
