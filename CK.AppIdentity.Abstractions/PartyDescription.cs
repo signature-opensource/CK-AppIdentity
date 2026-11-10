@@ -32,12 +32,17 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// <param name="data">The data announcements (see <see cref="Data"/>).</param>
     /// <param name="routes">The routes (see <see cref="Routes"/>).</param>
     /// <param name="encryptionKey">The encryption key (see <see cref="EncryptionKey"/>).</param>
+    /// <param name="collected">
+    /// The items collected along the routes (see <see cref="Collected"/>): at most <see cref="CollectedItem.MaxCount"/>
+    /// distinct items per route name. They are sorted (see <see cref="CollectedItem.Comparer"/>).
+    /// </param>
     public PartyDescription( Uri? publicUrl,
                              ImmutableArray<ClientApplicationDescription> clientApplications,
                              IEnumerable<string>? roles = null,
                              IEnumerable<KeyValuePair<string, string>>? data = null,
                              IEnumerable<KeyValuePair<string, PartyRoute>>? routes = null,
-                             PartyEncryptionKey? encryptionKey = null )
+                             PartyEncryptionKey? encryptionKey = null,
+                             IEnumerable<KeyValuePair<string, IEnumerable<CollectedItem>>>? collected = null )
     {
         EncryptionKey = encryptionKey;
         Throw.CheckArgument( publicUrl == null || IsValidPublicUrl( publicUrl, out _ ) );
@@ -48,6 +53,66 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                     : roles.Where( r => !string.IsNullOrWhiteSpace( r ) ).Distinct( StringComparer.Ordinal ).Order( StringComparer.Ordinal ).ToImmutableArray();
         Data = ToNamed( data, "data announcement" );
         Routes = ToNamed( routes, "route" );
+        Collected = ToCollected( collected );
+    }
+
+    static ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> ToCollected( IEnumerable<KeyValuePair<string, IEnumerable<CollectedItem>>>? collected )
+    {
+        var b = ImmutableSortedDictionary.CreateBuilder<string, ImmutableArray<CollectedItem>>( StringComparer.Ordinal );
+        if( collected != null )
+        {
+            foreach( var (name, items) in collected )
+            {
+                if( !TryNormalizeCollected( name, items, out var normalized, out var error ) ) Throw.ArgumentException( error );
+                if( normalized.Length > 0 ) b.Add( name, normalized );
+            }
+        }
+        return b.ToImmutable();
+    }
+
+    /// <summary>
+    /// Checks and sorts the items collected for a route name (see <see cref="Collected"/>): a valid name, at most
+    /// <see cref="CollectedItem.MaxCount"/> items, no two items with the same holder and value.
+    /// </summary>
+    /// <param name="name">The route name.</param>
+    /// <param name="items">The items.</param>
+    /// <param name="normalized">The sorted items on success.</param>
+    /// <param name="error">The error on failure.</param>
+    /// <returns>True on success, false otherwise.</returns>
+    public static bool TryNormalizeCollected( string name,
+                                              IEnumerable<CollectedItem>? items,
+                                              out ImmutableArray<CollectedItem> normalized,
+                                              [NotNullWhen( false )] out string? error )
+    {
+        normalized = ImmutableArray<CollectedItem>.Empty;
+        if( !IsValidName( name ) )
+        {
+            error = $"Invalid route name '{name}' of collected items: a non empty name without whitespace is expected.";
+            return false;
+        }
+        var sorted = (items ?? []).ToArray();
+        if( sorted.Any( i => i == null ) )
+        {
+            error = $"The collected items of '{name}' contain a null item.";
+            return false;
+        }
+        if( sorted.Length > CollectedItem.MaxCount )
+        {
+            error = $"The route '{name}' has {sorted.Length} collected items: at most {CollectedItem.MaxCount} are allowed.";
+            return false;
+        }
+        Array.Sort( sorted, CollectedItem.Comparer );
+        for( int i = 1; i < sorted.Length; ++i )
+        {
+            if( sorted[i - 1].IsSameItem( sorted[i] ) )
+            {
+                error = $"The route '{name}' has the same collected item twice: '{sorted[i]}'.";
+                return false;
+            }
+        }
+        normalized = ImmutableArray.Create( sorted );
+        error = null;
+        return true;
     }
 
     static ImmutableSortedDictionary<string, T> ToNamed<T>( IEnumerable<KeyValuePair<string, T>>? items, string what ) where T : class
@@ -85,6 +150,14 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     public ImmutableSortedDictionary<string, PartyRoute> Routes { get; }
 
     /// <summary>
+    /// Gets the items collected along the routes, by route name (see <see cref="CollectedItem"/>): the items stated by the
+    /// party and the ones its connected remotes announced for a route whose next hop is this party, on their way toward
+    /// the host of the route ("Enlistment": the pending approvals of the System). A route name has at least one item.
+    /// Announced and compared, never persisted: an item counts only from a connected remote.
+    /// </summary>
+    public ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> Collected { get; }
+
+    /// <summary>
     /// Gets the current encryption key of the party, signed by it (see <see cref="PartyEncryptionKey"/>): what another
     /// party encrypts for it with. Null when the party publishes none. Announced and compared, never persisted: a key is
     /// short-lived, it counts only from a connected remote.
@@ -103,7 +176,10 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// </summary>
     /// <param name="roles">The roles.</param>
     /// <returns>The description.</returns>
-    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, Routes, EncryptionKey );
+    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, Routes, EncryptionKey, ToEnumerable( Collected ) );
+
+    static IEnumerable<KeyValuePair<string, IEnumerable<CollectedItem>>> ToEnumerable( IReadOnlyDictionary<string, ImmutableArray<CollectedItem>> collected )
+        => collected.Select( kv => new KeyValuePair<string, IEnumerable<CollectedItem>>( kv.Key, kv.Value ) );
 
     /// <summary>
     /// Gets the public URL of the party: an absolute "http" or "https" URL without path, query nor fragment.
@@ -192,7 +268,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             foreach( var r in Roles ) w.WriteStringValue( r );
             w.WriteEndArray();
         }
-        // The routes and the encryption key are not persisted: they count only from a connected remote.
+        // The routes, the collected items and the encryption key are not persisted: they count only from a connected remote.
         if( Data.Count > 0 )
         {
             w.WriteStartObject( "Data" );
@@ -281,7 +357,20 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                                                      && Roles.SequenceEqual( other.Roles )
                                                      && Data.SequenceEqual( other.Data )
                                                      && Routes.SequenceEqual( other.Routes )
+                                                     && CollectedEquals( Collected, other.Collected )
                                                      && Equals( EncryptionKey, other.EncryptionKey );
+
+    // An ImmutableArray compares its array reference: the items are compared one by one.
+    static bool CollectedEquals( ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> a,
+                                 ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> b )
+    {
+        if( a.Count != b.Count ) return false;
+        foreach( var (name, items) in a )
+        {
+            if( !b.TryGetValue( name, out var other ) || !items.SequenceEqual( other ) ) return false;
+        }
+        return true;
+    }
 
     /// <inheritdoc />
     public override bool Equals( object? obj ) => Equals( obj as PartyDescription );
@@ -296,6 +385,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         if( Roles.Length > 0 ) s += $" (Roles: {string.Join( ", ", Roles )})";
         if( Data.Count > 0 ) s += $" (Data: {string.Join( ", ", Data.Keys )})";
         if( Routes.Count > 0 ) s += $" (Routes: {string.Join( ", ", Routes.Select( r => $"{r.Key}: {r.Value}" ) )})";
+        if( Collected.Count > 0 ) s += $" (Collected: {string.Join( ", ", Collected.Select( c => $"{c.Key}: {c.Value.Length}" ) )})";
         if( EncryptionKey != null ) s += $" (EncryptionKey: {EncryptionKey})";
         return s;
     }
@@ -310,11 +400,33 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         readonly List<ClientApplicationDescription> _apps = new();
         readonly Dictionary<string, string> _data = new( StringComparer.Ordinal );
         readonly Dictionary<string, string> _hostedRoutes = new( StringComparer.Ordinal );
+        readonly Dictionary<string, IReadOnlyList<string>> _collected = new( StringComparer.Ordinal );
 
         /// <summary>
         /// Gets the client applications added so far.
         /// </summary>
         public IReadOnlyList<ClientApplicationDescription> ClientApplications => _apps;
+
+        /// <summary>
+        /// Gets the values of the items stated by the party so far, by route name (see <see cref="Collect"/>).
+        /// </summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<string>> Collected => _collected;
+
+        /// <summary>
+        /// States an item of the party to collect along the route <paramref name="name"/> (see <see cref="PartyDescription.Collected"/>):
+        /// the second phase gives it to the party when it has a route of this name, and the hops carry it toward the host.
+        /// Stating the same value twice is ignored.
+        /// </summary>
+        /// <param name="name">The name of the route: a non empty name without whitespace.</param>
+        /// <param name="value">The value: a non empty string of at most <see cref="CollectedItem.MaxValueLength"/> characters.</param>
+        public void Collect( string name, string value )
+        {
+            Throw.CheckArgument( IsValidName( name ) );
+            Throw.CheckArgument( !string.IsNullOrEmpty( value ) && value.Length <= CollectedItem.MaxValueLength );
+            if( !_collected.TryGetValue( name, out var values ) ) _collected.Add( name, values = new List<string>() );
+            var list = (List<string>)values;
+            if( !list.Contains( value ) ) list.Add( value );
+        }
 
         /// <summary>
         /// Gets the data announcements set so far.
@@ -395,6 +507,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     {
         readonly Builder _facts;
         readonly Dictionary<string, PartyRoute> _routes = new( StringComparer.Ordinal );
+        readonly Dictionary<string, ImmutableArray<CollectedItem>> _collected = new( StringComparer.Ordinal );
 
         /// <summary>
         /// Initializes the second phase from the first one.
@@ -444,10 +557,39 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         }
 
         /// <summary>
+        /// Gets the values of the items stated by the party, by route name, stated by the first phase.
+        /// </summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<string>> OwnCollected => _facts.Collected;
+
+        /// <summary>
+        /// Gets the collected items set so far.
+        /// </summary>
+        public IReadOnlyDictionary<string, ImmutableArray<CollectedItem>> Collected => _collected;
+
+        /// <summary>
+        /// Sets (or removes when <paramref name="items"/> is null or empty) the items collected along a route (see
+        /// <see cref="PartyDescription.Collected"/>): at most <see cref="CollectedItem.MaxCount"/> distinct items.
+        /// </summary>
+        /// <param name="name">The name of the route: a non empty name without whitespace.</param>
+        /// <param name="items">The items, null to remove them.</param>
+        public void SetCollected( string name, IEnumerable<CollectedItem>? items )
+        {
+            if( !TryNormalizeCollected( name, items, out var normalized, out var error ) ) Throw.ArgumentException( error );
+            if( normalized.Length == 0 ) _collected.Remove( name );
+            else _collected[name] = normalized;
+        }
+
+        /// <summary>
         /// Builds the description.
         /// </summary>
         /// <returns>The description.</returns>
-        public PartyDescription Build() => new PartyDescription( _facts.PublicUrl, _facts.ClientApplications.ToImmutableArray(), null, _facts.Data, _routes, _facts.EncryptionKey );
+        public PartyDescription Build() => new PartyDescription( _facts.PublicUrl,
+                                                                 _facts.ClientApplications.ToImmutableArray(),
+                                                                 null,
+                                                                 _facts.Data,
+                                                                 _routes,
+                                                                 _facts.EncryptionKey,
+                                                                 ToEnumerable( _collected ) );
     }
 }
 
