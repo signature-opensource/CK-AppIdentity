@@ -30,7 +30,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// <param name="clientApplications">The client applications.</param>
     /// <param name="roles">The roles (see <see cref="Roles"/>): they are sorted and deduplicated.</param>
     /// <param name="data">The data announcements (see <see cref="Data"/>).</param>
-    /// <param name="routes">The routes (see <see cref="Routes"/>).</param>
+    /// <param name="routes">The routes (see <see cref="Routes"/>): per route name, at most one route per host.</param>
     /// <param name="encryptionKey">The encryption key (see <see cref="EncryptionKey"/>).</param>
     /// <param name="collected">
     /// The items collected along the routes (see <see cref="Collected"/>): at most <see cref="CollectedItem.MaxCount"/>
@@ -40,7 +40,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                              ImmutableArray<ClientApplicationDescription> clientApplications,
                              IEnumerable<string>? roles = null,
                              IEnumerable<KeyValuePair<string, string>>? data = null,
-                             IEnumerable<KeyValuePair<string, PartyRoute>>? routes = null,
+                             IEnumerable<KeyValuePair<string, IEnumerable<PartyRoute>>>? routes = null,
                              PartyEncryptionKey? encryptionKey = null,
                              IEnumerable<KeyValuePair<string, IEnumerable<CollectedItem>>>? collected = null )
     {
@@ -52,7 +52,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                     ? ImmutableArray<string>.Empty
                     : roles.Where( r => !string.IsNullOrWhiteSpace( r ) ).Distinct( StringComparer.Ordinal ).Order( StringComparer.Ordinal ).ToImmutableArray();
         Data = ToNamed( data, "data announcement" );
-        Routes = ToNamed( routes, "route" );
+        Routes = ToRoutes( routes );
         Collected = ToCollected( collected );
     }
 
@@ -115,6 +115,60 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         return true;
     }
 
+    static ImmutableSortedDictionary<string, ImmutableArray<PartyRoute>> ToRoutes( IEnumerable<KeyValuePair<string, IEnumerable<PartyRoute>>>? routes )
+    {
+        var b = ImmutableSortedDictionary.CreateBuilder<string, ImmutableArray<PartyRoute>>( StringComparer.Ordinal );
+        if( routes != null )
+        {
+            foreach( var (name, items) in routes )
+            {
+                if( !TryNormalizeRoutes( name, items, out var normalized, out var error ) ) Throw.ArgumentException( error );
+                if( normalized.Length > 0 ) b.Add( name, normalized );
+            }
+        }
+        return b.ToImmutable();
+    }
+
+    /// <summary>
+    /// Checks and sorts the routes of a route name (see <see cref="Routes"/>): a valid name, at most one route per host,
+    /// sorted by host.
+    /// </summary>
+    /// <param name="name">The route name.</param>
+    /// <param name="routes">The routes.</param>
+    /// <param name="normalized">The sorted routes on success.</param>
+    /// <param name="error">The error on failure.</param>
+    /// <returns>True on success, false otherwise.</returns>
+    public static bool TryNormalizeRoutes( string name,
+                                           IEnumerable<PartyRoute>? routes,
+                                           out ImmutableArray<PartyRoute> normalized,
+                                           [NotNullWhen( false )] out string? error )
+    {
+        normalized = ImmutableArray<PartyRoute>.Empty;
+        if( !IsValidName( name ) )
+        {
+            error = $"Invalid route name '{name}': a non empty name without whitespace is expected.";
+            return false;
+        }
+        var sorted = (routes ?? []).ToArray();
+        if( sorted.Any( r => r == null ) )
+        {
+            error = $"The routes of '{name}' contain a null route.";
+            return false;
+        }
+        Array.Sort( sorted, ( a, b ) => StringComparer.Ordinal.Compare( a.Host, b.Host ) );
+        for( int i = 1; i < sorted.Length; ++i )
+        {
+            if( sorted[i - 1].Host == sorted[i].Host )
+            {
+                error = $"The route '{name}' has two routes to '{sorted[i].Host}'.";
+                return false;
+            }
+        }
+        normalized = ImmutableArray.Create( sorted );
+        error = null;
+        return true;
+    }
+
     static ImmutableSortedDictionary<string, T> ToNamed<T>( IEnumerable<KeyValuePair<string, T>>? items, string what ) where T : class
     {
         if( items == null ) return ImmutableSortedDictionary.Create<string, T>( StringComparer.Ordinal );
@@ -143,11 +197,20 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     public ImmutableSortedDictionary<string, string> Data { get; }
 
     /// <summary>
-    /// Gets the routes known by the party, by name (see <see cref="PartyRoute"/>): the route to the party that hosts
-    /// something ("Enlistment": the approval page of the System). Announced and compared, never persisted: a route
-    /// counts only from a connected remote.
+    /// Gets the routes known by the party, by name (see <see cref="PartyRoute"/>): per name, the route to each party that
+    /// hosts it, sorted by host ("Enlistment": the approval page of the System; a name can have several hosts). A route
+    /// name has at least one route. Announced and compared, never persisted: a route counts only from a connected remote.
     /// </summary>
-    public ImmutableSortedDictionary<string, PartyRoute> Routes { get; }
+    public ImmutableSortedDictionary<string, ImmutableArray<PartyRoute>> Routes { get; }
+
+    /// <summary>
+    /// Finds the route of a name that leads to a host.
+    /// </summary>
+    /// <param name="name">The route name.</param>
+    /// <param name="host">The full name of the host.</param>
+    /// <returns>The route, or null.</returns>
+    public PartyRoute? FindRoute( string name, string host )
+        => Routes.TryGetValue( name, out var routes ) ? routes.FirstOrDefault( r => r.Host == host ) : null;
 
     /// <summary>
     /// Gets the items collected along the routes, by route name (see <see cref="CollectedItem"/>): the items stated by the
@@ -176,10 +239,10 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     /// </summary>
     /// <param name="roles">The roles.</param>
     /// <returns>The description.</returns>
-    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, Routes, EncryptionKey, ToEnumerable( Collected ) );
+    public PartyDescription WithRoles( IEnumerable<string>? roles ) => new PartyDescription( PublicUrl, ClientApplications, roles, Data, ToEnumerable( Routes ), EncryptionKey, ToEnumerable( Collected ) );
 
-    static IEnumerable<KeyValuePair<string, IEnumerable<CollectedItem>>> ToEnumerable( IReadOnlyDictionary<string, ImmutableArray<CollectedItem>> collected )
-        => collected.Select( kv => new KeyValuePair<string, IEnumerable<CollectedItem>>( kv.Key, kv.Value ) );
+    static IEnumerable<KeyValuePair<string, IEnumerable<T>>> ToEnumerable<T>( IReadOnlyDictionary<string, ImmutableArray<T>> items )
+        => items.Select( kv => new KeyValuePair<string, IEnumerable<T>>( kv.Key, kv.Value ) );
 
     /// <summary>
     /// Gets the public URL of the party: an absolute "http" or "https" URL without path, query nor fragment.
@@ -258,7 +321,18 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             w.WriteStartObject();
             w.WriteString( "Name", a.Name );
             w.WriteString( "RequestPath", a.RequestPath );
-            if( !a.Facts.IsEmpty ) w.WriteString( "Facts", a.Facts.ToString() );
+            if( !a.Facts.IsEmpty )
+            {
+                // A key has a set of values: { "Admin": [""], "Enlistment": ["app-identity/enlist"] }.
+                w.WriteStartObject( "Facts" );
+                foreach( var (key, values) in a.Facts.Values )
+                {
+                    w.WriteStartArray( key );
+                    foreach( var v in values ) w.WriteStringValue( v );
+                    w.WriteEndArray();
+                }
+                w.WriteEndObject();
+            }
             w.WriteEndObject();
         }
         w.WriteEndArray();
@@ -310,9 +384,22 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                     error = "Invalid client application: a Name and a RequestPath that starts with '/' are expected.";
                     return false;
                 }
-                var facts = app.TryGetProperty( "Facts", out var f ) && f.ValueKind == JsonValueKind.String
-                                ? ClientApplicationDescription.FactContext.FindOrCreate( f.GetString() )
-                                : null;
+                ClientApplicationFacts? facts = null;
+                if( app.TryGetProperty( "Facts", out var f ) && f.ValueKind == JsonValueKind.Object )
+                {
+                    var pairs = new List<KeyValuePair<string, string>>();
+                    foreach( var fact in f.EnumerateObject() )
+                    {
+                        if( fact.Value.ValueKind != JsonValueKind.Array
+                            || fact.Value.EnumerateArray().Any( v => v.ValueKind != JsonValueKind.String ) )
+                        {
+                            error = $"Invalid fact '{fact.Name}' of the client application '{name}': an array of strings is expected.";
+                            return false;
+                        }
+                        foreach( var v in fact.Value.EnumerateArray() ) pairs.Add( new KeyValuePair<string, string>( fact.Name, v.GetString()! ) );
+                    }
+                    if( !ClientApplicationFacts.TryCreate( pairs, out facts, out error ) ) return false;
+                }
                 apps.Add( new ClientApplicationDescription( name, path, facts ) );
             }
         }
@@ -356,13 +443,13 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                                                      && ClientApplications.SequenceEqual( other.ClientApplications )
                                                      && Roles.SequenceEqual( other.Roles )
                                                      && Data.SequenceEqual( other.Data )
-                                                     && Routes.SequenceEqual( other.Routes )
-                                                     && CollectedEquals( Collected, other.Collected )
+                                                     && ArraysEquals( Routes, other.Routes )
+                                                     && ArraysEquals( Collected, other.Collected )
                                                      && Equals( EncryptionKey, other.EncryptionKey );
 
     // An ImmutableArray compares its array reference: the items are compared one by one.
-    static bool CollectedEquals( ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> a,
-                                 ImmutableSortedDictionary<string, ImmutableArray<CollectedItem>> b )
+    static bool ArraysEquals<T>( ImmutableSortedDictionary<string, ImmutableArray<T>> a,
+                                 ImmutableSortedDictionary<string, ImmutableArray<T>> b )
     {
         if( a.Count != b.Count ) return false;
         foreach( var (name, items) in a )
@@ -384,7 +471,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         var s = $"{PublicUrl?.ToString() ?? "(no public URL)"} [{string.Join( ", ", ClientApplications )}]";
         if( Roles.Length > 0 ) s += $" (Roles: {string.Join( ", ", Roles )})";
         if( Data.Count > 0 ) s += $" (Data: {string.Join( ", ", Data.Keys )})";
-        if( Routes.Count > 0 ) s += $" (Routes: {string.Join( ", ", Routes.Select( r => $"{r.Key}: {r.Value}" ) )})";
+        if( Routes.Count > 0 ) s += $" (Routes: {string.Join( ", ", Routes.SelectMany( r => r.Value.Select( v => $"{r.Key}: {v}" ) ) )})";
         if( Collected.Count > 0 ) s += $" (Collected: {string.Join( ", ", Collected.Select( c => $"{c.Key}: {c.Value.Length}" ) )})";
         if( EncryptionKey != null ) s += $" (EncryptionKey: {EncryptionKey})";
         return s;
@@ -399,7 +486,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     {
         readonly List<ClientApplicationDescription> _apps = new();
         readonly Dictionary<string, string> _data = new( StringComparer.Ordinal );
-        readonly Dictionary<string, string> _hostedRoutes = new( StringComparer.Ordinal );
+        readonly Dictionary<string, string?> _hostedRoutes = new( StringComparer.Ordinal );
         readonly Dictionary<string, IReadOnlyList<string>> _collected = new( StringComparer.Ordinal );
 
         /// <summary>
@@ -434,9 +521,9 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         public IReadOnlyDictionary<string, string> Data => _data;
 
         /// <summary>
-        /// Gets the routes hosted by the party, so far: the target of each route name.
+        /// Gets the routes hosted by the party, so far: the target of each route name (null when it has none).
         /// </summary>
-        public IReadOnlyDictionary<string, string> HostedRoutes => _hostedRoutes;
+        public IReadOnlyDictionary<string, string?> HostedRoutes => _hostedRoutes;
 
         /// <summary>
         /// Sets a data announcement (see <see cref="PartyDescription.Data"/>).
@@ -451,15 +538,14 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         }
 
         /// <summary>
-        /// States that the party hosts the route <paramref name="name"/>, with a target (see <see cref="PartyRoute"/>):
+        /// States that the party hosts the route <paramref name="name"/>, with an optional target (see <see cref="PartyRoute"/>):
         /// the second phase gives the party this route, and its remotes relay it.
         /// </summary>
         /// <param name="name">The name of the route: a non empty name without whitespace.</param>
-        /// <param name="target">The target: a string (an URL, the name of a command...).</param>
-        public void HostRoute( string name, string target )
+        /// <param name="target">The target, when the route has one: a string (an URL...).</param>
+        public void HostRoute( string name, string? target = null )
         {
             Throw.CheckArgument( IsValidName( name ) );
-            Throw.CheckNotNullArgument( target );
             _hostedRoutes[name] = target;
         }
 
@@ -506,7 +592,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     public sealed class DerivedBuilder
     {
         readonly Builder _facts;
-        readonly Dictionary<string, PartyRoute> _routes = new( StringComparer.Ordinal );
+        readonly Dictionary<string, ImmutableArray<PartyRoute>> _routes = new( StringComparer.Ordinal );
         readonly Dictionary<string, ImmutableArray<CollectedItem>> _collected = new( StringComparer.Ordinal );
 
         /// <summary>
@@ -535,25 +621,27 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         public IReadOnlyDictionary<string, string> Data => _facts.Data;
 
         /// <summary>
-        /// Gets the routes hosted by the party (the target of each route name), stated by the first phase.
+        /// Gets the routes hosted by the party (the target of each route name, null when it has none), stated by the first
+        /// phase.
         /// </summary>
-        public IReadOnlyDictionary<string, string> HostedRoutes => _facts.HostedRoutes;
+        public IReadOnlyDictionary<string, string?> HostedRoutes => _facts.HostedRoutes;
 
         /// <summary>
         /// Gets the routes set so far.
         /// </summary>
-        public IReadOnlyDictionary<string, PartyRoute> Routes => _routes;
+        public IReadOnlyDictionary<string, ImmutableArray<PartyRoute>> Routes => _routes;
 
         /// <summary>
-        /// Sets (or removes when <paramref name="route"/> is null) a route of the party (see <see cref="PartyDescription.Routes"/>).
+        /// Sets (or removes when <paramref name="routes"/> is null or empty) the routes of a name (see
+        /// <see cref="PartyDescription.Routes"/>): at most one route per host.
         /// </summary>
         /// <param name="name">The name of the route: a non empty name without whitespace.</param>
-        /// <param name="route">The route, null to remove it.</param>
-        public void SetRoute( string name, PartyRoute? route )
+        /// <param name="routes">The routes, null to remove them.</param>
+        public void SetRoutes( string name, IEnumerable<PartyRoute>? routes )
         {
-            Throw.CheckArgument( IsValidName( name ) );
-            if( route == null ) _routes.Remove( name );
-            else _routes[name] = route;
+            if( !TryNormalizeRoutes( name, routes, out var normalized, out var error ) ) Throw.ArgumentException( error );
+            if( normalized.Length == 0 ) _routes.Remove( name );
+            else _routes[name] = normalized;
         }
 
         /// <summary>
@@ -587,7 +675,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                                                                  _facts.ClientApplications.ToImmutableArray(),
                                                                  null,
                                                                  _facts.Data,
-                                                                 _routes,
+                                                                 ToEnumerable( _routes ),
                                                                  _facts.EncryptionKey,
                                                                  ToEnumerable( _collected ) );
     }
@@ -600,25 +688,18 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
 public sealed class ClientApplicationDescription : IEquatable<ClientApplicationDescription>
 {
     /// <summary>
-    /// The context of the <see cref="Facts"/> of the client applications ("PartyClientFact", separator '|'). The facts of a
-    /// client come from what it is built from: the PartyClientFact attribute of CK.AppIdentity.PartyClient on its types.
-    /// </summary>
-    public static readonly CKTraitContext FactContext = CKTraitContext.Create( "PartyClientFact" );
-
-    /// <summary>
     /// Initializes a new client application description.
     /// </summary>
     /// <param name="name">The client application name.</param>
     /// <param name="requestPath">Its request path: "/" for the default one, "/mini-app" for another one.</param>
-    /// <param name="facts">Its facts (a trait of the <see cref="FactContext"/>). Null for none.</param>
-    public ClientApplicationDescription( string name, string requestPath, CKTrait? facts = null )
+    /// <param name="facts">Its facts. Null for none.</param>
+    public ClientApplicationDescription( string name, string requestPath, ClientApplicationFacts? facts = null )
     {
         Throw.CheckNotNullOrWhiteSpaceArgument( name );
         Throw.CheckNotNullArgument( requestPath );
-        Throw.CheckArgument( facts == null || facts.Context == FactContext );
         Name = name;
         RequestPath = requestPath;
-        Facts = facts ?? FactContext.EmptyTrait;
+        Facts = facts ?? ClientApplicationFacts.Empty;
     }
 
     /// <summary>
@@ -633,9 +714,9 @@ public sealed class ClientApplicationDescription : IEquatable<ClientApplicationD
 
     /// <summary>
     /// Gets its facts: what the client is, stated by what it is built from (the PartyClientFact attribute of
-    /// CK.AppIdentity.PartyClient). Never null, <see cref="CKTrait.IsEmpty"/> when it has none.
+    /// CK.AppIdentity.PartyClient). Never null, <see cref="ClientApplicationFacts.IsEmpty"/> when it has none.
     /// </summary>
-    public CKTrait Facts { get; }
+    public ClientApplicationFacts Facts { get; }
 
     /// <summary>
     /// Gets whether this is the default client application of the party (served at "/").
@@ -646,7 +727,7 @@ public sealed class ClientApplicationDescription : IEquatable<ClientApplicationD
     public bool Equals( ClientApplicationDescription? other ) => other != null
                                                                  && Name == other.Name
                                                                  && RequestPath == other.RequestPath
-                                                                 && Facts == other.Facts;
+                                                                 && Facts.Equals( other.Facts );
 
     /// <inheritdoc />
     public override bool Equals( object? obj ) => Equals( obj as ClientApplicationDescription );

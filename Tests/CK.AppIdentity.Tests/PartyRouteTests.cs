@@ -71,14 +71,22 @@ public class PartyRouteTests
                                       default,
                                       null,
                                       [new KeyValuePair<string, string>( "Region", "eu-west" )],
-                                      [new KeyValuePair<string, PartyRoute>( "Enlistment", new PartyRoute( "T", ["A", "B"] ) )] );
+                                      [new KeyValuePair<string, IEnumerable<PartyRoute>>( "Enlistment", [new PartyRoute( "T", ["A", "B"] )] ),
+                                       new KeyValuePair<string, IEnumerable<PartyRoute>>( "Mail", [new PartyRoute( null, ["A", "M2"] ), new PartyRoute( null, ["A", "M1"] )] )] );
         d.Data["Region"].ShouldBe( "eu-west" );
-        d.Routes["Enlistment"].Host.ShouldBe( "B" );
+        d.Routes["Enlistment"].ShouldHaveSingleItem().Host.ShouldBe( "B" );
+        d.Routes["Mail"].Select( r => r.Host ).ShouldBe( ["M1", "M2"], "A name can have several hosts, sorted." );
+        d.FindRoute( "Mail", "M2" ).ShouldNotBeNull().Target.ShouldBeNull();
+        d.FindRoute( "Mail", "M3" ).ShouldBeNull();
         d.ToString().ShouldContain( "(Data: Region)" );
-        d.ToString().ShouldContain( "(Routes: Enlistment: A > B (T))" );
+        d.ToString().ShouldContain( "(Routes: Enlistment: A > B (T), Mail: A > M1, Mail: A > M2)" );
         d.ShouldNotBe( new PartyDescription( null, default, null, d.Data ), "The routes are compared." );
-        d.ShouldNotBe( new PartyDescription( null, default, null, null, d.Routes ), "The data are compared." );
+        d.ShouldNotBe( new PartyDescription( null, default, null, null, d.Routes.Select( kv => new KeyValuePair<string, IEnumerable<PartyRoute>>( kv.Key, kv.Value ) ) ),
+                       "The data are compared." );
         Should.Throw<ArgumentException>( () => new PartyDescription( null, default, null, [new KeyValuePair<string, string>( "Bad name", "x" )] ) );
+        Should.Throw<ArgumentException>( () => new PartyDescription( null, default, null, null,
+                                                                     [new KeyValuePair<string, IEnumerable<PartyRoute>>( "Mail", [new PartyRoute( null, ["A", "M1"] ), new PartyRoute( null, ["B", "M1"] )] )] ),
+                                         "One route per host." );
 
         using var stream = new MemoryStream();
         using( var w = new System.Text.Json.Utf8JsonWriter( stream ) ) d.Write( w );

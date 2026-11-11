@@ -270,21 +270,25 @@ public class PartyClientFeatureTests
         await host.StopAsync( cancel );
     }
 
-    [TestCase( "Enlistment", true )]
-    [TestCase( "", false )]
-    [TestCase( "A|B", false )]
-    [TestCase( "A B", false )]
-    public void a_fact_is_an_atomic_name( string fact, bool isValid )
+    [TestCase( "Enlistment", "", true )]
+    [TestCase( "Enlistment", "app-identity/enlist", true )]
+    [TestCase( "A|B", "", true )]
+    [TestCase( "", "", false )]
+    [TestCase( "A=B", "", false )]
+    [TestCase( "A,B", "", false )]
+    [TestCase( "A B", "", false )]
+    [TestCase( "A", "x\ny", false )]
+    public void a_fact_is_a_key_with_an_optional_value( string key, string value, bool isValid )
     {
         if( isValid )
         {
-            var a = new PartyClientFactAttribute( fact );
-            a.Trait.IsAtomic.ShouldBeTrue();
-            a.Trait.Context.ShouldBeSameAs( ClientApplicationDescription.FactContext );
+            var a = new PartyClientFactAttribute( key, value );
+            a.Key.ShouldBe( key );
+            a.Value.ShouldBe( value );
         }
         else
         {
-            Should.Throw<ArgumentException>( () => new PartyClientFactAttribute( fact ) );
+            Should.Throw<ArgumentException>( () => new PartyClientFactAttribute( key, value ) );
         }
     }
 }

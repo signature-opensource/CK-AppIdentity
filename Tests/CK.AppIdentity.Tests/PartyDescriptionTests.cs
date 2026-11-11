@@ -200,7 +200,8 @@ public class PartyDescriptionTests
 
         protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
         {
-            builder.HostRoute( "Hosted", "Some.Command" );
+            builder.HostRoute( "Hosted", "Some.Target" );
+            builder.HostRoute( "NoTarget" );
             builder.SetData( "Region", "eu-west" );
         }
 
@@ -208,7 +209,7 @@ public class PartyDescriptionTests
         {
             foreach( var (name, target) in builder.HostedRoutes )
             {
-                builder.SetRoute( name, PartyRoute.Hosted( target, party.FullName ) );
+                builder.SetRoutes( name, [PartyRoute.Hosted( target, party.FullName )] );
             }
         }
     }
@@ -221,7 +222,8 @@ public class PartyDescriptionTests
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.Description.Data["Region"].ShouldBe( "eu-west" );
-        root.Description.Routes["Hosted"].ShouldBe( PartyRoute.Hosted( "Some.Command", root.FullName ) );
+        root.Description.Routes["Hosted"].ShouldBe( [PartyRoute.Hosted( "Some.Target", root.FullName )] );
+        root.Description.FindRoute( "NoTarget", root.FullName ).ShouldNotBeNull().Target.ShouldBeNull();
         await host.StopAsync( cancel );
     }
 
@@ -257,16 +259,21 @@ public class PartyDescriptionTests
     }
 
     [Test]
-    public void the_facts_of_a_client_application_are_a_trait_compared_and_persisted()
+    public void the_facts_of_a_client_application_are_a_multimap_compared_and_persisted()
     {
-        var facts = ClientApplicationDescription.FactContext.FindOrCreate( "Enlistment|Admin" );
+        var facts = ClientApplicationFacts.Create( ("Enlistment", "app-identity/enlist"), ("Admin", ""), ("Tag", "b"), ("Tag", "a"), ("Admin", "") );
+        facts.ToString().ShouldBe( "Admin, Enlistment=app-identity/enlist, Tag=a, Tag=b", "Sorted, a pair is a single fact." );
+        facts.Get( "Tag" ).ShouldBe( ["a", "b"] );
+        facts.Get( "Admin" ).ShouldBe( [""] );
+        facts.Get( "None" ).ShouldBeEmpty();
+        facts.Union( ClientApplicationFacts.Create( ("Tag", "c"), ("Admin", "") ) ).Get( "Tag" ).ShouldBe( ["a", "b", "c"] );
+        facts.Union( facts ).ShouldBe( facts, "The union is idempotent." );
         var app = new ClientApplicationDescription( "App", "/", facts );
-        app.Facts.ToString().ShouldBe( "Admin|Enlistment", "A trait is sorted." );
-        app.ShouldBe( new ClientApplicationDescription( "App", "/", ClientApplicationDescription.FactContext.FindOrCreate( "Admin|Enlistment" ) ) );
+        app.ShouldBe( new ClientApplicationDescription( "App", "/", ClientApplicationFacts.Create( facts.Pairs ) ) );
         app.ShouldNotBe( new ClientApplicationDescription( "App", "/" ), "The facts are compared." );
         new ClientApplicationDescription( "App", "/" ).Facts.IsEmpty.ShouldBeTrue();
-        app.ToString().ShouldBe( "App (/, Facts: Admin|Enlistment)" );
-        Should.Throw<ArgumentException>( () => new ClientApplicationDescription( "App", "/", CKTraitContext.Create( "Other" ).FindOrCreate( "X" ) ) );
+        app.ToString().ShouldBe( "App (/, Facts: Admin, Enlistment=app-identity/enlist, Tag=a, Tag=b)" );
+        Should.Throw<ArgumentException>( () => ClientApplicationFacts.Create( ("Bad key", "") ) );
 
         var d = new PartyDescription( null, [app, new ClientApplicationDescription( "MiniApp", "/mini-app" )] );
         using var stream = new MemoryStream();
@@ -274,7 +281,7 @@ public class PartyDescriptionTests
         using var doc = System.Text.Json.JsonDocument.Parse( stream.ToArray() );
         PartyDescription.TryRead( doc.RootElement, out var back, out _ ).ShouldBeTrue();
         back.ShouldBe( d );
-        back.ClientApplications[0].Facts.ShouldBeSameAs( facts );
+        back.ClientApplications[0].Facts.ShouldBe( facts );
     }
 
     [Test]

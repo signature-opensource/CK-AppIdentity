@@ -12,7 +12,7 @@ namespace CK.AppIdentity;
 /// <see cref="PartyDescription.Routes"/> of the parties: each party knows the route of its nearest connected remote, one
 /// hop more, so that any party of a System knows where the hosting party is and through which parties it is reached.
 /// <para>
-/// The <see cref="Target"/> is a mere string, never interpreted by the route: the hosting party sets it (an URL, the name
+/// The optional <see cref="Target"/> is a mere string, never interpreted by the route: the hosting party sets it (an URL, the name
 /// of a command...) and the other parties pass it along unchanged. The <see cref="Path"/> is the list of the parties
 /// from the announcing one to the hosting one, both included: a party that finds its own name in a path ignores it, so
 /// that no loop is possible.
@@ -28,11 +28,10 @@ public sealed class PartyRoute : IEquatable<PartyRoute>
     /// <summary>
     /// Initializes a new route.
     /// </summary>
-    /// <param name="target">The target: a string set by the hosting party.</param>
+    /// <param name="target">The target: a string set by the hosting party, null when the route has none.</param>
     /// <param name="path">The full names of the parties, from the announcing one to the hosting one (1 to <see cref="MaxLength"/> distinct names).</param>
-    public PartyRoute( string target, IEnumerable<string> path )
+    public PartyRoute( string? target, IEnumerable<string> path )
     {
-        Throw.CheckNotNullArgument( target );
         Throw.CheckNotNullArgument( path );
         var p = path.ToImmutableArray();
         Throw.CheckArgument( "A path has 1 to MaxLength parties.", p.Length >= 1 && p.Length <= MaxLength );
@@ -45,15 +44,16 @@ public sealed class PartyRoute : IEquatable<PartyRoute>
     /// <summary>
     /// Creates the route of the hosting party itself: a path of one name.
     /// </summary>
-    /// <param name="target">The target.</param>
+    /// <param name="target">The target, null when the route has none.</param>
     /// <param name="hostFullName">The full name of the hosting party.</param>
     /// <returns>The route.</returns>
-    public static PartyRoute Hosted( string target, string hostFullName ) => new PartyRoute( target, [hostFullName] );
+    public static PartyRoute Hosted( string? target, string hostFullName ) => new PartyRoute( target, [hostFullName] );
 
     /// <summary>
-    /// Gets the target: a string set by the hosting party (an URL, the name of a command...).
+    /// Gets the target: a string set by the hosting party (an URL...), null when the route has none (most routes: the
+    /// host is what is reached).
     /// </summary>
-    public string Target { get; }
+    public string? Target { get; }
 
     /// <summary>
     /// Gets the full names of the parties from the announcing one (the first) to the hosting one (the last).
@@ -154,5 +154,5 @@ public sealed class PartyRoute : IEquatable<PartyRoute>
     /// Returns "First > ... > Host (Target)".
     /// </summary>
     /// <returns>A readable string.</returns>
-    public override string ToString() => $"{string.Join( " > ", Path )} ({Target})";
+    public override string ToString() => Target == null ? string.Join( " > ", Path ) : $"{string.Join( " > ", Path )} ({Target})";
 }

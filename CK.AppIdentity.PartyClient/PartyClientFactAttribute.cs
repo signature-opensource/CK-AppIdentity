@@ -9,8 +9,8 @@ namespace CK.AppIdentity;
 /// once per build, into the <see cref="ClientApplicationDescription.Facts"/> of the client. The client announces them
 /// with its party's description, so that the other parties know what it is.
 /// <para>
-/// A fact is an atomic trait of the <see cref="ClientApplicationDescription.FactContext"/>: a name without the '|'
-/// separator and without whitespace ("Enlistment"). The attribute can be repeated, and it is not inherited.
+/// A fact is a key with an optional value (see <see cref="ClientApplicationFacts"/>): <c>[PartyClientFact( "Admin" )]</c>,
+/// <c>[PartyClientFact( "Enlistment", "app-identity/enlist" )]</c>. The attribute can be repeated, and it is not inherited.
 /// </para>
 /// </summary>
 [AttributeUsage( AttributeTargets.Class, AllowMultiple = true, Inherited = false )]
@@ -19,22 +19,23 @@ public sealed class PartyClientFactAttribute : Attribute
     /// <summary>
     /// Initializes a new fact.
     /// </summary>
-    /// <param name="fact">The fact: a name without the '|' separator and without whitespace.</param>
-    public PartyClientFactAttribute( string fact )
+    /// <param name="key">The key: a non empty name without whitespace, '=' nor ','.</param>
+    /// <param name="value">The value: empty for a fact without value.</param>
+    public PartyClientFactAttribute( string key, string value = "" )
     {
-        Throw.CheckNotNullOrWhiteSpaceArgument( fact );
-        Throw.CheckArgument( "A fact is a name without the '|' separator and without whitespace.",
-                             fact.IndexOf( ClientApplicationDescription.FactContext.Separator ) < 0 && !fact.AsSpan().ContainsAny( " \t\r\n" ) );
-        Fact = fact;
+        Throw.CheckArgument( "A fact key is a non empty name without whitespace, '=' nor ','.", ClientApplicationFacts.IsValidKey( key ) );
+        Throw.CheckArgument( "A fact value has no control character.", ClientApplicationFacts.IsValidValue( value ) );
+        Key = key;
+        Value = value;
     }
 
     /// <summary>
-    /// Gets the fact.
+    /// Gets the key of the fact.
     /// </summary>
-    public string Fact { get; }
+    public string Key { get; }
 
     /// <summary>
-    /// Gets the fact as an atomic trait of the <see cref="ClientApplicationDescription.FactContext"/>.
+    /// Gets the value of the fact: empty for a fact without value.
     /// </summary>
-    public CKTrait Trait => ClientApplicationDescription.FactContext.FindOrCreate( Fact );
+    public string Value { get; }
 }

@@ -78,9 +78,13 @@ none: it is not announced).
 
 ## The facts of a client
 
-A type that a client is built from states facts about it with [`[PartyClientFact( "..." )]`](PartyClientFactAttribute.cs)
-(repeatable, not inherited): a TypeScript package that is an approval page states `[PartyClientFact( "Enlistment" )]`.
-The engine that builds a kind of client unions the facts of the types each client is built from, once per build (the
-TypeScript engine does it for the client applications, from their selected packages). The result is a `CKTrait` of
-`ClientApplicationDescription.FactContext` ("Admin|Enlistment"): the `Facts` of the client's description, announced
-with it. Nothing is configured, nothing is computed at run time: what a client is comes from what it is built from.
+A type that a client is built from states facts about it with
+[`[PartyClientFact( key, value )]`](PartyClientFactAttribute.cs) (repeatable, not inherited, the value is optional): a
+TypeScript package that is an approval page states `[PartyClientFact( "Enlistment", "app-identity/enlist" )]` (the path of
+the page), an administration application `[PartyClientFact( "Admin" )]`. The engine that builds a kind of client unions
+the facts of the types each client is built from, once per build (the TypeScript engine does it for the client
+applications, from their selected packages). The result is a
+[`ClientApplicationFacts`](../CK.AppIdentity.Abstractions/ClientApplicationFacts.cs), a multimap (a key has a set of
+values, the union is associative, commutative and idempotent): the `Facts` of the client's description, announced with
+it. Each consumer decides what it accepts for a key. Nothing is configured, nothing is computed at run time: what a
+client is comes from what it is built from.
