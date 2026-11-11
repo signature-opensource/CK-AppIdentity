@@ -71,6 +71,8 @@ sealed class FileStore : IFileStore
     /// <summary>
     /// Deletes a directory (created by <see cref="CreateFolder"/>) if it contains no file: its empty sub directories
     /// are deleted. A directory that contains files is kept (another application that shares the store may be using it).
+    /// The directories are deleted bottom-up, never recursively: a file written concurrently by another application
+    /// makes the deletion of its directory (and of the parents) fail, the file is never lost.
     /// Errors are logged as warnings.
     /// </summary>
     /// <param name="logger">The logger to use.</param>
@@ -85,11 +87,18 @@ sealed class FileStore : IFileStore
                 logger.Trace( $"Folder '{path}' is not empty: it is kept." );
                 return;
             }
-            Directory.Delete( path, recursive: true );
+            DeleteBottomUp( path );
         }
         catch( Exception ex )
         {
             logger.Warn( $"Unable to delete the folder '{path}'.", ex );
+        }
+
+        // A non recursive delete fails on a non empty directory.
+        static void DeleteBottomUp( string path )
+        {
+            foreach( var d in Directory.GetDirectories( path ) ) DeleteBottomUp( d );
+            Directory.Delete( path, recursive: false );
         }
     }
 
