@@ -41,7 +41,8 @@ The options of an owner are ordered by the topology attributes between them: `[R
 their optional forms (`[OptionalRequires<T>]`, `[OptionalRequiredBy<T>]`).
 
 - The direction of a relation gives the order: a required option comes before the one that requires it.
-- A non optional relation also means "only with it": the option can't be enabled without the other one. An optional
+- A non optional relation also means "only with it": the requiring option can't be enabled without the required one.
+  `[Requires<T>]` on X: X requires T. `[RequiredBy<T>]` on X: T requires X (X can be enabled alone). An optional
   relation is an order only.
 - A relation to a class that is not an option of the same owner is ignored.
 

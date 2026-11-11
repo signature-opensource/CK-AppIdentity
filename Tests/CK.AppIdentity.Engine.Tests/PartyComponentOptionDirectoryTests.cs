@@ -60,6 +60,32 @@ public class PartyComponentOptionDirectoryTests
     }
 
     [Test]
+    public async Task RequiredBy_makes_the_target_require_the_declaring_option_Async()
+    {
+        var configuration = TestHelper.CreateDefaultEngineConfiguration();
+        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
+                                              typeof( FakeFeatureDriver ), typeof( MainOption ), typeof( TracingOption ) );
+        var r = await configuration.RunSuccessfullyAsync();
+        await using var auto = r.LoadMap().CreateAutomaticServices( services =>
+        {
+            services.AddSingleton( ApplicationIdentityServiceConfiguration.CreateEmpty( "Test", "Options" ) );
+        } );
+        var options = auto.Services.GetRequiredService<PartyComponentOptionDirectory>().GetOptions( typeof( FakeFeatureDriver ) );
+        options.Select( o => o.Name ).ShouldBe( ["Tracing", "Main"] );
+        // [RequiredBy<MainOption>] on Tracing: Main requires Tracing, Tracing requires nothing.
+        options[0].Requires.ShouldBeEmpty();
+        options[1].Requires.ShouldBe( ["Tracing"] );
+
+        PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Tracing": true }""" ), out var selected ).ShouldBeTrue();
+        selected.Select( s => s.Info.Name ).ShouldBe( ["Tracing"] );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Main": true, "Tracing": false }""" ), out _ ).ShouldBeFalse();
+            texts.ShouldContain( "The option 'Main' requires the option 'Tracing' that is disabled." );
+        }
+    }
+
+    [Test]
     public async Task an_option_is_created_with_the_services_of_its_owner_Async()
     {
         await using var auto = await CreateServicesAsync();

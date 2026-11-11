@@ -154,7 +154,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
             RevertOrderingNames = group.EngineConfiguration.RevertOrderingNames
         };
         var byRawType = island.ToDictionary( o => o.Type.Type );
-        var requires = new Dictionary<OptionModel, List<string>>();
+        var requires = island.ToDictionary( o => o, o => new List<string>() );
         bool success = true;
         foreach( var o in island )
         {
@@ -164,13 +164,17 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                 success = false;
                 continue;
             }
-            // The non optional relations (both directions): "only with it".
+            // The non optional relations: "only with it", the requiring option can't be enabled without the required one.
+            // [Requires<T>] on o: o requires T. [RequiredBy<T>] on o: T requires o.
             // Before the build, the references of a type's relations are their raw types.
-            requires[o] = d.Requires.Concat( d.RequiredBy )
-                           .Where( r => !r.IsOptional && r.AsType is { } t && byRawType.ContainsKey( t ) )
-                           .Select( r => byRawType[r.AsType!].Name )
-                           .Distinct()
-                           .ToList();
+            foreach( var r in d.Requires )
+            {
+                if( !r.IsOptional && r.AsType is { } t && byRawType.TryGetValue( t, out var required ) ) AddRequirement( o, required.Name );
+            }
+            foreach( var r in d.RequiredBy )
+            {
+                if( !r.IsOptional && r.AsType is { } t && byRawType.TryGetValue( t, out var requiring ) ) AddRequirement( requiring, o.Name );
+            }
         }
         if( !success ) return null;
         var collector = config.Build( monitor );
@@ -180,6 +184,12 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         return data.CoreData.Packages.Where( p => p.Type != null && byType.ContainsKey( p.Type ) )
                                      .Select( p => (byType[p.Type!], requires[byType[p.Type!]]) )
                                      .ToList();
+
+        void AddRequirement( OptionModel requiring, string required )
+        {
+            var list = requires[requiring];
+            if( !list.Contains( required ) ) list.Add( required );
+        }
     }
 
     // The compatibility rule of an island: the options of an owner type assignable from the owner. A relation to another

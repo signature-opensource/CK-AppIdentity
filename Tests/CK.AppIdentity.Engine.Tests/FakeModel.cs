@@ -48,6 +48,13 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
     public FakeService Service { get; }
 }
 
+// A non optional [RequiredBy<T>]: Main requires Tracing (Tracing comes first and can be enabled alone).
+// Used only by its own test (not in the common model).
+[FeatureOption, RequiredBy<MainOption>]
+public sealed class TracingOption : IPartyComponentOption<FakeFeatureDriver>
+{
+}
+
 /// <summary>
 /// A fake client type and a client type derived from it.
 /// </summary>

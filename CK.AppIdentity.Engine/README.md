@@ -17,7 +17,7 @@ options without any reflection at runtime.
 3. **Each owner is a ResourceSpace island** (CK.ResourceSpace): its options are the allowed types, and the compatibility
    rule accepts the options of an owner type assignable from it (a relation to another class is ignored). The island
    orders the options by their topology attributes, and its non optional relations become the requirements of the
-   options.
+   options (`[Requires<T>]` on X: X requires T; `[RequiredBy<T>]` on X: T requires X).
 4. **The generated constructor** gives the directory the ordered options of each owner, with a factory per option that
    resolves its constructor parameters from the owner's services.
 
