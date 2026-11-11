@@ -36,13 +36,13 @@ public class ApplicationIdentityConfiguration
     public ImmutableConfigurationSection Configuration => _configuration;
 
     /// <summary>
-    /// Gets the feature names that are disabled for this party.
+    /// Gets the feature names that are disabled for this party (case insensitive).
     /// No <see cref="AllowFeatures"/> appear in this set.
     /// </summary>
     public IReadOnlySet<string> DisallowFeatures => _disallowFeatures;
 
     /// <summary>
-    /// Gets the feature names that are enabled for this party.
+    /// Gets the feature names that are enabled for this party (case insensitive).
     /// No <see cref="DisallowFeatures"/> appear in this set.
     /// </summary>
     public IReadOnlySet<string> AllowFeatures => _allowFeatures;
@@ -55,7 +55,7 @@ public class ApplicationIdentityConfiguration
 
     /// <summary>
     /// Computes whether a feature is allowed for this party: it is in <see cref="AllowFeatures"/>, or it is
-    /// not in <see cref="DisallowFeatures"/> and <paramref name="isAllowedByDefault"/> is true.
+    /// not in <see cref="DisallowFeatures"/> and <paramref name="isAllowedByDefault"/> is true. The names are case insensitive.
     /// </summary>
     /// <param name="featureName">The feature name.</param>
     /// <param name="isAllowedByDefault">Whether this feature is allowed by default (an opt-out feature).</param>

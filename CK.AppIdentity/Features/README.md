@@ -143,6 +143,11 @@ a string containing comma-separated substrings, or an array of strings. Their co
 initialization to establish a list of **possible** and **forbidden** Features at any Party level. The opt-in/opt-out function intrinsic
 to each FeatureDriver (described above) then takes over to establish the final list of Features for a Party.
 
+The names are case insensitive (like the full names of the parties). A name that is not the name of a registered feature
+(its `FeatureName`, or `FeatureName` + "Remote" for an asymmetric feature) is reported when the agent starts, and when a
+dynamic party is added: a warning, an error in `StrictConfigurationMode` (the start or the addition fails). A typo in a
+"DisallowFeatures" would otherwise silently leave a feature allowed by default enabled.
+
 Thanks to the topological ordering of the FeatureDrivers (described above), a Driver can decide whether a Feature is available
 depending on the status of another Feature (absence, presence, or even some of its configurations). 
 

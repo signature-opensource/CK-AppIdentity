@@ -146,8 +146,15 @@ public sealed class AppIdentityAgent : MicroAgent
             Exception? error;
             try
             {
-                var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
-                error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
+                if( CheckFeatureNames( monitor, _service.AllParties.Prepend<IParty>( _service ) ) )
+                {
+                    var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
+                    error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
+                }
+                else
+                {
+                    error = new CKException( "Unknown feature names in AllowFeatures or DisallowFeatures (see the logs) and StrictConfigurationMode is true." );
+                }
             }
             catch( Exception ex )
             {
@@ -263,7 +270,8 @@ public sealed class AppIdentityAgent : MicroAgent
     {
         using( monitor.OpenInfo( $"Initializing {added.Count} parties ({_service._builders.Count} feature builders)." ) )
         {
-            if( !CheckNewParties( monitor, added ) )
+            if( !CheckNewParties( monitor, added )
+                || !CheckFeatureNames( monitor, added.Remotes.Concat<IParty>( added.Tenants.SelectMany( t => t.Remotes.Prepend<IParty>( t ) ) ) ) )
             {
                 monitor.CloseGroup( "Failed." );
                 return false;
@@ -340,6 +348,41 @@ public sealed class AppIdentityAgent : MicroAgent
         {
             FileStore.DeleteFolderIfEmpty( monitor, createdFolders[i] );
         }
+    }
+
+    // The names of the "AllowFeatures" and "DisallowFeatures" of the parties must be the names of the registered features
+    // (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive: an unknown name (a typo that
+    // would leave a feature allowed by default enabled) is a warning, an error in StrictConfigurationMode.
+    bool CheckFeatureNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
+    {
+        var known = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+        foreach( var d in _service._builders )
+        {
+            known.Add( d.FeatureName );
+            if( d.IsAsymmetric ) known.Add( d.FeatureName + "Remote" );
+        }
+        Dictionary<string, List<IParty>>? unknown = null;
+        foreach( var p in parties )
+        {
+            ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
+            foreach( var name in c.AllowFeatures.Concat( c.DisallowFeatures ) )
+            {
+                if( known.Contains( name ) ) continue;
+                unknown ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );
+                if( !unknown.TryGetValue( name, out var list ) ) unknown.Add( name, list = new List<IParty>() );
+                list.Add( p );
+            }
+        }
+        if( unknown == null ) return true;
+        bool strict = _service.Configuration.StrictConfigurationMode;
+        var knownNames = known.Order( StringComparer.Ordinal ).Concatenate( "', '" );
+        foreach( var (name, list) in unknown )
+        {
+            var text = $"Unknown feature '{name}' in the AllowFeatures or DisallowFeatures of '{list.Select( p => p.ToString() ).Concatenate( "', '" )}' (the features are '{knownNames}').";
+            if( strict ) monitor.Error( text + " StrictConfigurationMode is true." );
+            else monitor.Warn( text );
+        }
+        return !strict;
     }
 
     bool CheckNewParties( IActivityMonitor monitor, AddedDynamicParties added )

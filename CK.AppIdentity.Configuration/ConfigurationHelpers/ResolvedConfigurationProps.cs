@@ -1,4 +1,5 @@
 using CK.Core;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -10,6 +11,9 @@ namespace CK.AppIdentity;
 /// The combinable properties of a party configuration (a "Local" section or a remote): the Allow/DisallowFeatures and the
 /// assemblies. They are resolved from the "Defaults" sections above the party (from the root down) and the party's own
 /// keys: the nearest level wins. A structural level (the root, a tenant domain, a group) has none: <see cref="Empty"/>.
+/// <para>
+/// The feature names are case insensitive (like the full names of the parties): the sets use <see cref="StringComparer.OrdinalIgnoreCase"/>.
+/// </para>
 /// </summary>
 readonly struct ResolvedConfigurationProps
 {
@@ -29,8 +33,8 @@ readonly struct ResolvedConfigurationProps
     /// <summary>
     /// The properties of a structural level.
     /// </summary>
-    public static ResolvedConfigurationProps Empty => new ResolvedConfigurationProps( ImmutableHashSet<string>.Empty,
-                                                                                      ImmutableHashSet<string>.Empty,
+    public static ResolvedConfigurationProps Empty => new ResolvedConfigurationProps( ImmutableHashSet.Create<string>( StringComparer.OrdinalIgnoreCase ),
+                                                                                      ImmutableHashSet.Create<string>( StringComparer.OrdinalIgnoreCase ),
                                                                                       AssemblyConfiguration.Empty );
 
     /// <summary>
@@ -43,8 +47,8 @@ readonly struct ResolvedConfigurationProps
     public static bool TryResolve( IActivityMonitor monitor, ImmutableConfigurationSection party, out ResolvedConfigurationProps props )
     {
         bool success = true;
-        var allow = new HashSet<string>();
-        var disallow = new HashSet<string>();
+        var allow = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+        var disallow = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
         // The "Defaults" above (from the root down: the nearest wins), then the party itself.
         var levels = party.LookupAllSectionWithDistance( ConfigurationSectionExtension.DefaultsKey )
                           .Where( d => d.Item2 > 0 )
@@ -79,8 +83,8 @@ readonly struct ResolvedConfigurationProps
                                               [NotNullWhen( true )] out HashSet<string>? allow,
                                               [NotNullWhen( true )] out HashSet<string>? disallow )
     {
-        allow = level.ReadUniqueStringSet( monitor, "AllowFeatures" );
-        disallow = level.ReadUniqueStringSet( monitor, "DisallowFeatures" );
+        allow = level.ReadUniqueStringSet( monitor, "AllowFeatures", StringComparer.OrdinalIgnoreCase );
+        disallow = level.ReadUniqueStringSet( monitor, "DisallowFeatures", StringComparer.OrdinalIgnoreCase );
         if( allow != null && disallow != null )
         {
             if( !allow.Overlaps( disallow ) )

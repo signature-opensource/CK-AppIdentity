@@ -104,7 +104,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         AsymmetricDrivers? asymmetric = kind > 0 ? new AsymmetricDrivers() : null;
         foreach( var other in s._builders )
         {
-            if( other._featureName != name ) continue;
+            // The configured names are case insensitive: two features can't differ only by case.
+            if( !string.Equals( other._featureName, name, System.StringComparison.OrdinalIgnoreCase ) ) continue;
             if( (other._asymmetric == null) != (asymmetric == null) )
             {
                 var symmetric = asymmetric == null ? this : other;
