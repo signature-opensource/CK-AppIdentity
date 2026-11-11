@@ -43,8 +43,10 @@ and carries on to register the configuration singleton. The application still ge
 `ApplicationIdentityServiceConfiguration`; what it loses is the process-level identity matching it. When
 that matters, this call has to come before whatever initialized the identity first.
 
-`contextDescriptor` defaults to `Environment.CommandLine`, which is a deliberate choice rather than a
-placeholder: it is the one piece of context that distinguishes two processes of the same party.
+`contextDescriptor` defaults to the path of the application (the first command line argument) and the
+process identifier: it distinguishes two processes of the same party. The arguments are not part of it: the
+descriptor is logged and exported with the logs (in the identity card of the process), and arguments can carry
+secrets (`--ConnectionStrings:Db="...;Password=..."`). A descriptor given explicitly is used as is.
 
 ## Getting the identity service itself.
 
