@@ -93,12 +93,20 @@ public abstract class ApplicationIdentityParty : IParty
     }
 
     /// <inheritdoc />
-    public T? GetFeature<T>() => _features.OfType<T>().FirstOrDefault();
+    public T? GetFeature<T>()
+    {
+        // A plain loop: this is called on per-command paths.
+        foreach( var f in _features )
+        {
+            if( f is T t ) return t;
+        }
+        return default;
+    }
 
     /// <inheritdoc />
     public T GetRequiredFeature<T>()
     {
-        var feature = _features.OfType<T>().FirstOrDefault();
+        var feature = GetFeature<T>();
         if( feature == null ) Throw.InvalidOperationException( $"Unable to find a feature '{typeof( T ).ToCSharpName()}' in '{FullName}'." );
         return feature;
     }
