@@ -179,6 +179,9 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     internal Task OnCreatedRemoteAsync( IActivityMonitor monitor, RemoteParty p )
     {
         Util.InterlockedAdd( ref _remotes, p );
+        // A tenant domain destroyed concurrently (after the agent's last check) may have missed this remote when it
+        // marked its remotes as destroyed: its destruction (handled after this) removes it, it must be marked too.
+        if( this is TenantDomainParty { IsDestroyed: true } ) p.DoSetDestroyed( false );
         // Subscribers' exceptions are logged: the remote is created.
         return _remotesChanged.SafeRaiseAsync( monitor, p );
     }

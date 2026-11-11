@@ -304,13 +304,18 @@ public sealed class AppIdentityAgent : MicroAgent
                     setup.Add( p );
                 }
             }
-            if( setup.Count < added.Count )
+            // A tenant domain can be destroyed while its new remotes are set up (its destruction is handled after this job):
+            // a remote is never published in a destroyed domain.
+            bool domainDestroyed = setup.Count == added.Count && !CheckLiveDomains( monitor, added );
+            if( setup.Count < added.Count || domainDestroyed )
             {
                 // The parties that have been fully set up have never been published: they are torn down.
                 for( int i = setup.Count - 1; i >= 0; --i )
                 {
                     var p = setup[i];
-                    using( monitor.OpenInfo( $"Tearing down dynamic party '{p}' that has been set up: another party of the same batch failed." ) )
+                    using( monitor.OpenInfo( domainDestroyed
+                                                ? $"Tearing down dynamic party '{p}' that has been set up: a tenant domain of the batch is destroyed."
+                                                : $"Tearing down dynamic party '{p}' that has been set up: another party of the same batch failed." ) )
                     {
                         var context = new FeatureLifetimeContext( monitor, this, _service._builders );
                         await context.ExecuteTeardownDynamicRemoteAsync( p ).ConfigureAwait( false );
@@ -355,7 +360,13 @@ public sealed class AppIdentityAgent : MicroAgent
                 success = false;
             }
         }
-        // Remotes can be added to a tenant domain: it must be alive.
+        return CheckLiveDomains( monitor, added ) && success;
+    }
+
+    // Remotes can be added to a tenant domain: it must be alive.
+    bool CheckLiveDomains( IActivityMonitor monitor, AddedDynamicParties added )
+    {
+        bool success = true;
         foreach( var r in added.Remotes )
         {
             if( r.Owner is TenantDomainParty d && (d.IsDestroyed || !_service.TenantDomains.Contains( d )) )

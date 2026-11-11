@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
 
@@ -133,4 +134,52 @@ public class DomainTests
         await ((IHostedService)empty).StopAsync( default );
     }
 
+    // Blocks the setup of the dynamic party "$Blocked" until Release is completed.
+    public sealed class BlockingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
+    {
+        public BlockingFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+
+        public readonly TaskCompletionSource Entered = new( TaskCreationOptions.RunContinuationsAsynchronously );
+        public readonly TaskCompletionSource Release = new( TaskCreationOptions.RunContinuationsAsynchronously );
+
+        protected override async Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+        {
+            if( party.PartyName == "$Blocked" )
+            {
+                Entered.SetResult();
+                await Release.Task;
+            }
+            return true;
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_remote_is_never_added_to_a_tenant_domain_destroyed_during_its_setup_Async( CancellationToken cancel )
+    {
+        var config = new MutableConfigurationSection( "DontCare" );
+        config["CK-AppIdentity:FullName"] = "D/$P";
+        var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
+        builder.Configuration.Sources.Add( new ChainedConfigurationSource { Configuration = config } );
+        builder.Services.AddSingleton<ApplicationIdentityService>();
+        builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
+        builder.Services.AddSingleton<BlockingFeatureDriver>();
+        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<BlockingFeatureDriver>() );
+        using var app = builder.AddApplicationIdentityServiceConfiguration().CKBuild();
+        await app.StartAsync( cancel );
+        var s = app.Services.GetRequiredService<ApplicationIdentityService>();
+        var driver = app.Services.GetRequiredService<BlockingFeatureDriver>();
+
+        var d1 = await s.AddTenantDomainAsync( TestHelper.Monitor, c => c["FullName"] = "D1/$D1" );
+        Throw.DebugAssert( d1 != null );
+        var adding = d1.AddRemoteAsync( TestHelper.Monitor, c => c["FullName"] = "D1/$Blocked" );
+        await driver.Entered.Task.WaitAsync( cancel );
+        // The domain is destroyed while its new remote is set up.
+        var destroying = d1.DestroyAsync();
+        driver.Release.SetResult();
+        (await adding.WaitAsync( cancel )).ShouldBeNull( "The domain has been destroyed: the remote is not added." );
+        await destroying.WaitAsync( cancel );
+        s.AllParties.ShouldBeEmpty();
+        await app.StopAsync( cancel );
+    }
 }
