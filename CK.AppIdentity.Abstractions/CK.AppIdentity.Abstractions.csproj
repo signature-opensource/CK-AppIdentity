@@ -8,9 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CK.PerfectEvent" Version="30.0.0-0.cris-auth.0.ci.8" />
+        <PackageReference Include="CK.PerfectEvent" Version="30.0.0-0.cris-auth.1" />
         <!-- The options of the party components are resource groups, ordered by the topology attributes. -->
-        <PackageReference Include="CK.ResourceSpace.Abstractions" Version="32.0.0-0.cris-auth.1.ci.11" />
+        <PackageReference Include="CK.ResourceSpace.Abstractions" Version="32.0.0-0.cris-auth.2" />
     </ItemGroup>
 
     <ItemGroup>
