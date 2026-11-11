@@ -115,7 +115,7 @@ public abstract class MicroAgent
     /// <param name="arg">The argument to the action. Should be a static lambda if possible.</param>
     /// <param name="action">The action to execute.</param>
     /// <returns>False if the agent is stopped: the action will never be executed.</returns>
-    public bool PostAction<T>( in T arg, Action<IActivityMonitor, T> action ) => _channel.Writer.TryWrite( new Job<T>( arg, action ) );
+    public bool PostAction<T>( in T arg, Action<IActivityMonitor, T> action ) => PostJob( new Job<T>( arg, action ) );
 
     /// <summary>
     /// Executes an asynchronous action on the agent loop. The goal is to avoid any closure in the action: the <paramref name="arg"/>
@@ -125,7 +125,7 @@ public abstract class MicroAgent
     /// <param name="arg">The argument to the action. Should be a static lambda if possible.</param>
     /// <param name="action">The action to execute.</param>
     /// <returns>False if the agent is stopped: the action will never be executed.</returns>
-    public bool PostTask<T>( in T arg, Func<IActivityMonitor, T, Task> action ) => _channel.Writer.TryWrite( new Job<T>( arg, action ) );
+    public bool PostTask<T>( in T arg, Func<IActivityMonitor, T, Task> action ) => PostJob( new Job<T>( arg, action ) );
 
     /// <summary>
     /// Executes an asynchronous action on the agent loop. The goal is to avoid any closure in the action: the <paramref name="arg"/>
@@ -135,7 +135,17 @@ public abstract class MicroAgent
     /// <param name="arg">The argument to the action.</param>
     /// <param name="action">The action to execute. Should be a static lambda if possible.</param>
     /// <returns>False if the agent is stopped: the action will never be executed.</returns>
-    public bool PostValueTask<T>( in T arg, Func<IActivityMonitor, T, ValueTask> action ) => _channel.Writer.TryWrite( new Job<T>( arg, action ) );
+    public bool PostValueTask<T>( in T arg, Func<IActivityMonitor, T, ValueTask> action ) => PostJob( new Job<T>( arg, action ) );
+
+    // Under the lock, SendStop can't write the stop signal concurrently: an accepted job comes before it and is executed.
+    // Once stopped, the job is refused (the teardown may still be running: the channel is not completed yet).
+    bool PostJob( IJob job )
+    {
+        lock( _channel )
+        {
+            return _status != RunningStatus.Stopped && _channel.Writer.TryWrite( job );
+        }
+    }
 
     /// <summary>
     /// Pushes an object that must be handled by <see cref="ExecuteTypedJobAsync(IActivityMonitor, object)"/>.
@@ -433,7 +443,8 @@ public abstract class MicroAgent
     }
 
     /// <summary>
-    /// Called at the end of the running the loop. Jobs pushed from here (or later) are rejected.
+    /// Called at the end of the running the loop. The Post methods already return false (the action is not executed) and
+    /// typed jobs pushed from here (or later) are rejected (see <see cref="OnRejectedTypedJob(IActivityLineEmitter, object)"/>).
     /// Does nothing at this level.
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
