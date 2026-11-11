@@ -43,10 +43,11 @@ and carries on to register the configuration singleton. The application still ge
 `ApplicationIdentityServiceConfiguration`; what it loses is the process-level identity matching it. When
 that matters, this call has to come before whatever initialized the identity first.
 
-`contextDescriptor` defaults to the path of the application (the first command line argument) and the
-process identifier: it distinguishes two processes of the same party. The arguments are not part of it: the
-descriptor is logged and exported with the logs (in the identity card of the process), and arguments can carry
-secrets (`--ConnectionStrings:Db="...;Password=..."`). A descriptor given explicitly is used as is.
+`contextDescriptor` defaults to the path of the application (the first command line argument). It describes the
+running context, not the running instance (the `ContextualId` of the `CoreApplicationIdentity` is computed from it and
+must be stable across restarts; the instance is its `InstanceId`). The arguments are not part of it: the descriptor
+is logged and exported with the logs (in the identity card of the process), and arguments can carry secrets
+(`--ConnectionStrings:Db="...;Password=..."`). A descriptor given explicitly is used as is.
 
 ## Getting the identity service itself.
 

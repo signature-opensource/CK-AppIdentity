@@ -20,14 +20,15 @@ public static class CKAppIdentityHostApplicationBuilderExtensions
     /// </summary>
     /// <param name="builder">The builder of the host.</param>
     /// <param name="contextDescriptor">
-    /// Defaults to the path of the application (the first command line argument) and the process identifier: never the
-    /// whole command line, whose arguments may carry secrets (the descriptor is logged and exported with the logs).
+    /// Defaults to the path of the application (the first command line argument): never the whole command line, whose
+    /// arguments may carry secrets (the descriptor is logged and exported with the logs). It describes the running context,
+    /// not the running instance (that is <see cref="CoreApplicationIdentity.InstanceId"/>): it is stable across restarts.
     /// </param>
     /// <returns>This builder.</returns>
     public static HostApplicationBuilder AddApplicationIdentityServiceConfiguration( this HostApplicationBuilder builder, string? contextDescriptor = null )
     {
         // The default ContextDescriptor identifies the process without its arguments (they may carry secrets).
-        contextDescriptor ??= $"{Environment.GetCommandLineArgs()[0]} (pid {Environment.ProcessId})";
+        contextDescriptor ??= Environment.GetCommandLineArgs()[0];
 
         var uniqueKey = typeof( ApplicationIdentityServiceConfiguration );
         var properties = ((IHostApplicationBuilder)builder).Properties;
