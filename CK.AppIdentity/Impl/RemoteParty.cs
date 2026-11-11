@@ -19,6 +19,8 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
     readonly TaskCompletionSource? _destroyTCS;
     int _isDestroyed;
     readonly bool _isDynamic;
+    // Set when the persisted description could not be read: the next announcement rewrites it.
+    volatile bool _invalidPersistedDescription;
 
     internal RemoteParty( RemotePartyConfiguration configuration, LocalParty owner, bool isDynamic )
         : base( configuration, isDynamic, owner.ApplicationIdentityService )
@@ -51,8 +53,10 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         }
         // Only the persisted projection is written (see PartyDescription.Write): a change of the routes, the collected
         // items or the encryption key alone doesn't rewrite the file (this runs on the caller's thread, often a channel's).
-        if( !HasSamePersistedContent( previous, description ) )
+        // An unreadable file is rewritten by the first announcement.
+        if( _invalidPersistedDescription || !HasSamePersistedContent( previous, description ) )
         {
+            _invalidPersistedDescription = false;
             PersistDescription( monitor, description );
         }
         // The agent's loop raises ILocalParty.RemoteDescriptionChanged: this stays synchronous.
@@ -101,6 +105,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
             else
             {
                 monitor.Warn( $"Invalid '{path}' ignored: {error}" );
+                _invalidPersistedDescription = true;
             }
         }
         catch( Exception ex ) when( ex is FileNotFoundException or DirectoryNotFoundException )
@@ -110,6 +115,7 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         catch( Exception ex )
         {
             monitor.Warn( $"While reading '{path}' (ignored).", ex );
+            _invalidPersistedDescription = true;
         }
     }
 

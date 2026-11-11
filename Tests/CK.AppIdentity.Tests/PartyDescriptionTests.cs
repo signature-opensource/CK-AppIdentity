@@ -202,6 +202,33 @@ public class PartyDescriptionTests
 
     [Test]
     [CancelAfter( 10000 )]
+    public async Task an_unreadable_description_file_is_rewritten_by_the_next_announcement_Async( CancellationToken cancel )
+    {
+        NormalizedPath file;
+        using( var first = BuildHost() )
+        {
+            await first.StartAsync( cancel );
+            var r = first.Services.GetRequiredService<ApplicationIdentityService>().Remotes.Single();
+            file = r.SharedFileStore.FolderPath.AppendPart( "PartyDescription.json" );
+            await first.StopAsync( cancel );
+        }
+        File.WriteAllText( file, """{ "Data": { "D": "1", "D": "2" } }""" );
+
+        using var host = BuildHost();
+        await host.StartAsync( cancel );
+        var remote = host.Services.GetRequiredService<ApplicationIdentityService>().Remotes.Single();
+        remote.Description.ShouldBe( PartyDescription.Empty, "The invalid file is ignored." );
+        // An announcement without any persisted part (like a Worker's) rewrites it.
+        remote.SetDescription( TestHelper.Monitor, new PartyDescription( null, [], encryptionKey: new PartyEncryptionKey( [1, 2, 3], [4, 5] ) ) ).ShouldBeTrue();
+        using( var doc = System.Text.Json.JsonDocument.Parse( File.ReadAllText( file ) ) )
+        {
+            PartyDescription.TryRead( doc.RootElement, out _, out _ ).ShouldBeTrue( "The file is valid again." );
+        }
+        await host.StopAsync( cancel );
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
     public async Task the_caller_party_is_the_local_party_or_one_of_its_remotes_Async( CancellationToken cancel )
     {
         using var host = BuildHost();
