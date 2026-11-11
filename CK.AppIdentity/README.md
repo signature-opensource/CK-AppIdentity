@@ -178,8 +178,9 @@ static feature allowed by default) sets it:
   act on.
 - **A remote's description is its last announcement** (`IRemoteParty.SetDescription`, called by the channel), persisted
   in the remote's folder of the shared store (`PartyDescription.json`: it is the remote's own statement, the same for
-  every local party) and read back when the remote is set up, so that it is known while the remote is not connected. A
-  change of its public URL is logged as a warning.
+  every local party) and read back when the remote is set up, so that it is known while the remote is not connected. The
+  file is written only when its persisted part changes (not for the routes, the collected items or the encryption key).
+  A change of its public URL is logged as a warning.
 
 The URL of a client application is derived, never stored: `PartyDescription.GetClientApplicationUrl( name )` (the
 default one, served at `/`, when the name is null).

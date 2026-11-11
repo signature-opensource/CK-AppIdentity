@@ -177,6 +177,31 @@ public class PartyDescriptionTests
 
     [Test]
     [CancelAfter( 10000 )]
+    public async Task the_description_file_is_written_only_when_its_persisted_part_changes_Async( CancellationToken cancel )
+    {
+        using var host = BuildHost();
+        await host.StartAsync( cancel );
+        var remote = host.Services.GetRequiredService<ApplicationIdentityService>().Remotes.Single();
+        var file = remote.SharedFileStore.FolderPath.AppendPart( "PartyDescription.json" );
+        var announced = new PartyDescription( null, [new ClientApplicationDescription( "App", "/" )], data: [new( "D", "1" )] );
+        remote.SetDescription( TestHelper.Monitor, announced );
+        File.Exists( file ).ShouldBeTrue();
+
+        // Deletes the file: a change of the encryption key (not persisted) doesn't write it again.
+        remote.SharedFileStore.TryTrash( TestHelper.Monitor, file, immediateDelete: true );
+        var withKey = new PartyDescription( null, announced.ClientApplications, data: announced.Data, encryptionKey: new PartyEncryptionKey( [1, 2, 3], [4, 5] ) );
+        remote.SetDescription( TestHelper.Monitor, withKey ).ShouldBeTrue( "The description changed." );
+        remote.Description.ShouldBe( withKey );
+        File.Exists( file ).ShouldBeFalse( "Its persisted part didn't change: the file is not written." );
+
+        // A change of a persisted part writes it.
+        remote.SetDescription( TestHelper.Monitor, new PartyDescription( null, announced.ClientApplications, data: [new( "D", "2" )] ) ).ShouldBeTrue();
+        File.Exists( file ).ShouldBeTrue();
+        await host.StopAsync( cancel );
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
     public async Task the_caller_party_is_the_local_party_or_one_of_its_remotes_Async( CancellationToken cancel )
     {
         using var host = BuildHost();
@@ -296,6 +321,18 @@ public class PartyDescriptionTests
         PartyDescription.TryRead( doc.RootElement, out var back, out _ ).ShouldBeTrue();
         back.ShouldBe( d );
         back.ShouldNotBe( d.WithRoles( null ) );
+    }
+
+    [TestCase( """{ "Data": { "a": "1", "a": "2" } }""", "Duplicated data announcement 'a'." )]
+    [TestCase( """{ "PublicUrl": 42 }""", "Invalid public URL" )]
+    [TestCase( """{ "ClientApplications": [ { "Name": 3, "RequestPath": "/" } ] }""", "Invalid client application" )]
+    [TestCase( """{ "ClientApplications": [ "App" ] }""", "Invalid client application" )]
+    public void TryRead_returns_false_on_an_invalid_description_and_never_throws( string json, string expectedError )
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse( json );
+        PartyDescription.TryRead( doc.RootElement, out var d, out var error ).ShouldBeFalse();
+        d.ShouldBeNull();
+        error.ShouldStartWith( expectedError );
     }
 
     [Test]

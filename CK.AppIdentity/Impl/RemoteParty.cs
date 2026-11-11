@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
@@ -48,6 +49,25 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         {
             monitor.Info( $"Description of '{FullName}': {description}." );
         }
+        // Only the persisted projection is written (see PartyDescription.Write): a change of the routes, the collected
+        // items or the encryption key alone doesn't rewrite the file (this runs on the caller's thread, often a channel's).
+        if( !HasSamePersistedContent( previous, description ) )
+        {
+            PersistDescription( monitor, description );
+        }
+        // The agent's loop raises ILocalParty.RemoteDescriptionChanged: this stays synchronous.
+        ApplicationIdentityService.Agent.OnRemoteDescriptionChanged( this );
+        return true;
+    }
+
+    static bool HasSamePersistedContent( PartyDescription a, PartyDescription b )
+        => Equals( a.PublicUrl, b.PublicUrl )
+           && a.ClientApplications.SequenceEqual( b.ClientApplications )
+           && a.Roles.SequenceEqual( b.Roles )
+           && a.Data.SequenceEqual( b.Data );
+
+    void PersistDescription( IActivityMonitor monitor, PartyDescription description )
+    {
         try
         {
             SharedFileStore.WriteAtomically( SharedFileStore.FolderPath.AppendPart( DescriptionFileName ), stream =>
@@ -60,9 +80,6 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         {
             monitor.Warn( $"While persisting the description of '{FullName}'.", ex );
         }
-        // The agent's loop raises ILocalParty.RemoteDescriptionChanged: this stays synchronous.
-        ApplicationIdentityService.Agent.OnRemoteDescriptionChanged( this );
-        return true;
     }
 
     /// <summary>

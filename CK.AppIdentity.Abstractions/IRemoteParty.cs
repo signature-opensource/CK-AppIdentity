@@ -30,8 +30,9 @@ public interface IRemoteParty : IOwnedParty
     /// <summary>
     /// Sets the <see cref="IParty.Description"/> of this remote, from its announcement. The description is persisted in
     /// this remote's folder of the <see cref="IParty.SharedFileStore"/> (it is the remote's own statement: the same for
-    /// every local party), so that it is known while the remote is not connected, after a restart too. A change of the
-    /// public URL is logged as a warning.
+    /// every local party), so that it is known while the remote is not connected, after a restart too: the file is written
+    /// only when its persisted part changes (see <see cref="PartyDescription.Write"/>). A change of the public URL is logged
+    /// as a warning.
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="description">The announced description.</param>

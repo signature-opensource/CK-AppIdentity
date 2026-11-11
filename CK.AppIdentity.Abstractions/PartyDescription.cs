@@ -353,7 +353,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
     }
 
     /// <summary>
-    /// Reads a description written by <see cref="Write"/>.
+    /// Reads a description written by <see cref="Write"/>. Never throws: an invalid description returns false with the error.
     /// </summary>
     /// <param name="e">The JSON object.</param>
     /// <param name="description">The description on success.</param>
@@ -368,7 +368,7 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
             return false;
         }
         Uri? url = null;
-        if( e.TryGetProperty( "PublicUrl", out var u ) && !TryParsePublicUrl( u.GetString(), out url, out error ) )
+        if( e.TryGetProperty( "PublicUrl", out var u ) && !TryParsePublicUrl( AsString( u ), out url, out error ) )
         {
             return false;
         }
@@ -377,8 +377,8 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
         {
             foreach( var app in a.EnumerateArray() )
             {
-                var name = app.TryGetProperty( "Name", out var n ) ? n.GetString() : null;
-                var path = app.TryGetProperty( "RequestPath", out var p ) ? p.GetString() : null;
+                var name = app.ValueKind == JsonValueKind.Object && app.TryGetProperty( "Name", out var n ) ? AsString( n ) : null;
+                var path = app.ValueKind == JsonValueKind.Object && app.TryGetProperty( "RequestPath", out var p ) ? AsString( p ) : null;
                 if( string.IsNullOrWhiteSpace( name ) || string.IsNullOrWhiteSpace( path ) || path[0] != '/' )
                 {
                     error = "Invalid client application: a Name and a RequestPath that starts with '/' are expected.";
@@ -429,12 +429,19 @@ public sealed class PartyDescription : IEquatable<PartyDescription>
                     error = $"Invalid data announcement '{d.Name}': a name without whitespace and a string value are expected.";
                     return false;
                 }
+                if( data.Any( kv => kv.Key == d.Name ) )
+                {
+                    error = $"Duplicated data announcement '{d.Name}'.";
+                    return false;
+                }
                 data.Add( new KeyValuePair<string, string>( d.Name, d.Value.GetString()! ) );
             }
         }
         description = new PartyDescription( url, apps.ToImmutable(), roles, data );
         error = null;
         return true;
+
+        static string? AsString( JsonElement e ) => e.ValueKind == JsonValueKind.String ? e.GetString() : null;
     }
 
     /// <inheritdoc />
