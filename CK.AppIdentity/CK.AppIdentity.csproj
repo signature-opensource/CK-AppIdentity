@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The generated PartyComponentOptionDirectory (ContextBoundDelegation). -->
-    <PackageReference Include="CK.StObj.Model" Version="36.0.0-0.cris-auth.1.ci.42" />
+    <PackageReference Include="CK.StObj.Model" Version="36.0.0-0.cris-auth.1.ci.45" />
     <ProjectReference Include="..\CK.AppIdentity.Abstractions\CK.AppIdentity.Abstractions.csproj" />
   </ItemGroup>
 </Project>
