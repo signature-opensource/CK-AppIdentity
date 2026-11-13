@@ -38,6 +38,12 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// </summary>
     public const string DefaultRootDomainName = "Default";
 
+    /// <summary>
+    /// Gets the keys of the root of the configuration: its identity and its structure ("FullName", "Local", "Parties",
+    /// "Defaults"...). Any other key at the root is an error.
+    /// </summary>
+    public static IReadOnlySet<string> RootKeys => StructuralKeys.RootKeys;
+
     ApplicationIdentityServiceConfiguration( ImmutableConfigurationSection configuration,
                                              string domainName,
                                              NormalizedPath fullName,

@@ -1,5 +1,6 @@
 using CK.AppIdentity;
 using CK.Core;
+using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,35 +9,42 @@ using System.Linq;
 namespace CK.Setup;
 
 /// <summary>
-/// Reads the party of each BinPath of the App ("ckonf.json"): its "CK-AppIdentity" section is validated at build time
-/// (<see cref="ApplicationIdentityServiceConfiguration"/>: an invalid configuration is a build error), and the clients
-/// declared by its root party ("CK-AppIdentity:Local:PartyClient:{Name}") are exposed to the contributors that handle
-/// their kind (their "Type": "TypeScript" for instance). A declared client that no contributor handles is an error.
+/// Reads the party of each App of the builder ("ckonf.json"): its keys (<see cref="ApplicationIdentityServiceConfiguration.RootKeys"/>:
+/// "FullName", "Local", "Parties"...) are directly in the App. They are validated at build time
+/// (<see cref="ApplicationIdentityServiceConfiguration"/>: an invalid configuration is a build error) and projected in the
+/// "CK-AppIdentity" section of the host's "appsettings.json". The clients declared by its root party
+/// ("Local:PartyClient:{Name}") are exposed to the contributors that handle their kind (their "Type": "TypeScript" for
+/// instance). A declared client that no contributor handles is an error.
 /// </summary>
 public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
 {
+    /// <summary>
+    /// The section of the host's configuration that holds the party: "CK-AppIdentity".
+    /// </summary>
+    public const string SectionName = "CK-AppIdentity";
+
     readonly List<DeclaredClient> _clients = new();
 
     /// <summary>
-    /// A client declared by the root party of a BinPath.
+    /// A client declared by the root party of an App.
     /// </summary>
     public sealed class DeclaredClient
     {
-        internal DeclaredClient( AppBinPath binPath, string name, string type, ImmutableConfigurationSection configuration )
+        internal DeclaredClient( AppConfiguration app, string name, string type, ImmutableConfigurationSection configuration )
         {
-            BinPath = binPath;
+            App = app;
             Name = name;
             Type = type;
             Configuration = configuration;
         }
 
         /// <summary>
-        /// Gets the BinPath (the party) that declares this client.
+        /// Gets the App whose root party declares this client.
         /// </summary>
-        public AppBinPath BinPath { get; }
+        public AppConfiguration App { get; }
 
         /// <summary>
-        /// Gets the client name: its key in "CK-AppIdentity:Local:PartyClient".
+        /// Gets the client name: its key in "Local:PartyClient".
         /// </summary>
         public string Name { get; }
 
@@ -46,15 +54,15 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         public string Type { get; }
 
         /// <summary>
-        /// Gets the configuration of this client ("CK-AppIdentity:Local:PartyClient:{Name}").
+        /// Gets the configuration of this client ("Local:PartyClient:{Name}" of the App).
         /// </summary>
         public ImmutableConfigurationSection Configuration { get; }
 
         /// <summary>
-        /// Gets the path of this client's section relative to its <see cref="AppBinPath.Configuration"/>: the prefix
-        /// of the compile time keys of the client (see <see cref="AppBinPath.AddCompileKey(string)"/>).
+        /// Gets the path of this client's section relative to its <see cref="AppConfiguration.Configuration"/>: the prefix
+        /// of the compile time keys of the client (see <see cref="AppConfiguration.AddCompileKey(string)"/>).
         /// </summary>
-        public string RelativePath => $"CK-AppIdentity:Local:{PartyClientSectionName}:{Name}";
+        public string RelativePath => $"Local:{PartyClientSectionName}:{Name}";
 
         /// <summary>
         /// Gets whether a contributor handled this client.
@@ -67,14 +75,14 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         public void SetHandled() => IsHandled = true;
 
         /// <inheritdoc />
-        public override string ToString() => $"client '{Name}' of {BinPath}";
+        public override string ToString() => $"client '{Name}' of {App}";
     }
 
     // The "PartyClient" feature's section (CK.AppIdentity.PartyClient is not referenced by this engine).
     const string PartyClientSectionName = "PartyClient";
 
     /// <summary>
-    /// Gets the clients declared by the root party of each BinPath.
+    /// Gets the clients declared by the root party of each App.
     /// </summary>
     public IReadOnlyList<DeclaredClient> Clients => _clients;
 
@@ -82,16 +90,31 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     public bool Contribute( IActivityMonitor monitor, AppBuilderContext context )
     {
         bool success = true;
-        foreach( var b in context.BinPaths )
+        foreach( var a in context.Apps )
         {
-            var section = b.Configuration.TryGetSection( "CK-AppIdentity" );
-            if( section == null ) continue;
-            using( monitor.OpenInfo( $"Checking the party of {b}." ) )
+            // The keys of the party are the ones of the root of an AppIdentity configuration: an App without any of them
+            // is not a party.
+            var keys = a.Configuration.GetChildren().Where( c => ApplicationIdentityServiceConfiguration.RootKeys.Contains( c.Key ) ).ToList();
+            if( keys.Count == 0 ) continue;
+            // The configuration of the party alone (the other keys of the App are not its own), with the paths of the
+            // "ckonf.json" (for the errors).
+            var party = new MutableConfigurationSection( a.Configuration.Path );
+            foreach( var k in keys )
+            {
+                a.ProjectInSection( k.Key, SectionName );
+                if( k.Value != null ) party[k.Key] = k.Value;
+                foreach( var (path, value) in k.AsEnumerable( makePathsRelative: true ) )
+                {
+                    if( value != null ) party[$"{k.Key}:{path}"] = value;
+                }
+            }
+            var section = new ImmutableConfigurationSection( party );
+            using( monitor.OpenInfo( $"Checking the party of {a}." ) )
             {
                 // The relative paths (StoreRootPath) are the host's: its content root is its project folder.
-                if( ApplicationIdentityServiceConfiguration.Create( monitor, section, defaultPartyName: b.Name, basePath: b.HostProjectPath ) == null )
+                if( ApplicationIdentityServiceConfiguration.Create( monitor, section, defaultPartyName: a.Name, basePath: a.HostProjectPath ) == null )
                 {
-                    monitor.Error( $"Invalid \"CK-AppIdentity\" in {b}." );
+                    monitor.Error( $"Invalid party in {a}." );
                     success = false;
                     continue;
                 }
@@ -103,12 +126,12 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 var type = c["Type"];
                 if( string.IsNullOrWhiteSpace( type ) )
                 {
-                    monitor.Error( $"The client '{c.Key}' of {b} has no \"Type\": the kind of a client is explicit (\"Type\": \"TypeScript\" for instance)." );
+                    monitor.Error( $"The client '{c.Key}' of {a} has no \"Type\": the kind of a client is explicit (\"Type\": \"TypeScript\" for instance)." );
                     success = false;
                     continue;
                 }
-                var client = new DeclaredClient( b, c.Key, type, c );
-                b.AddCompileKey( $"{client.RelativePath}:Type" );
+                var client = new DeclaredClient( a, c.Key, type, c );
+                a.AddCompileKey( $"{client.RelativePath}:Type" );
                 _clients.Add( client );
             }
         }

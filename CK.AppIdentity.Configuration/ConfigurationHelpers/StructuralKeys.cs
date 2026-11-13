@@ -35,6 +35,11 @@ static class StructuralKeys
     };
 
     /// <summary>
+    /// Gets the keys of the root.
+    /// </summary>
+    public static IReadOnlySet<string> RootKeys => _root;
+
+    /// <summary>
     /// Checks the root configuration.
     /// </summary>
     public static bool CheckRoot( IActivityMonitor monitor, ImmutableConfigurationSection root ) => Check( monitor, root, _root, "the root", hasLocal: true );

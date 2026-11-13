@@ -32,16 +32,19 @@ options without any reflection at runtime.
 | Two options of an owner with the same name (whatever their namespace) | They have the same name. |
 | A cycle between the options of an owner | Reported by the ResourceSpace. |
 
-## The parties of the App ("ckonf.json")
+## The parties of the Apps ("ckonf.json")
 
 When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the
-[`AppIdentityAppBuilderContributor`](AppIdentityAppBuilderContributor.cs) reads the party of each BinPath before the
+[`AppIdentityAppBuilderContributor`](AppIdentityAppBuilderContributor.cs) reads the party of each App before the
 engine runs:
 
-- **its "CK-AppIdentity" section is validated at build time** (`ApplicationIdentityServiceConfiguration`, the BinPath
-  name is the default party name, the host project the base path): an invalid configuration is a build error. A BinPath
-  without "CK-AppIdentity" is not a party.
-- **its root party's clients** ("CK-AppIdentity:Local:PartyClient:{Name}") are exposed (`Clients`) to the contributors
+- **its keys are directly in the App:** the keys of the root of an AppIdentity configuration
+  (`ApplicationIdentityServiceConfiguration.RootKeys`: "FullName", "Local", "Parties", "Defaults"...), next to the other
+  sections of the host (`Logging`...). They are projected in the "CK-AppIdentity" section of the host's
+  `appsettings.json`. An App without any of them is not a party.
+- **the party is validated at build time** (`ApplicationIdentityServiceConfiguration`, the App name is the default
+  party name, the host project the base path): an invalid configuration is a build error.
+- **its root party's clients** ("Local:PartyClient:{Name}") are exposed (`Clients`) to the contributors
   that handle their kind: the **"Type"** of a client is required (`"Type": "TypeScript"`), and it is a compile time key
   (not projected in the host's `appsettings.json`). A declared client that no contributor handles (`SetHandled()`) is
   an error: "No package builds the client...".
