@@ -32,6 +32,21 @@ options without any reflection at runtime.
 | Two options of an owner with the same name (whatever their namespace) | They have the same name. |
 | A cycle between the options of an owner | Reported by the ResourceSpace. |
 
+## The parties of the App ("ckonf.json")
+
+When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the
+[`AppIdentityAppBuilderContributor`](AppIdentityAppBuilderContributor.cs) reads the party of each BinPath before the
+engine runs:
+
+- **its "CK-AppIdentity" section is validated at build time** (`ApplicationIdentityServiceConfiguration`, the BinPath
+  name is the default party name, the host project the base path): an invalid configuration is a build error. A BinPath
+  without "CK-AppIdentity" is not a party.
+- **its root party's clients** ("CK-AppIdentity:Local:PartyClient:{Name}") are exposed (`Clients`) to the contributors
+  that handle their kind: the **"Type"** of a client is required (`"Type": "TypeScript"`), and it is a compile time key
+  (not projected in the host's `appsettings.json`). A declared client that no contributor handles (`SetHandled()`) is
+  an error: "No package builds the client...".
+
 ## Requires
 
-- `CK.AppIdentity` (the runtime directory), `CK.StObj.Engine` and `CK.ResourceSpace`.
+- `CK.AppIdentity` (the runtime directory), `CK.StObj.Engine`, `CK.Engine` (the App builder contract) and
+  `CK.ResourceSpace`.
