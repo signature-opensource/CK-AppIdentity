@@ -1,6 +1,5 @@
 using CK.AppIdentity;
 using CK.Core;
-using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -102,11 +101,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             foreach( var k in keys )
             {
                 a.ProjectInSection( k.Key, SectionName );
-                if( k.Value != null ) party[k.Key] = k.Value;
-                foreach( var (path, value) in k.AsEnumerable( makePathsRelative: true ) )
-                {
-                    if( value != null ) party[$"{k.Key}:{path}"] = value;
-                }
+                Copy( party, k.Key, k );
             }
             var section = new ImmutableConfigurationSection( party );
             using( monitor.OpenInfo( $"Checking the party of {a}." ) )
@@ -136,6 +131,13 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             }
         }
         return success;
+
+        // In the order of the configuration (the order of the declared clients is the one of the file).
+        static void Copy( MutableConfigurationSection target, string path, ImmutableConfigurationSection s )
+        {
+            if( s.Value != null ) target[path] = s.Value;
+            foreach( var c in s.GetChildren() ) Copy( target, $"{path}:{c.Key}", c );
+        }
     }
 
     /// <inheritdoc />
