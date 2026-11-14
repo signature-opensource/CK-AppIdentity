@@ -169,7 +169,9 @@ public sealed class OtherBuildClientFeatureDriver : ClientFeatureDriver<OtherBui
 
 public sealed class ServeClientFeatureDriver : ClientFeatureDriver<ServeClientFeature>
 {
-    protected override ServeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+    // A feature finds the features that it requires (created before it).
+    protected override ServeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
+        => client.GetFeature<IFakeBuild>() != null ? new( client, configuration ) : null;
 }
 
 public sealed class NeedsFakeClientFeatureDriver : ClientFeatureDriver<NeedsFakeClientFeature>

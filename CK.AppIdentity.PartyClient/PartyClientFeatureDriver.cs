@@ -180,7 +180,6 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
             }
             declared.Sort( ( a, b ) => _componentDirectory.IndexOf( a.Driver.FeatureType ).CompareTo( _componentDirectory.IndexOf( b.Driver.FeatureType ) ) );
         }
-        var features = new List<ClientFeature>( declared.Count );
         foreach( var (driver, section) in declared )
         {
             var f = driver.Create( monitor, client, section );
@@ -200,10 +199,11 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                 success = false;
                 continue;
             }
-            features.Add( f );
+            // The next features find it (a feature requires the ones before it).
+            client.AddFeature( f );
         }
         if( !success ) return false;
-        client.SetFeatures( features );
+        client.Complete();
         return true;
 
         // A required feature driver of the party: allowed by the party.

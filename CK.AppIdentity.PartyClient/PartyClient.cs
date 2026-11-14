@@ -16,7 +16,7 @@ namespace CK.AppIdentity;
 /// </summary>
 public sealed class PartyClient
 {
-    IReadOnlyList<ClientFeature> _features;
+    readonly List<ClientFeature> _features;
     ClientApplicationDescription? _description;
 
     internal PartyClient( ILocalParty party, string name, ImmutableConfigurationSection configuration )
@@ -24,7 +24,7 @@ public sealed class PartyClient
         Party = party;
         Name = name;
         Configuration = configuration;
-        _features = [];
+        _features = new List<ClientFeature>();
     }
 
     /// <summary>
@@ -43,7 +43,8 @@ public sealed class PartyClient
     public ImmutableConfigurationSection Configuration { get; }
 
     /// <summary>
-    /// Gets the features of this client, in their order (a feature comes after the ones it requires).
+    /// Gets the features of this client, in their order (a feature comes after the ones it requires). While the client is
+    /// created, a feature finds here the features created before it (the ones it requires).
     /// </summary>
     public IReadOnlyList<ClientFeature> Features => _features;
 
@@ -61,11 +62,13 @@ public sealed class PartyClient
     /// </summary>
     public ClientApplicationDescription? Description => _description;
 
-    internal void SetFeatures( IReadOnlyList<ClientFeature> features )
+    internal void AddFeature( ClientFeature feature ) => _features.Add( feature );
+
+    // Called once all the features are created.
+    internal void Complete()
     {
-        _features = features;
         var b = new ClientDescriptionBuilder( this );
-        foreach( var f in features ) f.ContributeDescription( b );
+        foreach( var f in _features ) f.ContributeDescription( b );
         _description = b.RequestPath != null ? new ClientApplicationDescription( Name, b.RequestPath, b.Facts ) : null;
     }
 
