@@ -31,17 +31,17 @@ public class AppIdentityAppBuilderContributorTests
                 "ExcludedTypes": [ "{{OtherType}}" ],
                 "PartyClient": {
                   "App": { "Types": [ "{{FakeType}}" ], "NgApp": { "ActiveCultures": "fr" }, "Hosting": { "RequestPath": "/" } },
-                  "Tool": { "Types": [ { "Name": "{{FakeType}}", "Optional": true } ], "Local": {} }
+                  "Tool": { "Types": [ { "Name": "{{FakeType}}", "Optional": true } ], "Native": { "Store": "Play" } }
                 }
               },
-              "Parties": [ { "PartyName": "$Tenant", "Local": { "Types": [ "{{OtherType}}" ] } } ]
+              "Parties": [ { "FullName": "Tenant/$Tenant", "Local": { "Types": [ "{{OtherType}}" ] } } ]
             }
             """ );
         var c = new AppIdentityAppBuilderContributor();
         c.Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
         c.Clients.Select( x => x.Name ).ShouldBe( ["App", "Tool"] );
         c.Clients[0].Features.Keys.ShouldBe( ["NgApp", "Hosting"], ignoreOrder: true );
-        c.Clients[1].Features.Keys.ShouldBe( ["Local"] );
+        c.Clients[1].Features.Keys.ShouldBe( ["Native"] );
         // The type sets: the parties' and the clients' (the exclusions of the party apply to its clients).
         var binPath = context.Apps[0].BinPathConfiguration;
         binPath.TypeSets.Select( s => s.Name ).ShouldBe( ["$Front", "$Tenant", "App", "Tool"], ignoreOrder: true );

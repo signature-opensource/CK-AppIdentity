@@ -140,9 +140,9 @@ public class PartyClientOptionsTests
     {
         // DerivedOnly is an option of FakeDerivedClientFeature, not of FakeClientFeature: its driver refuses the key.
         var texts = await FailAsync( c => c["Local:PartyClient:A:Fake:DerivedOnly"] = "true" );
-        texts.ShouldContain( t => t.Contains( "Unexpected 'DerivedOnly' in \"Local:PartyClient:A:Fake\"" ) );
+        texts.ShouldContain( t => t.Contains( "Unexpected 'DerivedOnly' in \"CK-AppIdentity:Local:PartyClient:A:Fake\"" ) );
         texts = await FailAsync( c => c["Local:PartyClient:A:Unknown"] = "true" );
-        texts.ShouldContain( t => t.Contains( "Unknown \"Local:PartyClient:A:Unknown\": the keys of a client are its features" ) );
+        texts.ShouldContain( t => t.Contains( "Unknown \"CK-AppIdentity:Local:PartyClient:A:Unknown\": the keys of a client are its features" ) );
         texts = await FailAsync( c => c["Local:PartyClient:A:Types:0"] = "Some.Type, Some.Assembly" );
         texts.ShouldContain( t => t.Contains( "The client 'A' of 'Test/$OptionsHost" ) && t.Contains( "has no feature." ) );
     }
