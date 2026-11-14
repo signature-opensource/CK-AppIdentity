@@ -13,7 +13,8 @@ namespace CK.AppIdentity;
 /// A client is <b>declared</b> by a party, in its "Local:PartyClient:{Name}" section: only the configuration says which
 /// party has which client. A client is a bag of client features (<see cref="ClientFeature"/>): the keys of its section
 /// are its features ("NgApp", "Hosting"...), each one created by its <see cref="IClientFeatureDriver"/>, plus its type
-/// set ("Types" and "ExcludedTypes": compile time keys, accepted and ignored).
+/// set ("Types" and "ExcludedTypes": compile time keys, accepted and ignored). A feature without configuration is declared
+/// by <c>true</c> (<c>"NgApp": true</c>).
 /// </para>
 /// <list type="bullet">
 ///   <item>A key of a client that is no feature of the application is an error; a client without feature is an error.</item>
@@ -148,7 +149,16 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
             if( TypeSetKeys.Contains( k.Key ) ) continue;
             if( _drivers.TryGetValue( k.Key, out var driver ) )
             {
-                declared.Add( (driver, k) );
+                // A feature is declared by its section, or by true when it has no configuration.
+                if( k.Value != null && !(bool.TryParse( k.Value, out var b ) && b) )
+                {
+                    monitor.Error( $"Invalid \"{k.Path}\" = '{k.Value}': a client feature is declared by true or by its section." );
+                    success = false;
+                }
+                else
+                {
+                    declared.Add( (driver, k) );
+                }
             }
             else
             {

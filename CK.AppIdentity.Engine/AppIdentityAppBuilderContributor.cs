@@ -252,7 +252,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         bool success = true;
         foreach( var c in _clients.Where( c => !c.IsHandled ) )
         {
-            monitor.Error( $"No package builds the {c}: its build feature ('NgApp' for an Angular application) is missing, or its package is not referenced by the builder." );
+            monitor.Error( $"No package builds the {c}: its build feature ('NgApp' for an Angular application, "NgApp": true without configuration: an empty object is no declaration) is missing, or its package is not referenced by the builder." );
             success = false;
         }
         return success;

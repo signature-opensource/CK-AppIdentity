@@ -23,7 +23,7 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
   "PartyClient": {
     "App": {
       "Types": [ "..." ], "ExcludedTypes": [ "..." ],   // Its type set: compile time keys, ignored at run time.
-      "NgApp": { },
+      "NgApp": true,                                    // A feature without configuration: true (an empty object is nothing).
       "Hosting": { "RequestPath": "/", "DevServerPort": 4200 }
     }
   }

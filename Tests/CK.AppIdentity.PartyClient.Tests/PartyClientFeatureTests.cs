@@ -133,7 +133,8 @@ public class PartyClientFeatureTests
             c["Local:AllowFeatures"] = "Serving";
             c["Local:PublicUrl"] = "https://acme.com";
             c["Local:PartyClient:App:Served:Color"] = "Blue";
-            c["Local:PartyClient:Tool:Tool"] = "";
+            // A feature without configuration is declared by true.
+            c["Local:PartyClient:Tool:Tool"] = "true";
             // The type set of a client is compile time: accepted, ignored.
             c["Local:PartyClient:Tool:Types:0"] = "Some.Type, Some.Assembly";
         }, _drivers );
@@ -160,6 +161,18 @@ public class PartyClientFeatureTests
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
             (await logs.WaitForAsync( "Unknown \"CK-AppIdentity:Local:PartyClient:App:Unknown\": the keys of a client are its features (Served, Tool) and its type set (Types, ExcludedTypes)." )).ShouldBeTrue();
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_feature_is_declared_by_true_or_its_section_Async( CancellationToken cancel )
+    {
+        using var logs = new AllMonitorsTexts();
+        using var host = BuildHost( c => c["Local:PartyClient:App:Tool"] = "maybe", _drivers );
+        {
+            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
+            (await logs.WaitForAsync( "Invalid \"CK-AppIdentity:Local:PartyClient:App:Tool\" = 'maybe': a client feature is declared by true or by its section." )).ShouldBeTrue();
         }
     }
 
