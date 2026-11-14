@@ -193,8 +193,8 @@ try {
     Write-Step 'The parties are running'
     $browserUrl = $null
     foreach( $party in $parties ) {
-        $endpoints = @( Get-Property $party.Status 'Http' )
-        $defaultUrl = if( $endpoints.Count -gt 0 -and $endpoints[0] ) { $endpoints[0].DefaultUrl.TrimEnd( '/' ) } else { $null }
+        $http = Get-Property $party.Status 'Http'
+        $defaultUrl = if( $http -and $http.DefaultUrl ) { $http.DefaultUrl.TrimEnd( '/' ) } else { $null }
         Write-Host "$($party.Name): $(if( $defaultUrl ) { $defaultUrl } else { '(no HTTP endpoint)' })"
         foreach( $c in @( Get-Property $party.Status 'Clients' ) ) {
             if( -not $c -or -not $defaultUrl ) { continue }

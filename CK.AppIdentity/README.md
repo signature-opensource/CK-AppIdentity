@@ -121,10 +121,10 @@ Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures
 - **Its core properties:** `FullName`, `ProcessId`, `ProcessStartTime` (with the pid, they detect a stale file),
   `ContentRootPath`, `Ready` and the `Remotes` (`FullName`, `Outgoing`).
 - **The packages contribute their own properties** with an `IDevRunningStatusContributor` (CK.AppIdentity.Abstractions):
-  for instance, the transport (the remotes' availability), the HTTP endpoints, the client applications. `Ready` is
+  for instance, the transport (the remotes' availability), the HTTP endpoint, the client applications. `Ready` is
   true when every contributor is ready. A section can hold a `Pending` array: what an operator must do for the party
   (an approval, for instance), printed by the launcher; what waits for an operator doesn't make a party not ready. A feature driver implements it itself (explicitly: it doesn't add to its
-  public API), as the transport and the HTTP endpoints do; a separate contributor is for a package that has state of
+  public API), as the transport and the HTTP endpoint do; a separate contributor is for a package that has state of
   its own and no driver (the client applications).
 - **A contributor stays dormant until the writer activates it:** it subscribes to nothing and computes nothing before.
 
@@ -142,7 +142,7 @@ static feature allowed by default) sets it:
 - **A local party's public URL is its `Local:PublicUrl`** configuration: an absolute `http` or `https` URL without path,
   query nor fragment (`PartyDescription.TryParsePublicUrl`); an invalid one fails the start.
 - **The feature drivers complete the description of every local party** (the root and the tenant domains alike): a
-  driver overrides `ApplicationIdentityFeatureDriver.ContributeDescription( party, builder )`. The HTTP endpoints give
+  driver overrides `ApplicationIdentityFeatureDriver.ContributeDescription( party, builder )`. The HTTP endpoint gives
   the public URL of the root party when `Local:PublicUrl` is not configured, the "PartyClient" feature gives the client
   applications of each party. It is computed once all the drivers have set up the party, in their order, then each
   time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
