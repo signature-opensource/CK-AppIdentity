@@ -126,7 +126,7 @@ public class PartyClientOptionsTests
     [Test]
     public async Task a_feature_without_options_has_none_Async()
     {
-        var (services, party) = await StartAsync( c => c["Local:PartyClient:A:Fake"] = "" );
+        var (services, party) = await StartAsync( c => c["Local:PartyClient:A:Fake"] = "true" );
         await using( services )
         {
             Client( party, "A" ).Features.ShouldHaveSingleItem().Options.ShouldBeEmpty( "No option is enabled by default." );
@@ -152,8 +152,8 @@ public class PartyClientOptionsTests
     {
         var (services, party) = await StartAsync( c =>
         {
-            c["Local:PartyClient:App:Serve"] = "";
-            c["Local:PartyClient:App:Build"] = "";
+            c["Local:PartyClient:App:Serve"] = "true";
+            c["Local:PartyClient:App:Build"] = "true";
             c["Local:PartyClient:App:Types:0"] = "Some.Type, Some.Assembly";
         } );
         await using( services )
@@ -169,24 +169,24 @@ public class PartyClientOptionsTests
     [Test]
     public async Task the_requirements_of_the_features_are_checked_Async()
     {
-        var texts = await FailAsync( c => c["Local:PartyClient:App:Serve"] = "" );
+        var texts = await FailAsync( c => c["Local:PartyClient:App:Serve"] = "true" );
         texts.ShouldContain( t => t.Contains( "'ServeClientFeature' of client 'App' of 'Test/$OptionsHost" ) && t.Contains( "requires 'IFakeBuild' that client 'App'" ) );
 
         texts = await FailAsync( c =>
         {
-            c["Local:PartyClient:App:Build"] = "";
-            c["Local:PartyClient:App:OtherBuild"] = "";
+            c["Local:PartyClient:App:Build"] = "true";
+            c["Local:PartyClient:App:OtherBuild"] = "true";
         } );
         texts.ShouldContain( t => t.Contains( "has more than one 'IFakeBuild' ('BuildClientFeature', 'OtherBuildClientFeature'): it can have at most one." ) );
 
         // The FakeFeatureDriver is not allowed by default.
-        texts = await FailAsync( c => c["Local:PartyClient:App:NeedsFake"] = "" );
+        texts = await FailAsync( c => c["Local:PartyClient:App:NeedsFake"] = "true" );
         texts.ShouldContain( t => t.Contains( "'NeedsFakeClientFeature' of client 'App'" ) && t.Contains( "requires 'FakeFeatureDriver'" ) );
         // Allowed: fine.
         var (services, party) = await StartAsync( c =>
         {
             c["Local:AllowFeatures"] = "Fake";
-            c["Local:PartyClient:App:NeedsFake"] = "";
+            c["Local:PartyClient:App:NeedsFake"] = "true";
         } );
         await using( services )
         {

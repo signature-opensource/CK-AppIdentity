@@ -157,7 +157,7 @@ public class PartyClientFeatureTests
     public async Task a_key_of_a_client_that_is_no_feature_is_an_error_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => c["Local:PartyClient:App:Unknown"] = "", _drivers );
+        using var host = BuildHost( c => c["Local:PartyClient:App:Unknown"] = "true", _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
             (await logs.WaitForAsync( "Unknown \"CK-AppIdentity:Local:PartyClient:App:Unknown\": the keys of a client are its features (Served, Tool) and its type set (Types, ExcludedTypes)." )).ShouldBeTrue();
@@ -194,7 +194,7 @@ public class PartyClientFeatureTests
     {
         // "Serving" is opt-in, not allowed here.
         using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => c["Local:PartyClient:App:Served"] = "", _drivers );
+        using var host = BuildHost( c => c["Local:PartyClient:App:Served"] = "true", _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
             (await logs.WaitForAsync( "'ServedClientFeature' of client 'App' of 'Clients/$App/#Dev' requires 'ServingFeatureDriver' that client 'App' of 'Clients/$App/#Dev' doesn't have." )).ShouldBeTrue();
@@ -231,7 +231,7 @@ public class PartyClientFeatureTests
         using( var host = BuildHost( c =>
         {
             c["Local:DisallowFeatures"] = "PartyClient";
-            c["Local:PartyClient:Tool:Tool"] = "";
+            c["Local:PartyClient:Tool:Tool"] = "true";
         }, _drivers ) )
         {
             {
@@ -253,7 +253,7 @@ public class PartyClientFeatureTests
         var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
         {
             s["FullName"] = "D1/$D1";
-            s["Local:PartyClient:Tool:Tool"] = "";
+            s["Local:PartyClient:Tool:Tool"] = "true";
         } );
         domain.ShouldNotBeNull();
         var tool = domain.GetRequiredFeature<PartyClientFeature>().Clients.Single();
@@ -276,7 +276,7 @@ public class PartyClientFeatureTests
             s["FullName"] = "D1/$D1";
             s["Local:AllowFeatures"] = "Serving";
             s["Local:PublicUrl"] = "https://d1.acme.com";
-            s["Local:PartyClient:Admin:Served"] = "";
+            s["Local:PartyClient:Admin:Served"] = "true";
         } );
         domain.ShouldNotBeNull();
         domain.Description.ClientApplications.ShouldBe( [new ClientApplicationDescription( "Admin", "/admin" )] );
