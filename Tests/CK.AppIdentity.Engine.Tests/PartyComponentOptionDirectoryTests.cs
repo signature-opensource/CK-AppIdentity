@@ -18,7 +18,7 @@ public class PartyComponentOptionDirectoryTests
 {
     static readonly Type[] _model = [typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
                                      typeof( FakeFeatureDriver ), typeof( MainOption ), typeof( HeaderOption ), typeof( CompressionOption ),
-                                     typeof( FakeClient ), typeof( FakeDerivedClient ), typeof( CachingOption ), typeof( DerivedOnlyOption )];
+                                     typeof( FakeClientFeature ), typeof( FakeDerivedClientFeature ), typeof( CachingOption ), typeof( DerivedOnlyOption )];
 
     static async Task<AutomaticServices> CreateServicesAsync()
     {
@@ -38,7 +38,7 @@ public class PartyComponentOptionDirectoryTests
         await using var auto = await CreateServicesAsync();
         var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
 
-        directory.OwnerTypes.ShouldBe( [typeof( FakeDerivedClient ), typeof( FakeFeatureDriver ), typeof( FakeClient )], ignoreOrder: true );
+        directory.OwnerTypes.ShouldBe( [typeof( FakeDerivedClientFeature ), typeof( FakeFeatureDriver ), typeof( FakeClientFeature )], ignoreOrder: true );
 
         var driver = directory.GetOptions( typeof( FakeFeatureDriver ) );
         driver.Select( o => o.Name ).ShouldBe( ["Header", "Main", "Compression"] );
@@ -49,14 +49,14 @@ public class PartyComponentOptionDirectoryTests
         driver[2].Requires.ShouldBe( ["Main"] );
 
         // The options of a base owner type apply to the derived one.
-        directory.GetOptions( typeof( FakeClient ) ).Select( o => o.Name ).ShouldBe( ["Caching"] );
-        var derived = directory.GetOptions( typeof( FakeDerivedClient ) );
+        directory.GetOptions( typeof( FakeClientFeature ) ).Select( o => o.Name ).ShouldBe( ["Caching"] );
+        var derived = directory.GetOptions( typeof( FakeDerivedClientFeature ) );
         derived.Select( o => o.Name ).ShouldBe( ["Caching", "DerivedOnly"] );
         derived[1].Requires.ShouldBe( ["Caching"] );
 
         directory.GetOptions( typeof( string ) ).ShouldBeEmpty();
         directory.IsOptionName( typeof( FakeFeatureDriver ), "compression" ).ShouldBeTrue();
-        directory.IsOptionName( typeof( FakeClient ), "DerivedOnly" ).ShouldBeFalse();
+        directory.IsOptionName( typeof( FakeClientFeature ), "DerivedOnly" ).ShouldBeFalse();
     }
 
     [Test]
@@ -174,7 +174,7 @@ public class PartyComponentOptionDirectoryTests
     static async Task CheckEngineErrorAsync( string expected, params Type[] options )
     {
         var configuration = TestHelper.CreateDefaultEngineConfiguration();
-        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ), typeof( FakeFeatureDriver ), typeof( FakeClient ) );
+        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ), typeof( FakeFeatureDriver ), typeof( FakeClientFeature ) );
         configuration.FirstBinPath.Types.Add( options );
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {

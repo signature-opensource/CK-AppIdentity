@@ -5,8 +5,8 @@ using System.Runtime.CompilerServices;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// Decorates an option of a party client: an <see cref="IPartyComponentOption{TOwner}"/> whose owner is a
-/// <see cref="PartyClient"/>.
+/// Decorates an option of a client feature: an <see cref="IPartyComponentOption{TOwner}"/> whose owner is a
+/// <see cref="ClientFeature"/>.
 /// </summary>
 [AttributeUsage( AttributeTargets.Class, AllowMultiple = false, Inherited = false )]
 public sealed class PartyClientOptionAttribute : Attribute, IPartyComponentOptionAttribute
@@ -27,7 +27,7 @@ public sealed class PartyClientOptionAttribute : Attribute, IPartyComponentOptio
     public bool IsEnabledByDefault { get; init; }
 
     /// <summary>
-    /// Gets <see cref="PartyClient"/>.
+    /// Gets <see cref="ClientFeature"/>.
     /// </summary>
-    public Type OwnerKind => typeof( PartyClient );
+    public Type OwnerKind => typeof( ClientFeature );
 }

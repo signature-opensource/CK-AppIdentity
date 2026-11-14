@@ -2,8 +2,9 @@
 
 **The engine of CK.AppIdentity**: it generates the `PartyComponentOptionDirectory`, the options of each party component
 owner type of the application, in their order (see
-[the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md)). The application knows its
-options without any reflection at runtime.
+[the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md)), and the
+`PartyComponentDirectory`, the requirements, the abstractions and the order of the party components. The application
+knows them without any reflection at runtime.
 
 ## How it works
 
@@ -32,6 +33,21 @@ options without any reflection at runtime.
 | Two options of an owner with the same name (whatever their namespace) | They have the same name. |
 | A cycle between the options of an owner | Reported by the ResourceSpace. |
 
+## The party components
+
+[`PartyComponentDirectoryImpl`](PartyComponentDirectoryImpl.cs) implements the `PartyComponentDirectory` for each BinPath:
+
+- **The components** are the concrete classes of the BinPath that implement `IPartyComponent` (the feature drivers, the
+  client features).
+- **Their requirements** are the type arguments of their `[Requires<...>]`: a component of the BinPath or an abstraction
+  (an interface that extends `IPartyComponentAbstraction`). Anything else is an error.
+- **Their abstractions** are the interfaces they implement that extend `IPartyComponentAbstraction`; an abstraction
+  decorated with `[IsMultiple]` can be implemented more than once in a scope.
+- **Their order:** a required component before the ones that require it, the implementations of a required abstraction
+  before the ones that require it, otherwise by full name. A cycle is an error.
+
+The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
+
 ## The parties of the Apps ("ckonf.json")
 
 When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the
@@ -44,10 +60,17 @@ engine runs:
   `appsettings.json`. An App without any of them is not a party.
 - **the party is validated at build time** (`ApplicationIdentityServiceConfiguration`, the App name is the default
   party name, the host project the base path): an invalid configuration is a build error.
-- **its root party's clients** ("Local:PartyClient:{Name}") are exposed (`Clients`) to the contributors
-  that handle their kind: the **"Type"** of a client is required (`"Type": "TypeScript"`), and it is a compile time key
-  (not projected in the host's `appsettings.json`). A declared client that no contributor handles (`SetHandled()`) is
-  an error: "No package builds the client...".
+- **each local party and each client of the root party has its type set**, a `TypeSetConfiguration` of the App's
+  BinPath (computed by the engine as a subset of its types, `IRunningBinPathGroup.TypeSets`): the `Types` and
+  `ExcludedTypes` of its section (`Local` for a party, `Parties[i]:Local` for a tenant domain, `Local:PartyClient:{Name}`
+  for a client), compile time keys (not projected). A party's set is named after the party (`$Front`), a client's after
+  the client (`MiniApp`). A type is its assembly qualified name, or an object whose `Name` is (the other keys are the
+  projection's: `{ "Name": "...", "Optional": true }`). The exclusions of the root party apply to its clients: a client
+  that adds a type that its party excludes is an error.
+- **its root party's clients** ("Local:PartyClient:{Name}") are exposed (`Clients`, their `Features` by name, their
+  `TypeSet`) to the contributors that build them: the contributor of a build feature ("NgApp") calls
+  `DeclaredClient.SetHandled( "NgApp" )`, a client has one build feature. A declared client that no contributor builds
+  is an error: "No package builds the client...".
 
 ## Requires
 

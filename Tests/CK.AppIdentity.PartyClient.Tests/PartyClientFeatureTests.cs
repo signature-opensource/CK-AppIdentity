@@ -32,62 +32,70 @@ public class PartyClientFeatureTests
     }
 
     /// <summary>
-    /// A served client: announced, with a request path derived from its name, and a "Color" fact.
+    /// A served client feature ("Served"): it requires the opt-in "Serving" feature of its party, it gives a request path
+    /// derived from its client name and has a "Color".
     /// </summary>
-    public sealed class ServedClient : PartyClient
+    [Requires<ServingFeatureDriver>]
+    public sealed class ServedClientFeature : ClientFeature
     {
-        public ServedClient( ILocalParty party, string name, ImmutableConfigurationSection configuration, string? color )
-            : base( party, name, configuration )
+        public ServedClientFeature( PartyClient client, ImmutableConfigurationSection configuration )
+            : base( client, configuration )
         {
-            Color = color;
+            Color = configuration["Color"];
         }
 
         public string? Color { get; }
 
-        public override ClientApplicationDescription Description => new ClientApplicationDescription( Name, Name == "App" ? "/" : $"/{Name.ToLowerInvariant()}" );
+        protected override void ContributeDescription( ClientDescriptionBuilder builder )
+        {
+            builder.RequestPath = Client.Name == "App" ? "/" : $"/{Client.Name.ToLowerInvariant()}";
+        }
     }
 
-    public sealed class ServedClientFactory : IPartyClientFactory
+    public sealed class ServedClientFeatureDriver : ClientFeatureDriver<ServedClientFeature>
     {
-        public ServedClientFactory( ServingFeatureDriver serving ) => RequiredFeatures = [serving];
-
-        public IReadOnlyCollection<string> ClientNames => ["App", "Admin"];
-
-        public IReadOnlyList<ApplicationIdentityFeatureDriver> RequiredFeatures { get; }
-
-        public PartyClient? Create( IActivityMonitor monitor, ILocalParty party, string name, ImmutableConfigurationSection configuration )
+        protected override ServedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
         {
             foreach( var c in configuration.GetChildren() )
             {
                 if( c.Key != "Color" )
                 {
-                    monitor.Error( $"Unknown fact '{c.Key}' for the client '{name}' of '{party.FullName}'." );
+                    monitor.Error( $"Unknown key \"{c.Path}\" of {client}." );
                     return null;
                 }
             }
-            return new ServedClient( party, name, configuration, configuration["Color"] );
+            return new ServedClientFeature( client, configuration );
         }
     }
 
     /// <summary>
-    /// A local client: not announced, no requirement.
+    /// A local client feature ("Tool"): not served, no requirement.
     /// </summary>
-    public sealed class LocalClient : PartyClient
+    public sealed class ToolClientFeature : ClientFeature
     {
-        public LocalClient( ILocalParty party, string name, ImmutableConfigurationSection configuration ) : base( party, name, configuration ) { }
+        public ToolClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
     }
 
-    public sealed class LocalClientFactory : IPartyClientFactory
+    public sealed class ToolClientFeatureDriver : ClientFeatureDriver<ToolClientFeature>
     {
-        public IReadOnlyCollection<string> ClientNames => ["Tool"];
-
-        public IReadOnlyList<ApplicationIdentityFeatureDriver> RequiredFeatures => [];
-
-        public PartyClient? Create( IActivityMonitor monitor, ILocalParty party, string name, ImmutableConfigurationSection configuration )
-            => new LocalClient( party, name, configuration );
+        protected override ToolClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
     }
 
-    static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] factories )
+    /// <summary>
+    /// What the engine generates in a real application.
+    /// </summary>
+    sealed class TestComponentDirectory : PartyComponentDirectory
+    {
+        public TestComponentDirectory()
+            : base( [new PartyComponentInfo( typeof( ServingFeatureDriver ), [], [] ),
+                     new PartyComponentInfo( typeof( ToolClientFeature ), [], [] ),
+                     new PartyComponentInfo( typeof( ServedClientFeature ), [typeof( ServingFeatureDriver )], [] )],
+                    new HashSet<Type>() )
+        {
+        }
+    }
+
+    static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] drivers )
     {
         var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
         ckApp["FullName"] = "Clients/$App";
@@ -103,37 +111,39 @@ public class PartyClientFeatureTests
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         builder.Services.AddSingleton<ServingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ServingFeatureDriver>() );
-        foreach( var f in factories )
+        builder.Services.AddSingleton<PartyComponentDirectory, TestComponentDirectory>();
+        foreach( var d in drivers )
         {
-            builder.Services.AddSingleton( f );
-            builder.Services.AddSingleton( sp => (IPartyClientFactory)sp.GetRequiredService( f ) );
+            builder.Services.AddSingleton( d );
+            builder.Services.AddSingleton( sp => (IClientFeatureDriver)sp.GetRequiredService( d ) );
         }
         builder.Services.AddSingleton<PartyClientFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyClientFeatureDriver>() );
         return builder.CKBuild();
     }
 
+    static readonly Type[] _drivers = [typeof( ServedClientFeatureDriver ), typeof( ToolClientFeatureDriver )];
+
     [Test]
     [CancelAfter( 10000 )]
-    public async Task the_declared_clients_are_created_and_described_Async( CancellationToken cancel )
+    public async Task the_declared_clients_are_created_with_their_features_and_described_Async( CancellationToken cancel )
     {
-        using var logs = new AllMonitorsTexts();
         using var host = BuildHost( c =>
         {
             c["Local:AllowFeatures"] = "Serving";
             c["Local:PublicUrl"] = "https://acme.com";
-            c["Local:PartyClient:App:Color"] = "Blue";
-            c["Local:PartyClient:Tool"] = "";
-        }, typeof( ServedClientFactory ), typeof( LocalClientFactory ) );
-        {
-            await host.StartAsync( cancel );
-            (await logs.WaitForAsync( "The client 'Admin' is built but not declared by 'Clients/$App/#Dev': it is not a client of this party. Add \"Local:PartyClient:Admin\" to its configuration to make it one." )).ShouldBeTrue();
-        }
+            c["Local:PartyClient:App:Served:Color"] = "Blue";
+            c["Local:PartyClient:Tool:Tool"] = "";
+            // The type set of a client is compile time: accepted, ignored.
+            c["Local:PartyClient:Tool:Types:0"] = "Some.Type, Some.Assembly";
+        }, _drivers );
+        await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         var clients = root.GetRequiredFeature<PartyClientFeature>().Clients;
         clients.Select( c => c.Name ).ShouldBe( ["App", "Tool"] );
-        clients[0].ShouldBeOfType<ServedClient>().Color.ShouldBe( "Blue" );
-        clients[1].ShouldBeOfType<LocalClient>();
+        clients[0].GetFeature<ServedClientFeature>().ShouldNotBeNull().Color.ShouldBe( "Blue" );
+        clients[0].GetFeature<ServedClientFeature>()!.Name.ShouldBe( "Served" );
+        clients[1].Features.ShouldHaveSingleItem().ShouldBeOfType<ToolClientFeature>();
 
         // The served client is announced, the local one is not.
         root.Description.ClientApplications.ShouldBe( [new ClientApplicationDescription( "App", "/" )] );
@@ -143,42 +153,54 @@ public class PartyClientFeatureTests
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task a_declared_client_that_no_package_builds_is_an_error_Async( CancellationToken cancel )
+    public async Task a_key_of_a_client_that_is_no_feature_is_an_error_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => c["Local:PartyClient:Unknown"] = "", typeof( LocalClientFactory ) );
+        using var host = BuildHost( c => c["Local:PartyClient:App:Unknown"] = "", _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( "The client 'Unknown' is declared by 'Clients/$App/#Dev' but no package builds it." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "Unknown \"CK-AppIdentity:Local:PartyClient:App:Unknown\": the keys of a client are its features (Served, Tool) and its type set (Types, ExcludedTypes)." )).ShouldBeTrue();
         }
     }
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task a_client_requires_the_features_of_its_package_Async( CancellationToken cancel )
+    public async Task a_client_without_feature_is_an_error_Async( CancellationToken cancel )
+    {
+        using var logs = new AllMonitorsTexts();
+        using var host = BuildHost( c => c["Local:PartyClient:App"] = "", _drivers );
+        {
+            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
+            (await logs.WaitForAsync( "The client 'App' of 'Clients/$App/#Dev' has no feature." )).ShouldBeTrue();
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_client_feature_requires_the_features_of_the_party_that_it_requires_Async( CancellationToken cancel )
     {
         // "Serving" is opt-in, not allowed here.
         using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => c["Local:PartyClient:App"] = "", typeof( ServedClientFactory ) );
+        using var host = BuildHost( c => c["Local:PartyClient:App:Served"] = "", _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( "The client 'App' of 'Clients/$App/#Dev' requires the feature(s) 'Serving' that 'Clients/$App/#Dev' doesn't allow." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "'ServedClientFeature' of client 'App' of 'Clients/$App/#Dev' requires 'ServingFeatureDriver' that client 'App' of 'Clients/$App/#Dev' doesn't have." )).ShouldBeTrue();
         }
     }
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task a_fact_that_the_kind_of_client_doesnt_have_is_an_error_Async( CancellationToken cancel )
+    public async Task the_driver_validates_the_section_of_its_feature_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
         using var host = BuildHost( c =>
         {
             c["Local:AllowFeatures"] = "Serving";
-            c["Local:PartyClient:App:Origin"] = "https://cdn.acme.com";
-        }, typeof( ServedClientFactory ) );
+            c["Local:PartyClient:App:Served:Origin"] = "https://cdn.acme.com";
+        }, _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( "Unknown fact 'Origin' for the client 'App' of 'Clients/$App/#Dev'." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Served:Origin\" of client 'App' of 'Clients/$App/#Dev'." )).ShouldBeTrue();
         }
     }
 
@@ -187,7 +209,7 @@ public class PartyClientFeatureTests
     public async Task a_party_that_disallows_the_feature_has_no_clients_and_cannot_declare_any_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
-        using( var host = BuildHost( c => c["Local:DisallowFeatures"] = "PartyClient", typeof( LocalClientFactory ) ) )
+        using( var host = BuildHost( c => c["Local:DisallowFeatures"] = "PartyClient", _drivers ) )
         {
             await host.StartAsync( cancel );
             host.Services.GetRequiredService<ApplicationIdentityService>().GetFeature<PartyClientFeature>().ShouldBeNull();
@@ -196,8 +218,8 @@ public class PartyClientFeatureTests
         using( var host = BuildHost( c =>
         {
             c["Local:DisallowFeatures"] = "PartyClient";
-            c["Local:PartyClient:Tool"] = "";
-        }, typeof( LocalClientFactory ) ) )
+            c["Local:PartyClient:Tool:Tool"] = "";
+        }, _drivers ) )
         {
             {
                 await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
@@ -208,32 +230,9 @@ public class PartyClientFeatureTests
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task two_packages_cannot_build_the_same_client_Async( CancellationToken cancel )
-    {
-        using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => { }, typeof( LocalClientFactory ), typeof( OtherToolFactory ) );
-        {
-            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( l => l.Contains( "The client 'Tool' is built by" ) && l.Contains( "a client name is built by one package only." ) )).ShouldBeTrue();
-        }
-    }
-
-    public sealed class OtherToolFactory : IPartyClientFactory
-    {
-        public IReadOnlyCollection<string> ClientNames => ["Tool"];
-
-        public IReadOnlyList<ApplicationIdentityFeatureDriver> RequiredFeatures => [];
-
-        public PartyClient? Create( IActivityMonitor monitor, ILocalParty party, string name, ImmutableConfigurationSection configuration )
-            => new LocalClient( party, name, configuration );
-    }
-
-    [Test]
-    [CancelAfter( 10000 )]
     public async Task a_dynamic_tenant_domain_has_its_clients_Async( CancellationToken cancel )
     {
-        using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => { }, typeof( LocalClientFactory ) );
+        using var host = BuildHost( c => { }, _drivers );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.GetRequiredFeature<PartyClientFeature>().Clients.ShouldBeEmpty();
@@ -241,10 +240,12 @@ public class PartyClientFeatureTests
         var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
         {
             s["FullName"] = "D1/$D1";
-            s["Local:PartyClient:Tool"] = "";
+            s["Local:PartyClient:Tool:Tool"] = "";
         } );
         domain.ShouldNotBeNull();
-        domain.GetRequiredFeature<PartyClientFeature>().Clients.Single().ShouldBeOfType<LocalClient>().Party.ShouldBe( domain );
+        var tool = domain.GetRequiredFeature<PartyClientFeature>().Clients.Single();
+        tool.Party.ShouldBe( domain );
+        tool.Features.ShouldHaveSingleItem().ShouldBeOfType<ToolClientFeature>();
         await host.StopAsync( cancel );
     }
 
@@ -252,7 +253,7 @@ public class PartyClientFeatureTests
     [CancelAfter( 10000 )]
     public async Task the_clients_of_a_tenant_domain_are_in_its_description_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "Serving", typeof( ServedClientFactory ) );
+        using var host = BuildHost( c => c["Local:AllowFeatures"] = "Serving", _drivers );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.Description.ClientApplications.ShouldBeEmpty();
@@ -262,14 +263,13 @@ public class PartyClientFeatureTests
             s["FullName"] = "D1/$D1";
             s["Local:AllowFeatures"] = "Serving";
             s["Local:PublicUrl"] = "https://d1.acme.com";
-            s["Local:PartyClient:Admin"] = "";
+            s["Local:PartyClient:Admin:Served"] = "";
         } );
         domain.ShouldNotBeNull();
         domain.Description.ClientApplications.ShouldBe( [new ClientApplicationDescription( "Admin", "/admin" )] );
         domain.Description.GetClientApplicationUrl( "Admin" ).ShouldBe( "https://d1.acme.com/admin" );
         await host.StopAsync( cancel );
     }
-
     [TestCase( "Enlistment", "", true )]
     [TestCase( "Enlistment", "app-identity/enlist", true )]
     [TestCase( "A|B", "", true )]

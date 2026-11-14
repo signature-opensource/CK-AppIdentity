@@ -200,7 +200,7 @@ try {
             if( -not $c -or -not $defaultUrl ) { continue }
             $url = $defaultUrl + $c.RequestPath
             Write-Host "  $($c.Name): $url"
-            if( $c.Kind -eq 'DefaultApp' -and -not $browserUrl ) { $browserUrl = $url }
+            if( $c.RequestPath -eq '/' -and -not $browserUrl ) { $browserUrl = $url }
         }
         if( -not $browserUrl -and $defaultUrl ) { $browserUrl = $defaultUrl }
     }

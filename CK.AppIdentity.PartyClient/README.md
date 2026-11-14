@@ -1,30 +1,50 @@
 # CK.AppIdentity.PartyClient
 
 **The clients of a party:** the applications that send commands to a local party on behalf of users (a browser
-application served by the party, a local tool, a native application...). A client is not a party: it has no identity
-key and it is not a remote. This package is the ground for every kind of client; the packages that bring a kind of
-client build on it.
+application served by the party, a mobile application, a local tool...). A client is not a party: it has no identity key
+and it is not a remote. This package is the ground for every client: the packages that bring a client feature build on
+it.
 
-## A client is built by a package, and declared by a party
+## A client is a bag of client features, declared by a party
 
-- **A package builds the clients of a kind.** Their type specializes [`PartyClient`](PartyClient.cs) (its type is its
-  kind), and the package implements an [`IPartyClientFactory`](IPartyClientFactory.cs): it knows the names of the
-  clients it builds (`ClientNames`), the features that its clients require on their party (`RequiredFeatures`, the
-  drivers it receives as constructor parameters), and it creates a client from its configuration (`Create`).
-- **A party declares the clients it uses**, in its "Local:PartyClient" section: only the configuration says which party uses
-  which client (one build can produce a client for a party and not for another). The declaration holds what the build
-  can't know (the deployment facts, the options); everything else is derived from the build.
+A client is to its features what a party is to its features: [`PartyClient`](PartyClient.cs) is a container (its
+`Name`, its `Party`, its `Features`), and what it is comes from its features: "NgApp" (an Angular application, CK.TS.Angular),
+"Hosting" (served by its party, CK.TS.AspNet.Clients)...
+
+- **A package brings a client feature:** a class that specializes [`ClientFeature`](ClientFeature.cs), and its driver, a
+  [`ClientFeatureDriver<T>`](IClientFeatureDriver.cs) (an `[IsMultiple]` auto service) that creates the feature of a
+  client from its configuration. The name of a feature is its type name without the "ClientFeature" suffix
+  (`NgAppClientFeature` is "NgApp", `ClientFeature.GetFeatureName`).
+- **A party declares its clients**, in its "Local:PartyClient" section: only the configuration says which party has which
+  client. The keys of a client are its features (their section is their configuration) and its type set:
 
 ```jsonc
-"CK-AppIdentity": {
-  "Local": {
-    "PartyClient": {
-      "App": {},                                   // Declared: its facts come from the package that builds it.
-      "Admin": { /* deployment facts, options */ }
+"Local": {
+  "PartyClient": {
+    "App": {
+      "Types": [ "..." ], "ExcludedTypes": [ "..." ],   // Its type set: compile time keys, ignored at run time.
+      "NgApp": { },
+      "Hosting": { "RequestPath": "/", "DevServerPort": 4200 }
     }
   }
 }
 ```
+
+## The requirements of a feature
+
+A client feature declares its requirements with `[Requires<T>]` (a party component is a resource group, see
+`IPartyComponent`):
+
+- **a feature of its party:** `[Requires<HttpEndpointFeatureDriver>]`: the party must allow it;
+- **an abstraction implemented by another feature of the client:** `[Requires<IWebAppBuild>]`. An abstraction is an
+  interface that extends `IPartyComponentAbstraction`. It is unique by default (a client has at most one implementation
+  of it), `[IsMultiple]` makes it multiple. A requirement on an abstraction means "present": on a unique abstraction,
+  exactly one implementation. [`IWebAppBuild`](IWebAppBuild.cs) (the web build of a client: its `ProjectPath`, its
+  `OutputPath`, `GetDevServerStart`) is the one of this package.
+
+The engine reads them (no runtime reflection): the `PartyComponentDirectory` of CK.AppIdentity has the requirements, the
+abstractions and the order of every party component (a component after the ones it requires, after all the
+implementations of a required abstraction).
 
 ## The "PartyClient" feature
 
@@ -32,58 +52,58 @@ client build on it.
 domains, those of the initial configuration and the dynamic ones (a remote has no clients here: its clients are known
 by its description). It is **allowed by default**: `"DisallowFeatures": "PartyClient"` makes a party without clients. The
 clients of a party are its [`PartyClientFeature`](PartyClientFeature.cs) (`Clients`, `Find( name )`), in the order of their
-declaration.
+declaration. For each client, it finds the driver of each feature, checks the requirements
+(`PartyComponentDirectory.CheckScope`), creates the features in their order, then their options.
 
 The rules fail closed:
 
 | Case | Result |
 |---|---|
-| A declared client that no package builds | An error: the party's setup fails. |
-| Two packages that build the same client name | An error. |
-| A client whose package requires a feature that the party doesn't allow | An error. |
-| A configured fact that the kind of client doesn't have | An error, reported by its factory. |
+| A key of a client that is neither a client feature of the application nor its type set | An error: the party's setup fails. |
+| A client without feature | An error. |
+| A feature that requires a feature that the party doesn't allow | An error. |
+| A feature that requires an abstraction that no feature of the client implements | An error. |
+| Two features of a client that implement a unique abstraction | An error. |
+| A key of a feature that the feature doesn't have | An error, reported by its driver. |
 | A party that doesn't allow the feature but declares clients | An error. |
-| A built client that a party doesn't declare | Not a client of this party: an information says what to add ("Add `Local:PartyClient:{Name}` to its configuration"). |
 
 The declarations are read on the party only: a "Defaults" section doesn't declare clients.
 
-## The options of a client
+## The options of a client feature
 
-A package can add an option to a kind of client: a class decorated with `[PartyClientOption]`
-([`PartyClientOptionAttribute`](PartyClientOptionAttribute.cs)) that implements `IPartyComponentOption<TClient>`. It
-applies to `TClient` and to the clients derived from it. See
+A package can add an option to a client feature: a class decorated with `[PartyClientOption]`
+([`PartyClientOptionAttribute`](PartyClientOptionAttribute.cs)) that implements `IPartyComponentOption<TFeature>`. It
+applies to `TFeature` and to the features derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 
-- **The feature selects them, for every kind of client:** once a factory has created a client, `PartyClientFeatureDriver`
-  selects the options of the client's type from its `Local:PartyClient:{Name}` section (their key is their name), creates
-  them from the services and gives them to the client: `PartyClient.Options`, in their order.
-- **The client applies them:** `PartyClient.InitializeOptions( monitor, options )` is called once with the options and
-  their configuration section. It accepts them by default; a kind of client that has options checks there that they are
-  the ones it expects (a base type of its own) and initializes them.
-- **A factory ignores the option keys** of the section it receives: it refuses only a key that is neither one of its
-  own nor an option name of its client type (`PartyComponentOptionDirectory.IsOptionName`).
+- **The feature driver of the party selects them:** once a feature is created, `PartyClientFeatureDriver` selects the
+  options of its type from its section (their key is their name), creates them from the services and gives them to the
+  feature: `ClientFeature.Options`, in their order.
+- **The feature applies them:** `ClientFeature.InitializeOptions( monitor, options )` is called once with the options and
+  their configuration section. It accepts them by default.
+- **A driver ignores the option keys** of the section it receives: it refuses only a key that is neither one of its own
+  nor an option name of its feature (`PartyComponentOptionDirectory.IsOptionName`).
 
-```json
-"PartyClient": {
-  "Admin": { "Caching": true }
-}
+```jsonc
+"Hosting": { "StaticFiles": { "AssetsMaxAge": "01:00:00" } }
 ```
 
 ## The description of the party
 
 [`PartyClientFeatureDriver`](PartyClientFeatureDriver.cs) announces the clients of each local party (the root and the tenant
 domains) in its description (`PartyDescription.ClientApplications`, see the description of a party in
-[CK.AppIdentity](../CK.AppIdentity/README.md)): the clients that have a `PartyClient.Description` (a local tool has
-none: it is not announced).
+[CK.AppIdentity](../CK.AppIdentity/README.md)). The description of a client (`PartyClient.Description`) is assembled from
+its features (`ClientFeature.ContributeDescription`): its request path (the feature that serves it) and its facts. A
+client that its party doesn't serve (no request path) is not announced.
 
 ## The facts of a client
 
 A type that a client is built from states facts about it with
 [`[PartyClientFact( key, value )]`](PartyClientFactAttribute.cs) (repeatable, not inherited, the value is optional): a
 TypeScript package that is an approval page states `[PartyClientFact( "Enlistment", "app-identity/enlist" )]` (the path of
-the page), an administration application `[PartyClientFact( "Admin" )]`. The engine that builds a kind of client unions
-the facts of the types each client is built from, once per build (the TypeScript engine does it for the client
-applications, from their selected packages). The result is a
+the page), an administration application `[PartyClientFact( "Admin" )]`. The engine that builds a client unions the facts
+of the types the client is built from, once per build (the TypeScript engine does it for the client applications, from
+their selected packages), and its build feature contributes them to the description. The result is a
 [`ClientApplicationFacts`](../CK.AppIdentity.Abstractions/ClientApplicationFacts.cs), a multimap (a key has a set of
 values, the union is associative, commutative and idempotent): the `Facts` of the client's description, announced with
 it. Each consumer decides what it accepts for a key. Nothing is configured, nothing is computed at run time: what a

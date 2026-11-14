@@ -56,55 +56,123 @@ public sealed class TracingOption : IPartyComponentOption<FakeFeatureDriver>
 }
 
 /// <summary>
-/// A fake client type and a client type derived from it.
+/// A fake client feature type and a client feature type derived from it ("Fake" and "FakeDerived").
 /// </summary>
-public class FakeClient : PartyClient
+public class FakeClientFeature : ClientFeature
 {
-    public FakeClient( ILocalParty party, string name, ImmutableConfigurationSection configuration ) : base( party, name, configuration ) { }
+    public FakeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
-public sealed class FakeDerivedClient : FakeClient
+public sealed class FakeDerivedClientFeature : FakeClientFeature
 {
-    public FakeDerivedClient( ILocalParty party, string name, ImmutableConfigurationSection configuration ) : base( party, name, configuration ) { }
+    public FakeDerivedClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
-// An option of every FakeClient, and one of the derived client only, that comes after it.
+// An option of every FakeClientFeature, and one of the derived feature only, that comes after it.
 [PartyClientOption]
-public sealed class CachingOption : IPartyComponentOption<FakeClient>
+public sealed class CachingOption : IPartyComponentOption<FakeClientFeature>
 {
 }
 
 [PartyClientOption, Requires<CachingOption>]
-public sealed class DerivedOnlyOption : IPartyComponentOption<FakeDerivedClient>
+public sealed class DerivedOnlyOption : IPartyComponentOption<FakeDerivedClientFeature>
 {
 }
 
 /// <summary>
-/// Builds the "Fake" client (a <see cref="FakeClient"/>) and the "Derived" one (a <see cref="FakeDerivedClient"/>). Like
-/// the factories of real clients, it refuses a key of the client section that is not an option of the client: the
-/// options are selected by the PartyClient feature.
+/// Like the drivers of real client features, they refuse a key of the feature section that is not an option of the
+/// feature: the options are selected by the PartyClient feature.
 /// </summary>
-public sealed class FakeClientFactory : IPartyClientFactory
+public sealed class FakeClientFeatureDriver : ClientFeatureDriver<FakeClientFeature>
 {
     readonly PartyComponentOptionDirectory _options;
 
-    public FakeClientFactory( PartyComponentOptionDirectory options ) => _options = options;
+    public FakeClientFeatureDriver( PartyComponentOptionDirectory options ) => _options = options;
 
-    public IReadOnlyCollection<string> ClientNames => ["Fake", "Derived"];
-
-    public IReadOnlyList<ApplicationIdentityFeatureDriver> RequiredFeatures => [];
-
-    public PartyClient? Create( IActivityMonitor monitor, ILocalParty party, string name, ImmutableConfigurationSection configuration )
+    protected override FakeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
     {
-        var type = name == "Derived" ? typeof( FakeDerivedClient ) : typeof( FakeClient );
-        var unknown = configuration.GetChildren().Where( c => !_options.IsOptionName( type, c.Key ) ).Select( c => c.Key ).ToList();
+        return FakeDrivers.CheckOnlyOptions( monitor, _options, typeof( FakeClientFeature ), configuration )
+                ? new FakeClientFeature( client, configuration )
+                : null;
+    }
+}
+
+public sealed class FakeDerivedClientFeatureDriver : ClientFeatureDriver<FakeDerivedClientFeature>
+{
+    readonly PartyComponentOptionDirectory _options;
+
+    public FakeDerivedClientFeatureDriver( PartyComponentOptionDirectory options ) => _options = options;
+
+    protected override FakeDerivedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
+    {
+        return FakeDrivers.CheckOnlyOptions( monitor, _options, typeof( FakeDerivedClientFeature ), configuration )
+                ? new FakeDerivedClientFeature( client, configuration )
+                : null;
+    }
+}
+
+static class FakeDrivers
+{
+    public static bool CheckOnlyOptions( IActivityMonitor monitor, PartyComponentOptionDirectory options, System.Type featureType, ImmutableConfigurationSection configuration )
+    {
+        var unknown = configuration.GetChildren().Where( c => !options.IsOptionName( featureType, c.Key ) ).Select( c => c.Key ).ToList();
         if( unknown.Count > 0 )
         {
-            monitor.Error( $"Unexpected '{unknown.Concatenate( "', '" )}' in \"Local:PartyClient:{name}\": a fake client has only options." );
-            return null;
+            monitor.Error( $"Unexpected '{unknown.Concatenate( "', '" )}' in \"{configuration.Path}\": a fake feature has only options." );
+            return false;
         }
-        return name == "Derived"
-                ? new FakeDerivedClient( party, name, configuration )
-                : new FakeClient( party, name, configuration );
+        return true;
     }
+}
+
+/// <summary>
+/// The requirements: an abstraction (unique), a feature that implements it, another one that implements it too, a
+/// feature that requires it and a feature that requires the (not allowed by default) FakeFeatureDriver.
+/// </summary>
+public interface IFakeBuild : IPartyComponentAbstraction
+{
+}
+
+public sealed class BuildClientFeature : ClientFeature, IFakeBuild
+{
+    public BuildClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+}
+
+public sealed class OtherBuildClientFeature : ClientFeature, IFakeBuild
+{
+    public OtherBuildClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+}
+
+[Requires<IFakeBuild>]
+public sealed class ServeClientFeature : ClientFeature
+{
+    public ServeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+
+    protected override void ContributeDescription( ClientDescriptionBuilder builder ) => builder.RequestPath = "/";
+}
+
+[Requires<FakeFeatureDriver>]
+public sealed class NeedsFakeClientFeature : ClientFeature
+{
+    public NeedsFakeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+}
+
+public sealed class BuildClientFeatureDriver : ClientFeatureDriver<BuildClientFeature>
+{
+    protected override BuildClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+}
+
+public sealed class OtherBuildClientFeatureDriver : ClientFeatureDriver<OtherBuildClientFeature>
+{
+    protected override OtherBuildClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+}
+
+public sealed class ServeClientFeatureDriver : ClientFeatureDriver<ServeClientFeature>
+{
+    protected override ServeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+}
+
+public sealed class NeedsFakeClientFeatureDriver : ClientFeatureDriver<NeedsFakeClientFeature>
+{
+    protected override NeedsFakeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
 }

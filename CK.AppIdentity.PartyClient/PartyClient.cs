@@ -6,29 +6,25 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// A client of a local party: an application that sends commands to the party on behalf of users (a browser application
-/// served by the party, a local tool, a native application...). A client is not a party: it has no identity key and it
+/// served by the party, a mobile application, a local tool...). A client is not a party: it has no identity key and it
 /// is not a remote.
 /// <para>
-/// Its type is its kind: a package that brings a kind of client specializes this class and creates its instances
-/// (see <see cref="IPartyClientFactory"/>). A client is configured in the "Local:PartyClient:{Name}" section of its party.
+/// A client is a bag of client features (<see cref="ClientFeature"/>), as a party is a bag of features: "NgApp" (an
+/// Angular application), "Hosting" (served by its party)... It is declared by its party in its "Local:PartyClient:{Name}"
+/// section, whose keys are its features (and its type set, compile time).
 /// </para>
 /// </summary>
-public abstract class PartyClient : IPartyComponent
+public sealed class PartyClient
 {
-    /// <summary>
-    /// Initializes a new client.
-    /// </summary>
-    /// <param name="party">The local party of this client.</param>
-    /// <param name="name">The client name (unique in its party).</param>
-    /// <param name="configuration">Its "Local:PartyClient:{Name}" configuration section.</param>
-    protected PartyClient( ILocalParty party, string name, ImmutableConfigurationSection configuration )
+    IReadOnlyList<ClientFeature> _features;
+    ClientApplicationDescription? _description;
+
+    internal PartyClient( ILocalParty party, string name, ImmutableConfigurationSection configuration )
     {
-        Throw.CheckNotNullArgument( party );
-        Throw.CheckNotNullOrWhiteSpaceArgument( name );
-        Throw.CheckNotNullArgument( configuration );
         Party = party;
         Name = name;
         Configuration = configuration;
+        _features = [];
     }
 
     /// <summary>
@@ -47,42 +43,32 @@ public abstract class PartyClient : IPartyComponent
     public ImmutableConfigurationSection Configuration { get; }
 
     /// <summary>
-    /// Gets what this client states to the remotes, in the description of its party (<see cref="PartyDescription.ClientApplications"/>).
-    /// Null when the client is not announced (a local tool).
-    /// <para>
-    /// Defaults to null.
-    /// </para>
+    /// Gets the features of this client, in their order (a feature comes after the ones it requires).
     /// </summary>
-    public virtual ClientApplicationDescription? Description => null;
+    public IReadOnlyList<ClientFeature> Features => _features;
 
     /// <summary>
-    /// Gets the options of this client, in their order: the ones of its type (or of a base of it, see
-    /// <see cref="PartyClientOptionAttribute"/>) enabled by its "Local:PartyClient:{Name}" section. They are set once, when
-    /// the client is created (see <see cref="InitializeOptions"/>).
+    /// Gets the feature of a type (or of a type that implements it), or null.
     /// </summary>
-    public IReadOnlyList<object> Options { get; private set; } = [];
+    /// <typeparam name="T">The feature type, or an abstraction (<see cref="IWebAppBuild"/> for instance).</typeparam>
+    /// <returns>The feature or null.</returns>
+    public T? GetFeature<T>() where T : class => _features.OfType<T>().FirstOrDefault();
 
     /// <summary>
-    /// Called once, when the client is created, with its selected options (in their order) and their configuration
-    /// section (null for an option enabled by <c>true</c> or by default). Applying an option is the client's business: a
-    /// kind of client that has options checks here that they are the ones it expects (a base type of its own, for
-    /// instance) and initializes them.
-    /// <para>
-    /// Accepts the options by default. Returning false (an error must be logged) makes the client an error.
-    /// </para>
+    /// Gets what this client states to the remotes, in the description of its party (<see cref="PartyDescription.ClientApplications"/>):
+    /// its name, its request path and its facts, assembled from its features. Null when the party doesn't serve it (no
+    /// feature gives a request path).
     /// </summary>
-    /// <param name="monitor">The monitor to use.</param>
-    /// <param name="options">The selected options and their configuration.</param>
-    /// <returns>True on success, false on error.</returns>
-    protected virtual bool InitializeOptions( IActivityMonitor monitor, IReadOnlyList<(object Option, ImmutableConfigurationSection? Configuration)> options ) => true;
+    public ClientApplicationDescription? Description => _description;
 
-    internal bool SetOptions( IActivityMonitor monitor, IReadOnlyList<(object Option, ImmutableConfigurationSection? Configuration)> options )
+    internal void SetFeatures( IReadOnlyList<ClientFeature> features )
     {
-        if( !InitializeOptions( monitor, options ) ) return false;
-        Options = options.Select( o => o.Option ).ToArray();
-        return true;
+        _features = features;
+        var b = new ClientDescriptionBuilder( this );
+        foreach( var f in features ) f.ContributeDescription( b );
+        _description = b.RequestPath != null ? new ClientApplicationDescription( Name, b.RequestPath, b.Facts ) : null;
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"{GetType().Name} '{Name}' of '{Party.FullName}'";
+    public override string ToString() => $"client '{Name}' of '{Party.FullName}'";
 }

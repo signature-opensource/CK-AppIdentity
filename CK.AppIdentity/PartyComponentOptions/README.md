@@ -1,6 +1,6 @@
 # The options of the party components
 
-A party component (a feature driver, a party client) does one thing, and other packages may want to add something to
+A party component (a feature driver, a client feature) does one thing, and other packages may want to add something to
 it: a transport that understands forwarded headers, a client that is served with a compression... Each of these is an
 **option** of the component: a small class that a package brings, that a party enables or disables in its
 configuration, and that the component applies in a known order. The component doesn't know its options: the options
@@ -14,7 +14,7 @@ component it applies to, and is decorated with the attribute of its kind of owne
 | Owner | Attribute | Package |
 |---|---|---|
 | A feature driver (`IApplicationIdentityFeatureDriver`) | `[FeatureOption]` | CK.AppIdentity.Abstractions |
-| A party client (`PartyClient`) | `[PartyClientOption]` | CK.AppIdentity.PartyClient |
+| A client feature (`ClientFeature`) | `[PartyClientOption]` | CK.AppIdentity.PartyClient |
 
 ```csharp
 [FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]
@@ -28,7 +28,7 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 
 - **Its name** is its type name without its "Option" suffix ("Compression"): it is its key in the owner's
   configuration section.
-- **An option applies to its owner type and to the types derived from it**: an option of a base client is an option of
+- **An option applies to its owner type and to the types derived from it**: an option of a base client feature is an option of
   every client derived from it.
 - **An option is opt-in by default**: `IsEnabledByDefault = true` makes it opt-out.
 - **An option is not an auto service**: it is created from the services of its owner when the owner applies its

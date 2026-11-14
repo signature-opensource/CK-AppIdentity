@@ -18,32 +18,49 @@ public class AppIdentityAppBuilderContributorTests
         return new AppBuilderContext( engine, [app] );
     }
 
+    const string FakeType = "CK.AppIdentity.Engine.Tests.Fake.FakeClientFeature, CK.AppIdentity.Engine.Tests";
+    const string OtherType = "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests";
+
     [Test]
-    public void the_declared_clients_are_exposed_and_their_Type_is_a_compile_key()
+    public void the_declared_clients_are_exposed_with_their_features_and_their_type_set()
     {
-        var context = CreateContext( """
+        var context = CreateContext( $$"""
             {
               "FullName": "Sample/$Front",
-              "Local": { "PartyClient": { "App": { "Type": "TypeScript", "Kind": "DefaultApp" }, "Tool": { "Type": "Local" } } }
+              "Local": {
+                "ExcludedTypes": [ "{{OtherType}}" ],
+                "PartyClient": {
+                  "App": { "Types": [ "{{FakeType}}" ], "NgApp": { "ActiveCultures": "fr" }, "Hosting": { "RequestPath": "/" } },
+                  "Tool": { "Types": [ { "Name": "{{FakeType}}", "Optional": true } ], "Local": {} }
+                }
+              },
+              "Parties": [ { "PartyName": "$Tenant", "Local": { "Types": [ "{{OtherType}}" ] } } ]
             }
             """ );
         var c = new AppIdentityAppBuilderContributor();
         c.Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
-        c.Clients.Select( x => (x.Name, x.Type) ).ShouldBe( [("App", "TypeScript"), ("Tool", "Local")] );
-        c.Clients[0].Configuration["Kind"].ShouldBe( "DefaultApp" );
-        context.Apps[0].CompileKeys.ShouldBe( ["Local:PartyClient:App:Type", "Local:PartyClient:Tool:Type"], ignoreOrder: true );
+        c.Clients.Select( x => x.Name ).ShouldBe( ["App", "Tool"] );
+        c.Clients[0].Features.Keys.ShouldBe( ["NgApp", "Hosting"], ignoreOrder: true );
+        c.Clients[1].Features.Keys.ShouldBe( ["Local"] );
+        // The type sets: the parties' and the clients' (the exclusions of the party apply to its clients).
+        var binPath = context.Apps[0].BinPathConfiguration;
+        binPath.TypeSets.Select( s => s.Name ).ShouldBe( ["$Front", "$Tenant", "App", "Tool"], ignoreOrder: true );
+        binPath.FindTypeSet( "App" ).ShouldNotBeNull().Types.ShouldBe( [typeof( Fake.FakeClientFeature )] );
+        binPath.FindTypeSet( "App" )!.ExcludedTypes.ShouldBe( [typeof( Fake.FakeService )] );
+        binPath.FindTypeSet( "$Tenant" ).ShouldNotBeNull().Types.ShouldBe( [typeof( Fake.FakeService )] );
+        context.Apps[0].CompileKeys.ShouldBe( ["Local:ExcludedTypes", "Local:PartyClient:App:Types", "Local:PartyClient:Tool:Types", "Parties:0:Local:Types"], ignoreOrder: true );
 
-        // A client that no contributor handles is an error.
-        c.Clients[0].SetHandled();
+        // A client that no contributor builds is an error, and a client has one build feature.
+        c.Clients[0].SetHandled( "NgApp" ).ShouldBeTrue();
+        c.Clients[0].SetHandled( "ViteApp" ).ShouldBeFalse();
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
             c.OnContributed( TestHelper.Monitor, context ).ShouldBeFalse();
-            texts.ShouldContain( t => t.Contains( "No package builds the client 'Tool' of App 'Front' of Type 'Local'" ) );
+            texts.ShouldContain( t => t.Contains( "No package builds the client 'Tool' of App 'Front'" ) );
         }
-        c.Clients[1].SetHandled();
+        c.Clients[1].SetHandled( "NgApp" );
         c.OnContributed( TestHelper.Monitor, context ).ShouldBeTrue();
     }
-
     [Test]
     public void the_keys_of_the_party_are_projected_in_CK_AppIdentity()
     {
@@ -60,8 +77,10 @@ public class AppIdentityAppBuilderContributorTests
         context.Apps[0].ProjectedSections.ShouldBe( new[] { "FullName", "Defaults", "Local", "Parties" }.ToDictionary( k => k, _ => "CK-AppIdentity" ), ignoreOrder: true );
     }
 
-    [TestCase( """{ "FullName": "Sample/$Front", "Local": { "PartyClient": { "App": { "Kind": "DefaultApp" } } } }""",
-               "has no \"Type\"" )]
+    [TestCase( """{ "FullName": "Sample/$Front", "Local": { "Types": [ "No.Such.Type, No.Such.Assembly" ] } }""",
+               "Unable to find the type 'No.Such.Type, No.Such.Assembly' of \"ckonf:Apps:Front:Local:Types:0\"" )]
+    [TestCase( """{ "FullName": "Sample/$Front", "Local": { "ExcludedTypes": [ "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests" ], "PartyClient": { "App": { "Types": [ "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests" ] } } } }""",
+               "The client 'App' of App 'Front' adds the type" )]
     [TestCase( """{ "FullName": "not a valid full name!" }""",
                "Invalid party in App 'Front'" )]
     public void invalid_parties_are_build_errors( string json, string expected )
