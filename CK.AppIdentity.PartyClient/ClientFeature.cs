@@ -18,6 +18,7 @@ namespace CK.AppIdentity;
 /// A client feature is a party component: it owns options (<see cref="PartyClientOptionAttribute"/>).
 /// </para>
 /// </summary>
+[ClientFeatureName]
 public abstract class ClientFeature : IPartyComponent
 {
     /// <summary>
@@ -38,16 +39,8 @@ public abstract class ClientFeature : IPartyComponent
         Configuration = configuration;
     }
 
-    /// <summary>
-    /// Gets the name of a client feature type: its type name without the "ClientFeature" suffix.
-    /// </summary>
-    /// <param name="featureType">The client feature type.</param>
-    /// <returns>The feature name.</returns>
-    public static string GetFeatureName( Type featureType )
-    {
-        var n = featureType.Name;
-        return n.EndsWith( TypeNameSuffix, StringComparison.Ordinal ) && n.Length > TypeNameSuffix.Length ? n[..^TypeNameSuffix.Length] : n;
-    }
+    // Set by the PartyClientFeatureDriver once created (from the PartyComponentDirectory).
+    internal string? _name;
 
     /// <summary>
     /// Gets the client of this feature.
@@ -55,9 +48,10 @@ public abstract class ClientFeature : IPartyComponent
     public PartyClient Client { get; }
 
     /// <summary>
-    /// Gets the name of this feature (see <see cref="GetFeatureName(Type)"/>).
+    /// Gets the name of this feature: its type name without the "ClientFeature" suffix (the engine computes it, see
+    /// <see cref="PartyComponentInfo.FeatureName"/>). Available once the feature is created.
     /// </summary>
-    public string Name => GetFeatureName( GetType() );
+    public string Name => _name ?? Throw.InvalidOperationException<string>( $"The name of the client feature '{GetType().Name}' is set once it is created." );
 
     /// <summary>
     /// Gets the "Local:PartyClient:{Name}:{FeatureName}" configuration section of this feature.
@@ -100,5 +94,5 @@ public abstract class ClientFeature : IPartyComponent
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"{Name} of {Client}";
+    public override string ToString() => $"{_name ?? GetType().Name} of {Client}";
 }

@@ -4,17 +4,17 @@ namespace CK.AppIdentity.Engine.Tests.Bad;
 
 // Options that the engine rejects: they are only registered by the tests that check the errors.
 
-public sealed class NoAttributeOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class NoAttributeOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
 [PartyClientOption]
-public sealed class WrongKindOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class WrongKindOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
 [FeatureOption]
-public sealed class TwoConstructorsOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class TwoConstructorsOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public TwoConstructorsOption() { }
 
@@ -22,6 +22,6 @@ public sealed class TwoConstructorsOption : IPartyComponentOption<FakeFeatureDri
 }
 
 [FeatureOption]
-public sealed class MainOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }

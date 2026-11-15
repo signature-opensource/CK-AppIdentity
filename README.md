@@ -6,6 +6,7 @@ A minimal model of an application and its peers, extensible through "features" a
 objects, designed to minimize the configuration mess.
 
 | Package | Description | Latest stable |
+| [CK.Testing.AppIdentity](CK.Testing.AppIdentity/README.md) | Assembles an `ApplicationIdentityService` without the engine, for the tests of the run time: its `PartyComponentDirectory` is computed by the engine's own analysis. | [![nuget](https://img.shields.io/nuget/v/CK.Testing.AppIdentity.svg?label=CK.Testing.AppIdentity)](https://www.nuget.org/packages/CK.Testing.AppIdentity/) |
 |---------|-------------|---------------|
 | [CK.AppIdentity.Configuration](CK.AppIdentity.Configuration/README.md) | What you write in `appsettings.json`, and the immutable objects it is analyzed into. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.Configuration.svg?label=CK.AppIdentity.Configuration)](https://www.nuget.org/packages/CK.AppIdentity.Configuration/) |
 | [CK.AppIdentity.Abstractions](CK.AppIdentity.Abstractions/README.md) | The running model: `IParty` and its four specializations, and the `IFileStore` every party gets. | [![nuget](https://img.shields.io/nuget/v/CK.AppIdentity.Abstractions.svg?label=CK.AppIdentity.Abstractions)](https://www.nuget.org/packages/CK.AppIdentity.Abstractions/) |

@@ -8,9 +8,9 @@ namespace CK.AppIdentity.Engine.Tests.Fake;
 /// <summary>
 /// A fake feature driver: the owner of the options below.
 /// </summary>
-public sealed class FakeFeatureDriver : ApplicationIdentityFeatureDriver
+public sealed class FakePartyFeatureDriver : ApplicationIdentityFeatureDriver
 {
-    public FakeFeatureDriver( ApplicationIdentityService s ) : base( s, isAllowedByDefault: false ) { }
+    public FakePartyFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
     protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
 
@@ -31,17 +31,17 @@ public sealed class FakeService
 
 // The order: Header (before Main, order only), Main, Compression (after Main, only with it).
 [FeatureOption]
-public sealed class MainOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
 [FeatureOption( IsEnabledByDefault = true ), OptionalRequiredBy<MainOption>]
-public sealed class HeaderOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class HeaderOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
 [FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]
-public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class CompressionOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public CompressionOption( FakeService service ) => Service = service;
 
@@ -51,7 +51,7 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 // A non optional [RequiredBy<T>]: Main requires Tracing (Tracing comes first and can be enabled alone).
 // Used only by its own test (not in the common model).
 [FeatureOption, RequiredBy<MainOption>]
-public sealed class TracingOption : IPartyComponentOption<FakeFeatureDriver>
+public sealed class TracingOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
@@ -127,7 +127,7 @@ static class FakeDrivers
 
 /// <summary>
 /// The requirements: an abstraction (unique), a feature that implements it, another one that implements it too, a
-/// feature that requires it and a feature that requires the (not allowed by default) FakeFeatureDriver.
+/// feature that requires it and a feature that requires the (not allowed by default) FakePartyFeatureDriver.
 /// </summary>
 [IsSingle]
 public interface IFakeBuild : IPartyComponentAbstraction
@@ -152,7 +152,7 @@ public sealed class ServeClientFeature : ClientFeature
     protected override void ContributeDescription( ClientDescriptionBuilder builder ) => builder.RequestPath = "/";
 }
 
-[Requires<FakeFeatureDriver>]
+[Requires<FakePartyFeatureDriver>]
 public sealed class NeedsFakeClientFeature : ClientFeature
 {
     public NeedsFakeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }

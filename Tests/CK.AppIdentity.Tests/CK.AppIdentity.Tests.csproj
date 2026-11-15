@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\CK.AppIdentity.Hosting\CK.AppIdentity.Hosting.csproj" />
+    <ProjectReference Include="..\..\CK.Testing.AppIdentity\CK.Testing.AppIdentity.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using CK.Monitoring;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -22,11 +23,12 @@ namespace CK.AppIdentity.Tests;
 [TestFixture]
 public class RuntimeRobustnessTests
 {
+    [PartyFeature( IsOptional = false )]
     public sealed class ProbeFeatureDriver : ApplicationIdentityFeatureDriver
     {
         readonly List<string> _log = new();
 
-        public ProbeFeatureDriver( ApplicationIdentityService s ) : base( s, true ) { }
+        public ProbeFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         public string? FailSetupFor { get; set; }
 
@@ -68,6 +70,7 @@ public class RuntimeRobustnessTests
         services.AddSingleton<ApplicationIdentityService>();
         services.AddSingleton<ProbeFeatureDriver>();
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ProbeFeatureDriver>() );
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( ProbeFeatureDriver ) ) );
         if( fastClock ) services.AddSingleton<ApplicationIdentityService.ISystemClock>( new FastClock() );
         var sp = services.BuildServiceProvider();
         return (sp.GetRequiredService<ApplicationIdentityService>(), sp.GetRequiredService<ProbeFeatureDriver>());

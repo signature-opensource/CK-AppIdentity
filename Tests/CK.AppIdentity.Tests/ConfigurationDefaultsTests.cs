@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shouldly;
@@ -135,6 +136,12 @@ public class ConfigurationDefaultsTests
         config.AssemblyConfiguration.Assemblies.ShouldBeEmpty();
     }
 
+    // An optional symmetric feature.
+    public sealed class AsymFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
+    {
+        public AsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
+    }
+
     [Test]
     public void a_feature_driver_reads_a_local_party_in_its_Local()
     {
@@ -146,8 +153,8 @@ public class ConfigurationDefaultsTests
             c["Parties:1:PartyName"] = "R2";
             c["Parties:1:Asym"] = "false";
         } ).ShouldNotBeNull();
-        var s = new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
-        var driver = new FeatureBuilderInitializationTests.AsymFeatureDriver( s, isAllowedByDefault: false, featureName: null );
+        var s = new ApplicationIdentityService( c, AppIdentityTestHelper.CreateServiceProvider( typeof( AsymFeatureDriver ) ) );
+        var driver = new AsymFeatureDriver( s );
         driver.IsRootAllowed.ShouldBeTrue();
         driver.IsAllowedFeature( s ).ShouldBeTrue();
         driver.IsAllowedFeature( s.Remotes.Single( r => r.PartyName == "$R1" ) ).ShouldBeTrue();
@@ -160,8 +167,8 @@ public class ConfigurationDefaultsTests
             c["Local:Asym"] = "true";
             c["Parties:0:PartyName"] = "R1";
         } ).ShouldNotBeNull();
-        var s2 = new ApplicationIdentityService( c2, new ServiceCollection().BuildServiceProvider() );
-        var driver2 = new FeatureBuilderInitializationTests.AsymFeatureDriver( s2, isAllowedByDefault: false, featureName: null );
+        var s2 = new ApplicationIdentityService( c2, AppIdentityTestHelper.CreateServiceProvider( typeof( AsymFeatureDriver ) ) );
+        var driver2 = new AsymFeatureDriver( s2 );
         driver2.IsAllowedFeature( s2 ).ShouldBeTrue();
         driver2.IsAllowedFeature( s2.Remotes.Single() ).ShouldBeFalse();
     }

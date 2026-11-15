@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,11 +20,12 @@ public class PartyDescriptionTests
 {
     // Contributes to the root party's description, once it has set it up: the description driver, that comes first,
     // describes the parties once all the drivers have set them up.
+    [PartyFeature( IsOptional = false )]
     public sealed class TestContributorFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         bool _isSetup;
 
-        public TestContributorFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+        public TestContributorFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         public Uri? PublicUrl { get; set; }
 
@@ -74,6 +76,7 @@ public class PartyDescriptionTests
             builder.Services.AddSingleton( t );
             builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
         }
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( drivers.Prepend( typeof( TestContributorFeatureDriver ) ).Prepend( typeof( PartyDescriptionFeatureDriver ) ) ) );
         return builder.CKBuild();
     }
 
@@ -246,9 +249,10 @@ public class PartyDescriptionTests
     }
 
     // The first phase hosts a route and announces a data, the second one derives a route from the first phase.
+    [PartyFeature( IsOptional = false )]
     public sealed class RoutingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
-        public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+        public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
         {

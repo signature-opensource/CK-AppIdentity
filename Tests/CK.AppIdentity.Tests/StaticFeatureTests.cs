@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -35,13 +36,8 @@ public class StaticFeatureTests
     [CKTypeDefiner]
     public abstract class RecordingStaticFeatureDriver : ApplicationIdentityStaticFeatureDriver
     {
-        protected RecordingStaticFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false )
-            : base( s, isAllowedByDefault )
-        {
-        }
-
-        protected RecordingStaticFeatureDriver( ApplicationIdentityService s, string featureName )
-            : base( s, featureName, false )
+        protected RecordingStaticFeatureDriver( ApplicationIdentityService s )
+            : base( s )
         {
         }
 
@@ -95,15 +91,17 @@ public class StaticFeatureTests
     }
 
     // Allowed by default.
+    [PartyFeature( IsOptional = false )]
     public class SDFeatureDriver : RecordingStaticFeatureDriver
     {
-        public SDFeatureDriver( ApplicationIdentityService s ) : base( s, isAllowedByDefault: true ) { }
+        public SDFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     // The Local side of the "SC" asymmetric feature: the remotes that use it ("SCRemote") can be dynamic.
+    [PartyFeature( "SC", Side = FeatureSide.Local )]
     public class LocalSCFeatureDriver : RecordingStaticFeatureDriver
     {
-        public LocalSCFeatureDriver( ApplicationIdentityService s ) : base( s, "SC" ) { }
+        public LocalSCFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] drivers )
@@ -121,6 +119,7 @@ public class StaticFeatureTests
             builder.Services.AddSingleton( t );
             builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
         }
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( drivers ) );
         return builder.AddApplicationIdentityServiceConfiguration().CKBuild();
     }
 
@@ -172,10 +171,7 @@ public class StaticFeatureTests
             c["Local:SA"] = "true";
         } ).ShouldNotBeNull();
         var services = new ServiceCollection();
-        services.AddSingleton( c );
-        services.AddSingleton<ApplicationIdentityService>();
-        services.AddSingleton<SAFeatureDriver>();
-        services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<SAFeatureDriver>() );
+        services.AddApplicationIdentityForTests( c, [typeof( SAFeatureDriver )] );
         await using var sp = services.BuildServiceProvider();
         var s = sp.GetRequiredService<ApplicationIdentityService>();
         await s.StartAndInitializeAsync().WaitAsync( cancel );

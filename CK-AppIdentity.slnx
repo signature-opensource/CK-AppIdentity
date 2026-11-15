@@ -22,4 +22,5 @@
   <Project Path="CK.AppIdentity.Configuration/CK.AppIdentity.Configuration.csproj" />
   <Project Path="CK.AppIdentity.Hosting/CK.AppIdentity.Hosting.csproj" />
   <Project Path="CK.AppIdentity/CK.AppIdentity.csproj" />
+  <Project Path="CK.Testing.AppIdentity/CK.Testing.AppIdentity.csproj" />
 </Solution>

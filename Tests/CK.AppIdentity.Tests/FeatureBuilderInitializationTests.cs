@@ -1,5 +1,6 @@
 using CK.Core;
 using CK.Monitoring;
+using CK.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -64,6 +65,7 @@ public class FeatureBuilderInitializationTests
     }
 
     [CKTypeDefiner]
+    [PartyFeature( IsOptional = false )]
     public abstract class CheckOrderFeatureDriver : ApplicationIdentityFeatureDriver
     {
         internal static int _count;
@@ -82,7 +84,7 @@ public class FeatureBuilderInitializationTests
         }
 
         protected CheckOrderFeatureDriver( ApplicationIdentityService s )
-            : base( s, true )
+            : base( s )
         {
             ++_count;
         }
@@ -135,44 +137,44 @@ public class FeatureBuilderInitializationTests
         }
     }
 
-    public class F2_1FeatureDriver : CheckOrderFeatureDriver
+    public class F2x1FeatureDriver : CheckOrderFeatureDriver
     {
-        public F2_1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
+        public F2x1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
         {
         }
     }
 
-    public class F3_2FeatureDriver : CheckOrderFeatureDriver
+    public class F3x2FeatureDriver : CheckOrderFeatureDriver
     {
-        public F3_2FeatureDriver( ApplicationIdentityService s, F2_1FeatureDriver s2 ) : base( s )
+        public F3x2FeatureDriver( ApplicationIdentityService s, F2x1FeatureDriver s2 ) : base( s )
         {
         }
     }
 
-    public class FA_1FeatureDriver : CheckOrderFeatureDriver
+    public class FAx1FeatureDriver : CheckOrderFeatureDriver
     {
-        public FA_1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
+        public FAx1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
         {
         }
     }
 
-    public class FB_AFeatureDriver : CheckOrderFeatureDriver
+    public class FBxAFeatureDriver : CheckOrderFeatureDriver
     {
-        public FB_AFeatureDriver( ApplicationIdentityService s, FA_1FeatureDriver sa ) : base( s )
+        public FBxAFeatureDriver( ApplicationIdentityService s, FAx1FeatureDriver sa ) : base( s )
         {
         }
     }
 
-    public class FC_A_3FeatureDriver : CheckOrderFeatureDriver
+    public class FCxAx3FeatureDriver : CheckOrderFeatureDriver
     {
-        public FC_A_3FeatureDriver( ApplicationIdentityService s, FA_1FeatureDriver sa, F3_2FeatureDriver f1 ) : base( s )
+        public FCxAx3FeatureDriver( ApplicationIdentityService s, FAx1FeatureDriver sa, F3x2FeatureDriver f1 ) : base( s )
         {
         }
     }
 
-    public class FD_B_2FeatureDriver : CheckOrderFeatureDriver
+    public class FDxBx2FeatureDriver : CheckOrderFeatureDriver
     {
-        public FD_B_2FeatureDriver( ApplicationIdentityService s, FB_AFeatureDriver sb, F2_1FeatureDriver f2 ) : base( s )
+        public FDxBx2FeatureDriver( ApplicationIdentityService s, FBxAFeatureDriver sb, F2x1FeatureDriver f2 ) : base( s )
         {
         }
     }
@@ -183,12 +185,12 @@ public class FeatureBuilderInitializationTests
     {
         CheckOrderFeatureDriver.Reset();
         var builderTypes = new List<Type>() { typeof( F1FeatureDriver ),
-                                              typeof( F2_1FeatureDriver ),
-                                              typeof( F3_2FeatureDriver ),
-                                              typeof( FA_1FeatureDriver ),
-                                              typeof( FB_AFeatureDriver ),
-                                              typeof( FC_A_3FeatureDriver ),
-                                              typeof( FD_B_2FeatureDriver ) };
+                                              typeof( F2x1FeatureDriver ),
+                                              typeof( F3x2FeatureDriver ),
+                                              typeof( FAx1FeatureDriver ),
+                                              typeof( FBxAFeatureDriver ),
+                                              typeof( FCxAx3FeatureDriver ),
+                                              typeof( FDxBx2FeatureDriver ) };
         if( revert ) builderTypes.Reverse();
 
 
@@ -204,6 +206,7 @@ public class FeatureBuilderInitializationTests
             builder.Services.AddSingleton( t );
             builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
         }
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( builderTypes ) );
 
         using var app = builder.AddApplicationIdentityServiceConfiguration()
                                .CKBuild();
@@ -212,21 +215,21 @@ public class FeatureBuilderInitializationTests
         var identityService = app.Services.GetRequiredService<ApplicationIdentityService>();
 
         var f1 = app.Services.GetRequiredService<F1FeatureDriver>();
-        var f2_1 = app.Services.GetRequiredService<F2_1FeatureDriver>();
-        var f3_2 = app.Services.GetRequiredService<F3_2FeatureDriver>();
-        var fA_1 = app.Services.GetRequiredService<FA_1FeatureDriver>();
-        var fB_A = app.Services.GetRequiredService<FB_AFeatureDriver>();
-        var fC_A_3 = app.Services.GetRequiredService<FC_A_3FeatureDriver>();
-        var fD_B_2 = app.Services.GetRequiredService<FD_B_2FeatureDriver>();
+        var f2_1 = app.Services.GetRequiredService<F2x1FeatureDriver>();
+        var f3_2 = app.Services.GetRequiredService<F3x2FeatureDriver>();
+        var fA_1 = app.Services.GetRequiredService<FAx1FeatureDriver>();
+        var fB_A = app.Services.GetRequiredService<FBxAFeatureDriver>();
+        var fC_A_3 = app.Services.GetRequiredService<FCxAx3FeatureDriver>();
+        var fD_B_2 = app.Services.GetRequiredService<FDxBx2FeatureDriver>();
         CheckOrderFeatureDriver._count.ShouldBe( 7 );
 
         f1.FeatureName.ShouldBe( "F1" );
-        f2_1.FeatureName.ShouldBe( "F2_1" );
-        f3_2.FeatureName.ShouldBe( "F3_2" );
-        fA_1.FeatureName.ShouldBe( "FA_1" );
-        fB_A.FeatureName.ShouldBe( "FB_A" );
-        fC_A_3.FeatureName.ShouldBe( "FC_A_3" );
-        fD_B_2.FeatureName.ShouldBe( "FD_B_2" );
+        f2_1.FeatureName.ShouldBe( "F2x1" );
+        f3_2.FeatureName.ShouldBe( "F3x2" );
+        fA_1.FeatureName.ShouldBe( "FAx1" );
+        fB_A.FeatureName.ShouldBe( "FBxA" );
+        fC_A_3.FeatureName.ShouldBe( "FCxAx3" );
+        fD_B_2.FeatureName.ShouldBe( "FDxBx2" );
 
         f1.SetupOrder.ShouldBe( 0 );
         f2_1.SetupOrder.ShouldBeGreaterThan( f1.SetupOrder );
@@ -262,6 +265,7 @@ public class FeatureBuilderInitializationTests
         services.AddSingleton<ApplicationIdentityService>();
         services.AddSingleton( typeof( F1FeatureDriver ) );
         services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( F1FeatureDriver ) ) );
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( F1FeatureDriver ) ) );
         await Should.NotThrowAsync( () =>
         {
             var sp = services.BuildServiceProvider();
@@ -341,8 +345,8 @@ public class FeatureBuilderInitializationTests
 
     public abstract class NoopFeatureDriver : ApplicationIdentityFeatureDriver
     {
-        protected NoopFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault )
-            : base( s, featureName, isAllowedByDefault )
+        protected NoopFeatureDriver( ApplicationIdentityService s )
+            : base( s )
         {
         }
 
@@ -352,25 +356,23 @@ public class FeatureBuilderInitializationTests
         protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
-    // The "Asym" asymmetric feature: its common driver and its two sides.
-    public sealed class AsymFeatureDriver : NoopFeatureDriver
-    {
-        public AsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string? featureName = "Asym" ) : base( s, featureName, isAllowedByDefault ) { }
-    }
-
+    // The "Asym" asymmetric feature: its two sides.
+    [PartyFeature( "Asym", Side = FeatureSide.Local )]
     public sealed class LocalAsymFeatureDriver : NoopFeatureDriver
     {
-        public LocalAsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false, string featureName = "Asym" ) : base( s, featureName, isAllowedByDefault ) { }
+        public LocalAsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
+    [PartyFeature( "Asym", Side = FeatureSide.Remote )]
     public sealed class RemoteAsymFeatureDriver : NoopFeatureDriver
     {
-        public RemoteAsymFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault = false ) : base( s, "Asym", isAllowedByDefault ) { }
+        public RemoteAsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
+    [PartyFeature( IsOptional = false )]
     public sealed class LocalStorageFeatureDriver : NoopFeatureDriver
     {
-        public LocalStorageFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+        public LocalStorageFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     static ApplicationIdentityService CreateService( Action<MutableConfigurationSection>? configure = null )
@@ -380,7 +382,9 @@ public class FeatureBuilderInitializationTests
             c["FullName"] = "FakeDomain/$FakeApp";
             configure?.Invoke( c );
         } ).ShouldNotBeNull();
-        return new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
+        return new ApplicationIdentityService( c, AppIdentityTestHelper.CreateServiceProvider( typeof( LocalAsymFeatureDriver ),
+                                                                                               typeof( RemoteAsymFeatureDriver ),
+                                                                                               typeof( LocalStorageFeatureDriver ) ) );
     }
 
     [Test]
@@ -395,11 +399,10 @@ public class FeatureBuilderInitializationTests
             c["Parties:1:PartyName"] = "AllowsTheFeatureName";
             c["Parties:1:Asym"] = "true";
         } );
-        var common = new AsymFeatureDriver( s );
         var local = new LocalAsymFeatureDriver( s );
         var remote = new RemoteAsymFeatureDriver( s );
         var byRemote = s.Remotes.ToDictionary( r => r.PartyName );
-        foreach( var d in new ApplicationIdentityFeatureDriver[] { common, local, remote } )
+        foreach( var d in new ApplicationIdentityFeatureDriver[] { local, remote } )
         {
             d.IsAsymmetric.ShouldBeTrue();
             d.HasLocalSide.ShouldBeTrue();
@@ -478,13 +481,7 @@ public class FeatureBuilderInitializationTests
             c["Parties:1:AsymRemote"] = "true";
         } ).ShouldNotBeNull();
         var services = new ServiceCollection();
-        services.AddSingleton( c );
-        services.AddSingleton<ApplicationIdentityService>();
-        var t = side == "Local" ? typeof( LocalAsymFeatureDriver ) : typeof( RemoteAsymFeatureDriver );
-        services.AddSingleton( t, sp => side == "Local"
-                                            ? new LocalAsymFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() )
-                                            : new RemoteAsymFeatureDriver( sp.GetRequiredService<ApplicationIdentityService>() ) );
-        services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
+        services.AddApplicationIdentityForTests( c, [side == "Local" ? typeof( LocalAsymFeatureDriver ) : typeof( RemoteAsymFeatureDriver )] );
 
         using( var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 100 ) )
         {
@@ -504,10 +501,9 @@ public class FeatureBuilderInitializationTests
     public void the_drivers_of_an_asymmetric_feature_share_its_name()
     {
         var s = CreateService();
-        new AsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
         new LocalAsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
         new RemoteAsymFeatureDriver( s ).FeatureName.ShouldBe( "Asym" );
-        // Without the explicit feature name, the prefix is kept.
+        // Without an explicit feature name, the name is the type name without "FeatureDriver".
         new LocalStorageFeatureDriver( s ).FeatureName.ShouldBe( "LocalStorage" );
     }
 
@@ -519,46 +515,18 @@ public class FeatureBuilderInitializationTests
         var remote = new RemoteAsymFeatureDriver( s );
         local.HasRemoteSide.ShouldBeTrue();
         remote.HasLocalSide.ShouldBeTrue();
-        Should.Throw<InvalidOperationException>( () => new RemoteAsymFeatureDriver( s ) )
-              .Message.ShouldContain( "both manage the 'Asym' feature" );
     }
 
+    // The names and the optionality are the engine's (the PartyComponentDirectory): the rules (an explicit name for the
+    // sides of an asymmetric feature, the two sides agree on their optionality, a name is borne by one driver) are
+    // checked by the engine (see PartyComponentAnalysisTests in CK.AppIdentity.Engine.Tests).
     [Test]
-    public void the_drivers_of_a_feature_must_agree_on_isAllowedByDefault()
+    public void a_driver_that_is_not_in_the_directory_is_an_error()
     {
-        var s = CreateService();
-        new AsymFeatureDriver( s, isAllowedByDefault: false );
-        Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( s, isAllowedByDefault: true ) )
-              .Message.ShouldContain( "disagree on whether the 'Asym' feature is allowed by default" );
-    }
-
-    [Test]
-    public void the_drivers_of_an_asymmetric_feature_must_give_its_name()
-    {
-        var s = CreateService();
-        new AsymFeatureDriver( s, featureName: null );
+        var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c => c["FullName"] = "FakeDomain/$FakeApp" ).ShouldNotBeNull();
+        var s = new ApplicationIdentityService( c, AppIdentityTestHelper.CreateServiceProvider( typeof( LocalStorageFeatureDriver ) ) );
         Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( s ) )
-              .Message.ShouldContain( "'CK.AppIdentity.Tests.FeatureBuilderInitializationTests.AsymFeatureDriver' doesn't give the feature name to the base constructor" );
-    }
-
-    [Test]
-    public void the_explicit_feature_name_must_match_the_type_name()
-    {
-        Should.Throw<InvalidOperationException>( () => new LocalAsymFeatureDriver( CreateService(), featureName: "Other" ) )
-              .Message.ShouldContain( "it must be 'OtherFeatureDriver', 'LocalOtherFeatureDriver' or 'RemoteOtherFeatureDriver'" );
-    }
-
-    [Test]
-    public void two_drivers_of_the_same_feature_name_are_an_error()
-    {
-        var s = CreateService();
-        new AsymFeatureDriver( s );
-        Should.Throw<InvalidOperationException>( () => new AsymFeatureDriver( s ) )
-              .Message.ShouldContain( "both manage the 'Asym' feature" );
-        s = CreateService();
-        new LocalStorageFeatureDriver( s );
-        Should.Throw<InvalidOperationException>( () => new LocalStorageFeatureDriver( s ) )
-              .Message.ShouldContain( "both manage the 'LocalStorage' feature" );
+              .Message.ShouldContain( "is not a party component of the application" );
     }
 
 }

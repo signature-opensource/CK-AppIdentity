@@ -135,9 +135,10 @@ public class DomainTests
     }
 
     // Blocks the setup of the dynamic party "$Blocked" until Release is completed.
+    [PartyFeature( IsOptional = false )]
     public sealed class BlockingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
-        public BlockingFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+        public BlockingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         public readonly TaskCompletionSource Entered = new( TaskCreationOptions.RunContinuationsAsynchronously );
         public readonly TaskCompletionSource Release = new( TaskCreationOptions.RunContinuationsAsynchronously );
@@ -165,6 +166,7 @@ public class DomainTests
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         builder.Services.AddSingleton<BlockingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<BlockingFeatureDriver>() );
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( BlockingFeatureDriver ) ) );
         using var app = builder.AddApplicationIdentityServiceConfiguration().CKBuild();
         await app.StartAsync( cancel );
         var s = app.Services.GetRequiredService<ApplicationIdentityService>();

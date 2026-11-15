@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
@@ -20,7 +21,7 @@ public class PartyClientFeatureTests
     /// </summary>
     public sealed class ServingFeatureDriver : ApplicationIdentityFeatureDriver
     {
-        public ServingFeatureDriver( ApplicationIdentityService s ) : base( s, isAllowedByDefault: false ) { }
+        public ServingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
 
@@ -81,20 +82,6 @@ public class PartyClientFeatureTests
         protected override ToolClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
     }
 
-    /// <summary>
-    /// What the engine generates in a real application.
-    /// </summary>
-    sealed class TestComponentDirectory : PartyComponentDirectory
-    {
-        public TestComponentDirectory()
-            : base( [new PartyComponentInfo( typeof( ServingFeatureDriver ), [], [] ),
-                     new PartyComponentInfo( typeof( ToolClientFeature ), [], [] ),
-                     new PartyComponentInfo( typeof( ServedClientFeature ), [typeof( ServingFeatureDriver )], [] )],
-                    new HashSet<Type>() )
-        {
-        }
-    }
-
     static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] drivers )
     {
         var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
@@ -111,7 +98,12 @@ public class PartyClientFeatureTests
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         builder.Services.AddSingleton<ServingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ServingFeatureDriver>() );
-        builder.Services.AddSingleton<PartyComponentDirectory, TestComponentDirectory>();
+        // What the engine generates in a real application.
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( PartyDescriptionFeatureDriver ),
+                                                                                      typeof( ServingFeatureDriver ),
+                                                                                      typeof( PartyClientFeatureDriver ),
+                                                                                      typeof( ServedClientFeature ),
+                                                                                      typeof( ToolClientFeature ) ) );
         foreach( var d in drivers )
         {
             builder.Services.AddSingleton( d );

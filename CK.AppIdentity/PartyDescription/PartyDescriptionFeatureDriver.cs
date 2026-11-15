@@ -27,6 +27,7 @@ namespace CK.AppIdentity;
 ///   </item>
 /// </list>
 /// </summary>
+[PartyFeature( IsOptional = false )]
 public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFeatureDriver
 {
     /// <summary>
@@ -42,7 +43,7 @@ public sealed class PartyDescriptionFeatureDriver : ApplicationIdentityStaticFea
     /// </summary>
     /// <param name="s">The application identity service.</param>
     public PartyDescriptionFeatureDriver( ApplicationIdentityService s )
-        : base( s, isAllowedByDefault: true )
+        : base( s )
     {
         _lock = new SemaphoreSlim( 1 );
         s._descriptionDriver = this;

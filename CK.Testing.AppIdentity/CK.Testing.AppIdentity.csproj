@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Description>Assembles an ApplicationIdentityService without the engine, for the tests of the run time: its PartyComponentDirectory is computed from the component types by the engine's own analysis.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CK.Testing" Version="18.0.0-0.cris-auth.0.ci.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The analysis of the party components (PartyComponentAnalysis): the same computation as the generated directory. -->
+    <ProjectReference Include="..\CK.AppIdentity.Engine\CK.AppIdentity.Engine.csproj" />
+  </ItemGroup>
+</Project>

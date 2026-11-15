@@ -35,7 +35,9 @@ knows them without any reflection at runtime.
 
 ## The party components
 
-[`PartyComponentDirectoryImpl`](PartyComponentDirectoryImpl.cs) implements the `PartyComponentDirectory` for each BinPath:
+[`PartyComponentDirectoryImpl`](PartyComponentDirectoryImpl.cs) implements the `PartyComponentDirectory` for each BinPath,
+from what [`PartyComponentAnalysis`](PartyComponentAnalysis.cs) computes (CK.Testing.AppIdentity builds the directory of a
+test with it):
 
 - **The components** are the concrete classes of the BinPath that implement `IPartyComponent` (the feature drivers, the
   client features).
@@ -46,6 +48,11 @@ knows them without any reflection at runtime.
   implemented more than once in a scope); declaring none is an error.
 - **Their order:** a required component before the ones that require it, the implementations of a required abstraction
   before the ones that require it, otherwise by full name. A cycle is an error.
+- **Their feature name and their optionality** follow the rules of the packages (`FeaturePackages`, CK.Engine.TypeSet):
+  the closest `[PartyFeature]` of a feature driver (or `[ClientFeatureName]` of a client feature) in its base classes. The
+  side of an asymmetric feature is the one of its `[PartyFeature]`: it requires an explicit name, the two sides agree on
+  their optionality. The feature names are unique among the packages of the BinPath: a party feature and a client feature
+  can't have the same name.
 
 The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
 

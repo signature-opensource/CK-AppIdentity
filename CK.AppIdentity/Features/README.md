@@ -28,14 +28,24 @@ Features.
 
 ![FeatureDriver](../docs/FeatureDriver.png)
 
-A Feature can be opt-in or opt-out. The implementation expresses this via the constructor of the abstract class:
+A Feature can be opt-in (optional: a party has it only when it declares it) or opt-out (allowed by default: a party has it
+unless it turns it off). The driver declares it with its [`PartyFeatureAttribute`](PartyFeatureAttribute.cs): without
+its own attribute, a driver is opt-in (the attribute of the base class applies), `[PartyFeature( IsOptional = false )]`
+makes it opt-out.
 ```csharp
-protected ApplicationIdentityFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault )
+[PartyFeature( IsOptional = false )]
+public sealed class KeyManagementFeatureDriver : ApplicationIdentityFeatureDriver
+{
+    public KeyManagementFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
+}
 ```
+The engine computes the feature names, the optionality and the sides of the drivers (`PartyComponentAnalysis`,
+CK.AppIdentity.Engine) into the generated `PartyComponentDirectory`: a driver reads them there (no reflection at run time).
+A test that assembles its services without the engine gets the same directory from CK.Testing.AppIdentity.
 
 The configuration then takes over: a party **declares** a feature by its key (see [Feature configuration](#feature-configuration)):
 
-- The feature name is deduced from the driver type: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
+- The feature name is the driver type name without its suffix: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
   the key in the configuration.
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which gives it the
   declaration of the party (its own key, then the "Defaults" above it), or the opt-in/opt-out default when there is none.
@@ -61,17 +71,25 @@ For the asymmetric feature "*XXX*":
 
 | Package | Content |
 |---|---|
-| CK.AppIdentity.XXX.Local | The core code: the `LocalXXXFeatureDriver`, the implementation of the feature. |
+| CK.AppIdentity.XXX.Local | The core code: the `LocalXXXFeatureDriver`, the implementation of the feature. It references CK.AppIdentity.XXX.Remote: the Local side requires the Remote side. |
 | CK.IO.XXX | The Cris commands (public or internal) that the remotes send to the local party that is the feature. |
 | CK.AppIdentity.XXX.Remote | The `RemoteXXXFeatureDriver` and the code that relays the feature to the remote that is the feature. |
 | CK.AppIdentity.XXX | Optional: the common implementation. |
 
-The two drivers give the feature name explicitly to the base constructor `ApplicationIdentityFeatureDriver( s, "XXX" )`
-(the prefix is never removed implicitly: a `LocalStorageFeatureDriver` manages "*LocalStorage*"). A common
-`XXXFeatureDriver` is possible but optional: it is only useful when consumers that ignore the side need one driver to
-depend on (the AuthCenter and the MailSender have none). The drivers of a feature agree on `isAllowedByDefault`: it
-defaults to false, and true makes little sense (every local party would be the feature and every remote one of its
-callers): it must be exceptional. Two drivers can never manage the same feature otherwise.
+The two drivers declare the feature and their side: `[PartyFeature( "XXX", Side = FeatureSide.Local )]` and
+`[PartyFeature( "XXX", Side = FeatureSide.Remote )]` (the prefix is never removed implicitly: a `LocalStorageFeatureDriver`
+manages "*LocalStorage*"). Their feature names for the type sets are "*XXX*" and "*XXXRemote*" (the keys that declare
+them).
+
+- **The Local side requires the Remote side** (`[Requires<RemoteXXXFeatureDriver>]`): the "*XXXRemote*" key of a remote
+  is read by both sides (the Remote side: "relay to it"; the Local side: "it may call me"). In a party that is the
+  feature, the Remote driver does nothing.
+- **What the two sides share** is first a shared static helper that both call; a common abstract base class (the
+  "template method" pattern) is possible when that is not enough. A common driver is never concrete: only the sides
+  are packages.
+- **The two sides agree on their optionality** (the engine checks it). It is optional by default, and allowed by default
+  makes little sense (every local party would be the feature and every remote one of its callers): it must be exceptional.
+- A feature name is borne by one driver: two drivers can never manage the same feature otherwise (the engine checks it).
 
 ### The configuration
 
@@ -110,7 +128,7 @@ whereas there can be several mail senders. This is a documented variation of the
 A **static** feature is allowed only on the parties of the initial configuration: the root, the tenant domains and the
 remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its driver specializes
 [`ApplicationIdentityStaticFeatureDriver`](ApplicationIdentityStaticFeatureDriver.cs) instead of
-`ApplicationIdentityFeatureDriver` (same constructors).
+`ApplicationIdentityFeatureDriver` (same constructor, same `[PartyFeature]`).
 
 - **Only the parties that ARE the feature are constrained:** the remotes that use an asymmetric feature can be dynamic
   (a remote is the feature when its local party is not).

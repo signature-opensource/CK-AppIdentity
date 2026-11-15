@@ -33,7 +33,7 @@ public class PartyClientOptionsTests
                                                   typeof( PartyComponentDirectory ),
                                                   typeof( ApplicationIdentityService ),
                                                   typeof( PartyClientFeatureDriver ),
-                                                  typeof( FakeFeatureDriver ),
+                                                  typeof( FakePartyFeatureDriver ),
                                                   typeof( FakeClientFeatureDriver ),
                                                   typeof( FakeDerivedClientFeatureDriver ),
                                                   typeof( FakeClientFeature ),
@@ -94,10 +94,10 @@ public class PartyClientOptionsTests
             var serve = d.Find( typeof( ServeClientFeature ) ).ShouldNotBeNull();
             serve.Requires.ShouldBe( [typeof( IFakeBuild )] );
             d.Find( typeof( BuildClientFeature ) ).ShouldNotBeNull().Abstractions.ShouldBe( [typeof( IFakeBuild )] );
-            d.Find( typeof( NeedsFakeClientFeature ) ).ShouldNotBeNull().Requires.ShouldBe( [typeof( FakeFeatureDriver )] );
+            d.Find( typeof( NeedsFakeClientFeature ) ).ShouldNotBeNull().Requires.ShouldBe( [typeof( FakePartyFeatureDriver )] );
             d.IndexOf( typeof( ServeClientFeature ) ).ShouldBeGreaterThan( d.IndexOf( typeof( BuildClientFeature ) ) );
             d.IndexOf( typeof( ServeClientFeature ) ).ShouldBeGreaterThan( d.IndexOf( typeof( OtherBuildClientFeature ) ) );
-            d.IndexOf( typeof( NeedsFakeClientFeature ) ).ShouldBeGreaterThan( d.IndexOf( typeof( FakeFeatureDriver ) ) );
+            d.IndexOf( typeof( NeedsFakeClientFeature ) ).ShouldBeGreaterThan( d.IndexOf( typeof( FakePartyFeatureDriver ) ) );
             d.IsMultipleAbstraction( typeof( IFakeBuild ) ).ShouldBeFalse();
             await ((IHostedService)party).StopAsync( default );
         }
@@ -179,13 +179,13 @@ public class PartyClientOptionsTests
         } );
         texts.ShouldContain( t => t.Contains( "has more than one 'IFakeBuild' ('BuildClientFeature', 'OtherBuildClientFeature'): it can have at most one." ) );
 
-        // The FakeFeatureDriver is not allowed by default.
+        // The FakePartyFeatureDriver is not allowed by default.
         texts = await FailAsync( c => c["Local:PartyClient:App:NeedsFake"] = "true" );
-        texts.ShouldContain( t => t.Contains( "'NeedsFakeClientFeature' of client 'App'" ) && t.Contains( "requires 'FakeFeatureDriver'" ) );
+        texts.ShouldContain( t => t.Contains( "'NeedsFakeClientFeature' of client 'App'" ) && t.Contains( "requires 'FakePartyFeatureDriver'" ) );
         // Allowed: fine.
         var (services, party) = await StartAsync( c =>
         {
-            c["Local:Fake"] = "true";
+            c["Local:FakeParty"] = "true";
             c["Local:PartyClient:App:NeedsFake"] = "true";
         } );
         await using( services )

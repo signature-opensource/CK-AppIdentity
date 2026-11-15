@@ -12,5 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\CK.AppIdentity.PartyClient\CK.AppIdentity.PartyClient.csproj" />
     <ProjectReference Include="..\..\CK.AppIdentity.Hosting\CK.AppIdentity.Hosting.csproj" />
+    <ProjectReference Include="..\..\CK.Testing.AppIdentity\CK.Testing.AppIdentity.csproj" />
   </ItemGroup>
 </Project>

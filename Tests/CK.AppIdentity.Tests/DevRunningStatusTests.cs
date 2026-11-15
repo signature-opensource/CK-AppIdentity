@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -71,6 +72,7 @@ public class DevRunningStatusTests
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         builder.Services.AddSingleton<DevRunningStatusFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<DevRunningStatusFeatureDriver>() );
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( DevRunningStatusFeatureDriver ) ) );
         builder.Services.AddSingleton<TestContributor>();
         builder.Services.AddSingleton<IDevRunningStatusContributor>( sp => sp.GetRequiredService<TestContributor>() );
         return builder.CKBuild();

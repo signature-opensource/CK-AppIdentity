@@ -21,6 +21,7 @@ namespace CK.AppIdentity;
 /// timer, the contributors are never activated). It is allowed by default: <c>"DevRunningStatus": false</c> switches it off.
 /// </para>
 /// </summary>
+[PartyFeature( IsOptional = false )]
 public sealed class DevRunningStatusFeatureDriver : ApplicationIdentityStaticFeatureDriver
 {
     /// <summary>
@@ -47,7 +48,7 @@ public sealed class DevRunningStatusFeatureDriver : ApplicationIdentityStaticFea
     /// <param name="contributors">The contributors.</param>
     /// <param name="services">The services of the host.</param>
     public DevRunningStatusFeatureDriver( ApplicationIdentityService s, IEnumerable<IDevRunningStatusContributor> contributors, IServiceProvider services )
-        : base( s, isAllowedByDefault: true )
+        : base( s )
     {
         _contributors = contributors.ToArray();
         _services = services;

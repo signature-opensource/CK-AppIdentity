@@ -14,7 +14,8 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
 - **A package brings a client feature:** a class that specializes [`ClientFeature`](ClientFeature.cs), and its driver, a
   [`ClientFeatureDriver<T>`](IClientFeatureDriver.cs) (an `[IsMultiple]` auto service) that creates the feature of a
   client from its configuration. The name of a feature is its type name without the "ClientFeature" suffix
-  (`NgAppClientFeature` is "NgApp", `ClientFeature.GetFeatureName`).
+  (`NgAppClientFeature` is "NgApp", `[ClientFeatureName]` on `ClientFeature`): the engine computes it into the
+  `PartyComponentDirectory` (`ClientFeature.Name`).
 - **A party declares its clients**, in its "Local:PartyClient" section: only the configuration says which party has which
   client. The keys of a client are its features (their section is their configuration) and its type set:
 

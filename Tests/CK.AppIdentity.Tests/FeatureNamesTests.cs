@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Testing;
 using CK.Monitoring;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,9 +18,10 @@ namespace CK.AppIdentity.Tests;
 public class FeatureNamesTests
 {
     // Allowed by default: only "OptOut": false switches it off.
+    [PartyFeature( IsOptional = false )]
     public sealed class OptOutFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
-        public OptOutFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
+        public OptOutFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     static async Task<(ServiceProvider Services, ApplicationIdentityService Service)> StartAsync( Action<MutableConfigurationSection> configure, CancellationToken cancel )
@@ -37,6 +39,7 @@ public class FeatureNamesTests
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<OptOutFeatureDriver>() );
         services.AddSingleton<FeatureBuilderInitializationTests.LocalAsymFeatureDriver>();
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<FeatureBuilderInitializationTests.LocalAsymFeatureDriver>() );
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( OptOutFeatureDriver ), typeof( FeatureBuilderInitializationTests.LocalAsymFeatureDriver ) ) );
         var sp = services.BuildServiceProvider();
         var s = sp.GetRequiredService<ApplicationIdentityService>();
         await ((IHostedService)s).StartAsync( cancel );

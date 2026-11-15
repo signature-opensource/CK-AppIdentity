@@ -21,26 +21,12 @@ namespace CK.AppIdentity;
 public abstract class ApplicationIdentityStaticFeatureDriver : ApplicationIdentityFeatureDriver
 {
     /// <summary>
-    /// Initializes a new <see cref="ApplicationIdentityStaticFeatureDriver"/>.
+    /// Initializes a new <see cref="ApplicationIdentityStaticFeatureDriver"/>. Its feature is declared by its
+    /// <see cref="PartyFeatureAttribute"/> (see <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService)"/>).
     /// </summary>
     /// <param name="s">The application identity service.</param>
-    /// <param name="isAllowedByDefault">Whether the feature is opt-in or opt-out.</param>
-    protected ApplicationIdentityStaticFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault )
-        : this( s, null, isAllowedByDefault )
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new <see cref="ApplicationIdentityStaticFeatureDriver"/> of an asymmetric feature.
-    /// See <see cref="ApplicationIdentityFeatureDriver(ApplicationIdentityService, string?, bool)"/>.
-    /// </summary>
-    /// <param name="s">The application identity service.</param>
-    /// <param name="featureName">The name of an asymmetric feature (null for a symmetric one).</param>
-    /// <param name="isAllowedByDefault">
-    /// Whether the feature is opt-in or opt-out. For an asymmetric feature, true makes little sense and must be exceptional.
-    /// </param>
-    protected ApplicationIdentityStaticFeatureDriver( ApplicationIdentityService s, string? featureName, bool isAllowedByDefault = false )
-        : base( s, featureName, isAllowedByDefault )
+    protected ApplicationIdentityStaticFeatureDriver( ApplicationIdentityService s )
+        : base( s )
     {
         _isStatic = true;
     }

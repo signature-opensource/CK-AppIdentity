@@ -17,7 +17,7 @@ namespace CK.AppIdentity.Engine.Tests;
 public class PartyComponentOptionDirectoryTests
 {
     static readonly Type[] _model = [typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
-                                     typeof( FakeFeatureDriver ), typeof( MainOption ), typeof( HeaderOption ), typeof( CompressionOption ),
+                                     typeof( FakePartyFeatureDriver ), typeof( MainOption ), typeof( HeaderOption ), typeof( CompressionOption ),
                                      typeof( FakeClientFeature ), typeof( FakeDerivedClientFeature ), typeof( CachingOption ), typeof( DerivedOnlyOption )];
 
     static async Task<AutomaticServices> CreateServicesAsync()
@@ -38,9 +38,9 @@ public class PartyComponentOptionDirectoryTests
         await using var auto = await CreateServicesAsync();
         var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
 
-        directory.OwnerTypes.ShouldBe( [typeof( FakeDerivedClientFeature ), typeof( FakeFeatureDriver ), typeof( FakeClientFeature )], ignoreOrder: true );
+        directory.OwnerTypes.ShouldBe( [typeof( FakeDerivedClientFeature ), typeof( FakePartyFeatureDriver ), typeof( FakeClientFeature )], ignoreOrder: true );
 
-        var driver = directory.GetOptions( typeof( FakeFeatureDriver ) );
+        var driver = directory.GetOptions( typeof( FakePartyFeatureDriver ) );
         driver.Select( o => o.Name ).ShouldBe( ["Header", "Main", "Compression"] );
         driver.Select( o => o.IsEnabledByDefault ).ShouldBe( [true, false, true] );
         // The optional relation of Header is an order only. Compression requires Main.
@@ -55,7 +55,7 @@ public class PartyComponentOptionDirectoryTests
         derived[1].Requires.ShouldBe( ["Caching"] );
 
         directory.GetOptions( typeof( string ) ).ShouldBeEmpty();
-        directory.IsOptionName( typeof( FakeFeatureDriver ), "compression" ).ShouldBeTrue();
+        directory.IsOptionName( typeof( FakePartyFeatureDriver ), "compression" ).ShouldBeTrue();
         directory.IsOptionName( typeof( FakeClientFeature ), "DerivedOnly" ).ShouldBeFalse();
     }
 
@@ -64,13 +64,13 @@ public class PartyComponentOptionDirectoryTests
     {
         var configuration = TestHelper.CreateDefaultEngineConfiguration();
         configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
-                                              typeof( FakeFeatureDriver ), typeof( MainOption ), typeof( TracingOption ) );
+                                              typeof( FakePartyFeatureDriver ), typeof( MainOption ), typeof( TracingOption ) );
         var r = await configuration.RunSuccessfullyAsync();
         await using var auto = r.LoadMap().CreateAutomaticServices( services =>
         {
             services.AddSingleton( ApplicationIdentityServiceConfiguration.CreateEmpty( "Test", "Options" ) );
         } );
-        var options = auto.Services.GetRequiredService<PartyComponentOptionDirectory>().GetOptions( typeof( FakeFeatureDriver ) );
+        var options = auto.Services.GetRequiredService<PartyComponentOptionDirectory>().GetOptions( typeof( FakePartyFeatureDriver ) );
         options.Select( o => o.Name ).ShouldBe( ["Tracing", "Main"] );
         // [RequiredBy<MainOption>] on Tracing: Main requires Tracing, Tracing requires nothing.
         options[0].Requires.ShouldBeEmpty();
@@ -90,11 +90,11 @@ public class PartyComponentOptionDirectoryTests
     {
         await using var auto = await CreateServicesAsync();
         var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
-        var compression = directory.GetOptions( typeof( FakeFeatureDriver ) ).Single( o => o.Name == "Compression" );
+        var compression = directory.GetOptions( typeof( FakePartyFeatureDriver ) ).Single( o => o.Name == "Compression" );
         compression.OptionType.ShouldBe( typeof( CompressionOption ) );
         var o = compression.Create( auto.Services ).ShouldBeOfType<CompressionOption>();
         o.Service.ShouldBeSameAs( auto.Services.GetRequiredService<FakeService>() );
-        directory.GetOptions( typeof( FakeFeatureDriver ) ).Single( o => o.Name == "Main" ).Create( auto.Services ).ShouldBeOfType<MainOption>();
+        directory.GetOptions( typeof( FakePartyFeatureDriver ) ).Single( o => o.Name == "Main" ).Create( auto.Services ).ShouldBeOfType<MainOption>();
     }
 
     // The selection is a pure function of the options and the configuration: it is tested on hand made options.
@@ -174,7 +174,7 @@ public class PartyComponentOptionDirectoryTests
     static async Task CheckEngineErrorAsync( string expected, params Type[] options )
     {
         var configuration = TestHelper.CreateDefaultEngineConfiguration();
-        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ), typeof( FakeFeatureDriver ), typeof( FakeClientFeature ) );
+        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ), typeof( FakePartyFeatureDriver ), typeof( FakeClientFeature ) );
         configuration.FirstBinPath.Types.Add( options );
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
