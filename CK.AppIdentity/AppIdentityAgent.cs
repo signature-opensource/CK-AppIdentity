@@ -153,7 +153,7 @@ public sealed class AppIdentityAgent : MicroAgent
                 }
                 else
                 {
-                    error = new CKException( "Unknown feature names in AllowFeatures or DisallowFeatures (see the logs) and StrictConfigurationMode is true." );
+                    error = new CKException( "Unknown feature names declared by the parties (see the logs) and StrictConfigurationMode is true." );
                 }
             }
             catch( Exception ex )
@@ -350,9 +350,10 @@ public sealed class AppIdentityAgent : MicroAgent
         }
     }
 
-    // The names of the "AllowFeatures" and "DisallowFeatures" of the parties must be the names of the registered features
-    // (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive: an unknown name (a typo that
-    // would leave a feature allowed by default enabled) is a warning, an error in StrictConfigurationMode.
+    // A key of a party (or of the "Defaults" above it) whose value is true or false declares a feature: it must be the
+    // name of a registered feature (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive.
+    // An unknown name (a typo that would leave a feature allowed by default on) is a warning, an error in
+    // StrictConfigurationMode.
     bool CheckFeatureNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         var known = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
@@ -365,7 +366,7 @@ public sealed class AppIdentityAgent : MicroAgent
         foreach( var p in parties )
         {
             ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
-            foreach( var name in c.AllowFeatures.Concat( c.DisallowFeatures ) )
+            foreach( var name in c.GetBooleanKeys() )
             {
                 if( known.Contains( name ) ) continue;
                 unknown ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );
@@ -378,7 +379,7 @@ public sealed class AppIdentityAgent : MicroAgent
         var knownNames = known.Order( StringComparer.Ordinal ).Concatenate( "', '" );
         foreach( var (name, list) in unknown )
         {
-            var text = $"Unknown feature '{name}' in the AllowFeatures or DisallowFeatures of '{list.Select( p => p.ToString() ).Concatenate( "', '" )}' (the features are '{knownNames}').";
+            var text = $"Unknown feature '{name}' declared by '{list.Select( p => p.ToString() ).Concatenate( "', '" )}' (the features are '{knownNames}').";
             if( strict ) monitor.Error( text + " StrictConfigurationMode is true." );
             else monitor.Warn( text );
         }

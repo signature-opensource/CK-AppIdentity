@@ -50,7 +50,7 @@ implementations of a required abstraction).
 
 [`PartyClientFeatureDriver`](PartyClientFeatureDriver.cs) creates the clients of the local parties: the root and the tenant
 domains, those of the initial configuration and the dynamic ones (a remote has no clients here: its clients are known
-by its description). It is **allowed by default**: `"DisallowFeatures": "PartyClient"` makes a party without clients. The
+by its description). It is **allowed by default**: `"PartyClient": false` makes a party without clients. The
 clients of a party are its [`PartyClientFeature`](PartyClientFeature.cs) (`Clients`, `Find( name )`), in the order of their
 declaration. For each client, it finds the driver of each feature, checks the requirements
 (`PartyComponentDirectory.CheckScope`), creates the features in their order, then their options.
@@ -61,11 +61,10 @@ The rules fail closed:
 |---|---|
 | A key of a client that is neither a client feature of the application nor its type set | An error: the party's setup fails. |
 | A client without feature | An error. |
-| A feature that requires a feature that the party doesn't allow | An error. |
+| A feature that requires a feature that the party doesn't have | An error. |
 | A feature that requires an abstraction that no feature of the client implements | An error. |
 | Two features of a client that implement a unique abstraction | An error. |
 | A key of a feature that the feature doesn't have | An error, reported by its driver. |
-| A party that doesn't allow the feature but declares clients | An error. |
 
 The declarations are read on the party only: a "Defaults" section doesn't declare clients.
 

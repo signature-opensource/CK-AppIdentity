@@ -27,7 +27,7 @@ sections.
 | `Address` | remote parties | Where the remote can be reached. The party that declares the address initiates the communication (the client); the other side listens (the server). |
 | `Local` | root, tenant domains | The configuration of the local party: the application (or the tenant), see the [samples](docs/Samples.md#the-local-and-the-defaults-configurations). |
 | `Defaults` | root, tenant domains, groups | The default values of the parties below this level (its `Local` included): see [the levels and the defaults](#the-structural-levels-and-the-defaults). |
-| `AllowFeatures`, `DisallowFeatures` | parties (`Local`, remotes), `Defaults` | Feature names (case insensitive): a string, a comma-separated string or an array of strings. Combined along the `Defaults` above the party (the nearest level wins). |
+| *a feature name* | parties (`Local`, remotes), `Defaults` | The declaration of a feature (case insensitive): `true` or its section declares it, `false` turns off a feature allowed by default. The party's own key, otherwise the nearest `Defaults` above the party. |
 | `DefaultAssembly`, `Assemblies` | parties (`Local`, remotes), `Defaults` | The [`AssemblyConfiguration`](https://github.com/signature-opensource/CK-Configuration/blob/stable/CK.Configuration/README.md#assemblyconfiguration) of CK.Configuration: the "plugins/dynamic extension" assemblies. Combined along the `Defaults` above the party. |
 | `StrictConfigurationMode` | root | Whether warnings are errors (see [below](#strictly-checking-the-configuration-or-not)). |
 | `StoreRootPath` | root | When not configured, the store is private and defaults to `ApplicationIdentityServiceConfiguration.DefaultStoreRootPath` (the `CK-AppIdentity` folder in `Environment.SpecialFolder.LocalApplicationData`); a host in Development that runs from a solution uses the `#Dev/Store` of the solution instead (`IsDevStore`, see CK.AppIdentity.Hosting). A relative path is resolved against the content root of the host (`IHostEnvironment.ContentRootPath`): the store is private (`IsRelativeStore`). A fully qualified path is a shared store. |
@@ -58,18 +58,18 @@ their structure (the names, `Parties`, `Local`, `Defaults`, and at the root `Sto
 ```jsonc
 {
   "FullName": "Acme/$App",
-  "Defaults": { "AllowFeatures": "KeyManagement" },     // For all the parties below, the root's "Local" included.
-  "Local": { "AllowFeatures": "AuthCenter" },            // The application: KeyManagement and AuthCenter.
+  "Defaults": { "KeyManagement": true },                // For all the parties below, the root's "Local" included.
+  "Local": { "AuthCenter": true },                      // The application: KeyManagement and AuthCenter.
   "Parties": [
     { "PartyName": "Front" },                            // KeyManagement.
-    { "PartyName": "Box", "DisallowFeatures": "KeyManagement" }
+    { "PartyName": "Box", "KeyManagement": false }
   ]
 }
 ```
 
-The `AllowFeatures` and `DisallowFeatures` combine: the ones of the farthest `"Defaults"` first, then the nearer ones,
-and finally the party's own keys (a feature allowed below is removed from the disallowed ones, and conversely). The
-assemblies combine the same way (`AssemblyConfiguration.Resolve` of CK.Configuration, with its locking). The feature
+**A party declares a feature by its key** (`ApplicationIdentityConfiguration.GetFeatureDeclaration`): `true` or a
+section (`"HttpEndpoint": { ... }`) declares it, `false` turns off a feature that is allowed by default. The declaration
+is the party's own key, otherwise the one of the nearest `"Defaults"` above it. The assemblies combine along the levels (`AssemblyConfiguration.Resolve` of CK.Configuration, with its locking). The feature
 drivers read a local party in its `LocalConfiguration` and a remote in its configuration. Any other setting of a party
 is resolved with the `TryResolveValue` / `TryResolveSection` extension methods of CK.Configuration (the party's own key,
 then the `"Defaults"` above).
@@ -109,7 +109,7 @@ A `ImmutableConfigurationSection` successfully analyzed results in multiple obje
 
 Two things the diagram makes plain. `ApplicationIdentityLocalConfiguration` is **not** a party
 configuration - it derives straight from the base, which is why a `"Local"` section carries settings
-and not an identity. And `AllowFeatures` / `DisallowFeatures` / `AssemblyConfiguration` sit on the base
+and not an identity. And the feature declarations (`GetFeatureDeclaration`) and the `AssemblyConfiguration` sit on the base
 class: they are resolved for the parties (a `"Local"`, a remote) and empty for the structural levels (the root and the
 tenant domains, whose local party is their `LocalConfiguration`).
 

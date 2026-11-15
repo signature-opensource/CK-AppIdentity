@@ -200,11 +200,11 @@ level: it is an error. It goes in one of these sections:
   "FullName": "Test/$App",
   // Default values for every party below (the "Local" included).
   "Defaults": {
-     "AllowFeatures": "KeyManagement"
+     "KeyManagement": true
   },
   // The configuration of the application itself.
   "Local": {
-     "AllowFeatures": "AuthCenter"
+     "AuthCenter": true
   },
   "Parties": [
    {

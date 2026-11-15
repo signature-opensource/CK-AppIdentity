@@ -18,7 +18,7 @@ namespace CK.AppIdentity;
 /// party is ready and where it is. The file is assembled from the <see cref="IDevRunningStatusContributor"/>.
 /// <para>
 /// Otherwise (production), this feature is dormant: its setup checks once and stops there (no file, no subscription, no
-/// timer, the contributors are never activated). It is allowed by default: "DisallowFeatures" can switch it off.
+/// timer, the contributors are never activated). It is allowed by default: <c>"DevRunningStatus": false</c> switches it off.
 /// </para>
 /// </summary>
 public sealed class DevRunningStatusFeatureDriver : ApplicationIdentityStaticFeatureDriver

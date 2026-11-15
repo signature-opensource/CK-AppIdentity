@@ -33,12 +33,12 @@ A Feature can be opt-in or opt-out. The implementation expresses this via the co
 protected ApplicationIdentityFeatureDriver( ApplicationIdentityService s, bool isAllowedByDefault )
 ```
 
-Configuration then takes over via "Allow/DisallowFeatures", which control the final list of associated features for each Party:
+The configuration then takes over: a party **declares** a feature by its key (see [Feature configuration](#feature-configuration)):
 
 - The feature name is deduced from the driver type: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
-  used in the configuration.
-- The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which will give it the final result of the
-  Allow/Disallow configurations for the given Party according to the configuration sections (up to the configuration root).
+  the key in the configuration.
+- The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which gives it the
+  declaration of the party (its own key, then the "Defaults" above it), or the opt-in/opt-out default when there is none.
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they
   throw, this is of course handled).
 - Teardown methods are not expected to fail.
@@ -75,24 +75,24 @@ callers): it must be exceptional. Two drivers can never manage the same feature 
 
 ### The configuration
 
-The name is "*XXX*" in the `Local` of a local party (the root or a tenant domain) and "*XXXRemote*" on a remote
-(`GetFeatureName( IParty p )` gives the name of a party). The "*XXX*" of the `Local` gives the role of the local party:
+The key is "*XXX*" in the `Local` of a local party (the root or a tenant domain) and "*XXXRemote*" on a remote
+(`GetFeatureName( IParty p )` gives the key of a party). The "*XXX*" of the `Local` gives the role of the local party:
 
-| | The local party allows "*XXX*": it **is** the feature | The local party doesn't allow "*XXX*" |
+| | The local party declares "*XXX*": it **is** the feature | The local party doesn't declare "*XXX*" |
 |---|---|---|
-| The Local side (`LocalXXXFeatureDriver`) | implements the feature. The remotes that allow "*XXXRemote*" are the ones that can call it (a "Defaults" that allows "*XXXRemote*" lets all of them call it): the calls of a remote that doesn't allow it are refused. | does nothing (as if it was not there). |
-| The Remote side (`RemoteXXXFeatureDriver`) | does nothing (as if it was not there). | relays the feature to **the** remote that allows "*XXXRemote*", if any: this remote is the feature. |
+| The Local side (`LocalXXXFeatureDriver`) | implements the feature. The remotes that declare "*XXXRemote*" are the ones that can call it (a "Defaults" that declares "*XXXRemote*" lets all of them call it): the calls of a remote that doesn't declare it are refused. | does nothing (as if it was not there). |
+| The Remote side (`RemoteXXXFeatureDriver`) | does nothing (as if it was not there). | relays the feature to **the** remote that declares "*XXXRemote*", if any: this remote is the feature. |
 
 - **The feature can be configured on both sides of the relationship:** the `Local:XXX` section configures the feature,
   and a remote can have a "*XXXRemote*" section that configures how the remote is used or considered.
-- **A local party uses at most one remote that is the feature:** more than one remote that allows "*XXXRemote*" (when
-  the local party doesn't allow "*XXX*") is an error. `TryGetFeatureRemote` gives this remote.
+- **A local party uses at most one remote that is the feature:** more than one remote that declares "*XXXRemote*" (when
+  the local party doesn't declare "*XXX*") is an error. `TryGetFeatureRemote` gives this remote.
 - **The Local and the Remote sides can coexist in the same process:** the "*XXX*" of each local party gives its role
   in its tenant domain.
-- **A configuration that uses the name of the other kind of party is an error:** a `Local` that allows only
-  "*XXXRemote*", or a remote that allows only "*XXX*", fails the setup of the feature. Allowing both names is not an
-  error (a "Defaults" applies to the `Local` and to the remotes).
-- **A remote added later can be the feature** of a local party that doesn't allow "*XXX*": the Remote side handles it
+- **A remote that declares only "*XXX*" is an error** ("*XXX*" is the key of a local party that is the feature): it fails
+  the setup of the feature. Declaring both names is not an error (a "Defaults" applies to the `Local` and to the
+  remotes). A `Local` can declare "*XXXRemote*": the party has the Remote side, for the remotes added later.
+- **A remote added later can be the feature** of a local party that doesn't declare "*XXX*": the Remote side handles it
   like a remote of the initial configuration.
 - **The roles are announced:** the [description of a local party](../README.md#the-description-of-a-party) carries the
   asymmetric features it is (`PartyDescription.Roles`). A local party that relays "*XXX*" to a remote checks that the
@@ -138,15 +138,16 @@ remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its dr
 
 ## Feature configuration
 
-CK.AppIdentity only needs two configuration keys to manage Features: "AllowFeatures" and "DisallowFeatures". Their value can be a string,
-a string containing comma-separated substrings, or an array of strings. Their contents are combined in the configuration tree during
-initialization to establish a list of **possible** and **forbidden** Features at any Party level. The opt-in/opt-out function intrinsic
-to each FeatureDriver (described above) then takes over to establish the final list of Features for a Party.
+A party (a `Local` section, a remote) **declares a feature by its key**: `"AuthCenter": true`, or the section of the
+feature (`"HttpEndpoint": { ... }`); `"KeyManagement": false` turns off a feature that is allowed by default. The
+declaration is the party's own key, otherwise the one of the nearest "Defaults" above it. Without declaration, the
+opt-in/opt-out default of the FeatureDriver (described above) applies.
 
-The names are case insensitive (like the full names of the parties). A name that is not the name of a registered feature
-(its `FeatureName`, or `FeatureName` + "Remote" for an asymmetric feature) is reported when the agent starts, and when a
-dynamic party is added: a warning, an error in `StrictConfigurationMode` (the start or the addition fails). A typo in a
-"DisallowFeatures" would otherwise silently leave a feature allowed by default enabled.
+The names are case insensitive (like the full names of the parties). A key whose value is `true` or `false` and that is
+not the name of a registered feature (its `FeatureName`, or `FeatureName` + "Remote" for an asymmetric feature) is
+reported when the agent starts, and when a dynamic party is added: a warning, an error in `StrictConfigurationMode` (the
+start or the addition fails). A typo in `"KeyManagment": false` would otherwise silently leave a feature allowed by
+default on.
 
 Thanks to the topological ordering of the FeatureDrivers (described above), a Driver can decide whether a Feature is available
 depending on the status of another Feature (absence, presence, or even some of its configurations). 

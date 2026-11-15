@@ -48,15 +48,15 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// "Remote<paramref name="featureName"/>FeatureDriver" (the Remote side: a local party relays to the remote that is
     /// the feature). They manage the same <paramref name="featureName"/>.
     /// <para>
-    /// The "AllowFeatures" and "DisallowFeatures" configurations use "<paramref name="featureName"/>" on a local party (in its
-    /// "Local") and "<paramref name="featureName"/>Remote" on a remote (see <see cref="GetFeatureName(IParty)"/>):
+    /// A local party declares "<paramref name="featureName"/>" (in its
+    /// "Local") and a remote declares "<paramref name="featureName"/>Remote" (see <see cref="GetFeatureName(IParty)"/>):
     /// <list type="bullet">
     ///   <item>
-    ///   A local party that allows "<paramref name="featureName"/>" <b>is</b> the feature: its remotes that allow
+    ///   A local party that declares "<paramref name="featureName"/>" <b>is</b> the feature: its remotes that declare
     ///   "<paramref name="featureName"/>Remote" are the ones that can use it (the Local side).
     ///   </item>
     ///   <item>
-    ///   A local party that doesn't allow it uses <b>the</b> remote that allows "<paramref name="featureName"/>Remote", if
+    ///   A local party that doesn't declare it uses <b>the</b> remote that declares "<paramref name="featureName"/>Remote", if
     ///   any: this remote is the feature (the Remote side, see <see cref="TryGetFeatureRemote(IActivityMonitor, ILocalParty, out IRemoteParty?)"/>).
     ///   </item>
     /// </list>
@@ -67,7 +67,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// </para>
     /// <para>
     /// An asymmetric feature allowed by default makes little sense: every local party would be the feature and every
-    /// remote one of its callers, unless the configuration disallows it. This must be exceptional: the default is false.
+    /// remote one of its callers, unless the configuration turns it off. This must be exceptional: the default is false.
     /// </para>
     /// </summary>
     /// <param name="s">The application identity service.</param>
@@ -155,7 +155,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <summary>
     /// Gets whether this feature is enabled for the given party (including the root <see cref="IApplicationIdentityService"/>):
     /// a local party (the root or a tenant domain) answers from its <see cref="ILocalParty.LocalConfiguration"/>, a remote from
-    /// its own configuration. Both resolve the Allow/DisallowFeatures of the "Defaults" sections above them.
+    /// its own configuration. Both look up the declaration of the feature (its key) in their own keys, then in the "Defaults"
+    /// sections above them.
     /// <para>
     /// On a remote, the configured name of an asymmetric feature is "<see cref="FeatureName"/>Remote" (see <see cref="GetFeatureName(IParty)"/>).
     /// </para>
@@ -210,17 +211,17 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     public bool HasRemoteSide => _asymmetric?.Remote != null;
 
     /// <summary>
-    /// Gets the name that allows this feature on a party: the <see cref="FeatureName"/>, except on a remote for an asymmetric
+    /// Gets the key that declares this feature on a party: the <see cref="FeatureName"/>, except on a remote for an asymmetric
     /// feature, where it is "<see cref="FeatureName"/>Remote".
     /// </summary>
     /// <param name="p">The party.</param>
-    /// <returns>The feature name to use in the "AllowFeatures" and "DisallowFeatures" of the party.</returns>
+    /// <returns>The key that declares this feature on the party.</returns>
     public string GetFeatureName( IParty p ) => _asymmetric != null && p is not ILocalParty ? _featureName + "Remote" : _featureName;
 
     /// <summary>
-    /// Gets the remote that is this asymmetric feature for a local party: when the local party doesn't allow the
-    /// <see cref="FeatureName"/>, this is the remote that allows "<see cref="FeatureName"/>Remote". There must be at most one:
-    /// more than one is an error (a "Defaults" that allows it applies to every remote below it).
+    /// Gets the remote that is this asymmetric feature for a local party: when the local party doesn't declare the
+    /// <see cref="FeatureName"/>, this is the remote that declares "<see cref="FeatureName"/>Remote". There must be at most one:
+    /// more than one is an error (a "Defaults" that declares it applies to every remote below it).
     /// <para>
     /// <paramref name="featureRemote"/> is null when the local party is the feature or when none of its remotes is.
     /// </para>
@@ -241,8 +242,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             if( found != null )
             {
                 var all = local.Remotes.Where( IsAllowedFeature ).Select( x => x.ToString() ).Concatenate( "', '" );
-                monitor.Error( $"'{local}' doesn't allow the '{_featureName}' feature: it can use only one remote that is the '{_featureName}' but the remotes '{all}' "
-                               + $"allow '{_featureName}Remote' (a \"Defaults\" that allows it applies to every remote below it)." );
+                monitor.Error( $"'{local}' doesn't declare the '{_featureName}' feature: it can use only one remote that is the '{_featureName}' but the remotes '{all}' "
+                               + $"declare '{_featureName}Remote' (a \"Defaults\" that declares it applies to every remote below it)." );
                 return false;
             }
             found = r;
@@ -253,29 +254,22 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
 
     static ApplicationIdentityConfiguration GetConfiguration( IParty p ) => p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
 
-    // Called before the setup of the first registered driver of an asymmetric feature: a local party that allows only
-    // "XXXRemote" or a remote that allows only "XXX" is an error.
+    // Called before the setup of the first registered driver of an asymmetric feature: a remote that declares only "XXX"
+    // is an error ("XXX" is declared by a local party that is the feature). A local party can declare "XXXRemote": its
+    // set contains the Remote side (for the remotes added later).
     internal bool CheckAsymmetricNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         Throw.DebugAssert( _asymmetric != null );
         bool success = true;
         foreach( var p in parties )
         {
+            if( p is ILocalParty ) continue;
             var c = GetConfiguration( p );
             var name = GetFeatureName( p );
-            var other = p is ILocalParty ? _featureName + "Remote" : _featureName;
-            if( c.IsAllowedFeature( other, false ) && !c.IsAllowedFeature( name, _isAllowedByDefault ) )
+            if( c.IsAllowedFeature( _featureName, false ) && !c.IsAllowedFeature( name, _isAllowedByDefault ) )
             {
-                if( p is ILocalParty )
-                {
-                    monitor.Error( $"'{p}' allows the '{other}' feature in its \"Local\": '{other}' is allowed on a remote. The '{_featureName}' feature is asymmetric: "
-                                   + $"a local party that is the '{_featureName}' allows '{_featureName}', a local party that uses a remote '{_featureName}' allows nothing." );
-                }
-                else
-                {
-                    monitor.Error( $"'{p}' allows the '{other}' feature: '{other}' is allowed in the \"Local\" of a local party. The '{_featureName}' feature is asymmetric: "
-                                   + $"a remote that is the '{_featureName}' (or that uses the local '{_featureName}') allows '{name}'." );
-                }
+                monitor.Error( $"'{p}' declares the '{_featureName}' feature: '{_featureName}' is declared in the \"Local\" of a local party that is the feature. The '{_featureName}' feature is asymmetric: "
+                               + $"a remote that is the '{_featureName}' (or that uses the local '{_featureName}') declares '{name}'." );
                 success = false;
             }
         }

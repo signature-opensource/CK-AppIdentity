@@ -185,7 +185,7 @@ public class PartyClientOptionsTests
         // Allowed: fine.
         var (services, party) = await StartAsync( c =>
         {
-            c["Local:AllowFeatures"] = "Fake";
+            c["Local:Fake"] = "true";
             c["Local:PartyClient:App:NeedsFake"] = "true";
         } );
         await using( services )

@@ -115,7 +115,7 @@ static feature allowed by default) writes `DevRunningStatus.json` in the root pa
 (`IParty.SharedFileStore`) while the host runs. It does this only when the environment is `#Dev` **and** the store is
 the `#Dev/Store` of the development solution (`ApplicationIdentityServiceConfiguration.IsDevStore`: a host in Development
 that doesn't configure its `StoreRootPath`).
-Otherwise it is dormant: it checks once and does nothing more. `DisallowFeatures` switches it off.
+Otherwise it is dormant: it checks once and does nothing more. `"DevRunningStatus": false` switches it off.
 - **The file is written** when the host has started (`OnHostStartedAsync`), rewritten after a change (batched over
   200 ms), and deleted when the host stops. The write is atomic: a temporary file, then a rename.
 - **Its core properties:** `FullName`, `ProcessId`, `ProcessStartTime` (with the pid, they detect a stale file),

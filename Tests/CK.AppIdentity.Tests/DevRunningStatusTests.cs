@@ -149,7 +149,7 @@ public class DevRunningStatusTests
                 case "OtherEnvironment": c["FullName"] = "D/$App/#Staging"; break;
                 // A configured store is not the dev store, even in the solution.
                 case "RelativeStore": c["StoreRootPath"] = "TestStore/#Dev/Store"; break;
-                case "Disallowed": c["Local:DisallowFeatures"] = "DevRunningStatus"; break;
+                case "Disallowed": c["Local:DevRunningStatus"] = "false"; break;
             }
         }, useDevStore: reason != "DefaultStore" );
         await host.StartAsync( cancel );

@@ -388,14 +388,14 @@ public class PartyDescriptionTests
     public async Task the_roles_of_a_local_party_are_the_asymmetric_features_it_is_Async( CancellationToken cancel )
     {
         // The Local side is installed and the root allows "Asym": it is the "Asym".
-        using( var host = BuildHost( c => c["Local:AllowFeatures"] = "Asym", typeof( FeatureBuilderInitializationTests.LocalAsymFeatureDriver ) ) )
+        using( var host = BuildHost( c => c["Local:Asym"] = "true", typeof( FeatureBuilderInitializationTests.LocalAsymFeatureDriver ) ) )
         {
             await host.StartAsync( cancel );
             host.Services.GetRequiredService<ApplicationIdentityService>().Description.Roles.ShouldBe( ["Asym"] );
             await host.StopAsync( cancel );
         }
         // Only the Remote side: the root cannot be the "Asym".
-        using( var host = BuildHost( c => c["Local:AllowFeatures"] = "Asym", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) ) )
+        using( var host = BuildHost( c => c["Local:Asym"] = "true", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) ) )
         {
             await host.StartAsync( cancel );
             host.Services.GetRequiredService<ApplicationIdentityService>().Description.Roles.ShouldBeEmpty();
@@ -407,7 +407,7 @@ public class PartyDescriptionTests
     [CancelAfter( 10000 )]
     public async Task a_remote_to_which_a_feature_is_relayed_must_announce_it_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Parties:0:AllowFeatures"] = "AsymRemote", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) );
+        using var host = BuildHost( c => c["Parties:0:AsymRemote"] = "true", typeof( FeatureBuilderInitializationTests.RemoteAsymFeatureDriver ) );
         await host.StartAsync( cancel );
         var remote = host.Services.GetRequiredService<ApplicationIdentityService>().Remotes.Single();
         remote.SharedFileStore.TryTrash( TestHelper.Monitor, remote.SharedFileStore.FolderPath.AppendPart( "PartyDescription.json" ), immediateDelete: true );

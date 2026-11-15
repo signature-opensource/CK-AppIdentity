@@ -130,7 +130,7 @@ public class PartyClientFeatureTests
     {
         using var host = BuildHost( c =>
         {
-            c["Local:AllowFeatures"] = "Serving";
+            c["Local:Serving"] = "true";
             c["Local:PublicUrl"] = "https://acme.com";
             c["Local:PartyClient:App:Served:Color"] = "Blue";
             // A feature without configuration is declared by true.
@@ -208,7 +208,7 @@ public class PartyClientFeatureTests
         using var logs = new AllMonitorsTexts();
         using var host = BuildHost( c =>
         {
-            c["Local:AllowFeatures"] = "Serving";
+            c["Local:Serving"] = "true";
             c["Local:PartyClient:App:Served:Origin"] = "https://cdn.acme.com";
         }, _drivers );
         {
@@ -219,25 +219,14 @@ public class PartyClientFeatureTests
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task a_party_that_disallows_the_feature_has_no_clients_and_cannot_declare_any_Async( CancellationToken cancel )
+    public async Task a_party_that_turns_the_feature_off_has_no_clients_Async( CancellationToken cancel )
     {
-        using var logs = new AllMonitorsTexts();
-        using( var host = BuildHost( c => c["Local:DisallowFeatures"] = "PartyClient", _drivers ) )
+        // Declaring a client declares the feature (its section): "PartyClient": false and a client can't coexist.
+        using( var host = BuildHost( c => c["Local:PartyClient"] = "false", _drivers ) )
         {
             await host.StartAsync( cancel );
             host.Services.GetRequiredService<ApplicationIdentityService>().GetFeature<PartyClientFeature>().ShouldBeNull();
             await host.StopAsync( cancel );
-        }
-        using( var host = BuildHost( c =>
-        {
-            c["Local:DisallowFeatures"] = "PartyClient";
-            c["Local:PartyClient:Tool:Tool"] = "true";
-        }, _drivers ) )
-        {
-            {
-                await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-                (await logs.WaitForAsync( "'Clients/$App/#Dev' declares clients ('Tool') but doesn't allow the 'PartyClient' feature." )).ShouldBeTrue();
-            }
         }
     }
 
@@ -266,7 +255,7 @@ public class PartyClientFeatureTests
     [CancelAfter( 10000 )]
     public async Task the_clients_of_a_tenant_domain_are_in_its_description_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "Serving", _drivers );
+        using var host = BuildHost( c => c["Local:Serving"] = "true", _drivers );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.Description.ClientApplications.ShouldBeEmpty();
@@ -274,7 +263,7 @@ public class PartyClientFeatureTests
         var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
         {
             s["FullName"] = "D1/$D1";
-            s["Local:AllowFeatures"] = "Serving";
+            s["Local:Serving"] = "true";
             s["Local:PublicUrl"] = "https://d1.acme.com";
             s["Local:PartyClient:Admin:Served"] = "true";
         } );

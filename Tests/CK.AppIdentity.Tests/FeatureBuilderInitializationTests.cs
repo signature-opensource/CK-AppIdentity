@@ -386,14 +386,14 @@ public class FeatureBuilderInitializationTests
     [Test]
     public void an_asymmetric_feature_is_XXX_on_a_local_party_and_XXXRemote_on_a_remote()
     {
-        // The local party is the "Asym": its remotes that allow "AsymRemote" use it.
+        // The local party is the "Asym": its remotes that declare "AsymRemote" use it.
         var s = CreateService( c =>
         {
-            c["Local:AllowFeatures"] = "Asym";
+            c["Local:Asym"] = "true";
             c["Parties:0:PartyName"] = "AllowsTheRemoteName";
-            c["Parties:0:AllowFeatures"] = "AsymRemote";
+            c["Parties:0:AsymRemote"] = "true";
             c["Parties:1:PartyName"] = "AllowsTheFeatureName";
-            c["Parties:1:AllowFeatures"] = "Asym";
+            c["Parties:1:Asym"] = "true";
         } );
         var common = new AsymFeatureDriver( s );
         var local = new LocalAsymFeatureDriver( s );
@@ -413,11 +413,11 @@ public class FeatureBuilderInitializationTests
             featureRemote.ShouldBeNull( "The local party is the feature." );
         }
 
-        // The local party is not the "Asym": the remote that allows "AsymRemote" is the "Asym".
+        // The local party is not the "Asym": the remote that declares "AsymRemote" is the "Asym".
         s = CreateService( c =>
         {
             c["Parties:0:PartyName"] = "TheAsym";
-            c["Parties:0:AllowFeatures"] = "AsymRemote";
+            c["Parties:0:AsymRemote"] = "true";
             c["Parties:1:PartyName"] = "Other";
         } );
         remote = new RemoteAsymFeatureDriver( s );
@@ -447,7 +447,7 @@ public class FeatureBuilderInitializationTests
     {
         var s = CreateService( c =>
         {
-            c["Defaults:AllowFeatures"] = "AsymRemote";
+            c["Defaults:AsymRemote"] = "true";
             c["Parties:0:PartyName"] = "A";
             c["Parties:1:PartyName"] = "B";
         } );
@@ -456,25 +456,26 @@ public class FeatureBuilderInitializationTests
         {
             remote.TryGetFeatureRemote( TestHelper.Monitor, s, out var r ).ShouldBeFalse();
             r.ShouldBeNull();
-            texts.ShouldContain( t => t.Contains( "it can use only one remote that is the 'Asym' but the remotes 'FakeDomain/$A/#Dev', 'FakeDomain/$B/#Dev' allow 'AsymRemote'" ) );
+            texts.ShouldContain( t => t.Contains( "it can use only one remote that is the 'Asym' but the remotes 'FakeDomain/$A/#Dev', 'FakeDomain/$B/#Dev' declare 'AsymRemote'" ) );
         }
     }
 
     [TestCase( "Local" )]
     [TestCase( "Remote" )]
     [CancelAfter( 2000 )]
-    public async Task a_local_party_that_allows_XXXRemote_or_a_remote_that_allows_XXX_is_an_error_Async( string side, CancellationToken cancellation )
+    public async Task a_remote_that_declares_XXX_is_an_error_Async( string side, CancellationToken cancellation )
     {
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "FakeDomain/$FakeApp";
-            c["Local:AllowFeatures"] = "AsymRemote";
+            // A local party can declare "AsymRemote": it has the Remote side (for the remotes added later).
+            c["Local:AsymRemote"] = "true";
             c["Parties:0:PartyName"] = "Other";
-            c["Parties:0:AllowFeatures"] = "Asym";
-            // Allowing both names is fine (a "Defaults" applies to the local party and to the remotes).
+            c["Parties:0:Asym"] = "true";
+            // Declaring both names is fine (a "Defaults" applies to the local party and to the remotes).
             c["Parties:1:PartyName"] = "Both";
-            c["Parties:1:AllowFeatures:0"] = "Asym";
-            c["Parties:1:AllowFeatures:1"] = "AsymRemote";
+            c["Parties:1:Asym"] = "true";
+            c["Parties:1:AsymRemote"] = "true";
         } ).ShouldNotBeNull();
         var services = new ServiceCollection();
         services.AddSingleton( c );
@@ -495,8 +496,7 @@ public class FeatureBuilderInitializationTests
                 return s.InitializationTask.WaitAsync( cancellation );
             } );
             ( await WaitForLogAsync( logs,
-                "'Application: FakeDomain/$FakeApp/#Dev' allows the 'AsymRemote' feature in its \"Local\": 'AsymRemote' is allowed on a remote. The 'Asym' feature is asymmetric: a local party that is the 'Asym' allows 'Asym', a local party that uses a remote 'Asym' allows nothing.",
-                "'FakeDomain/$Other/#Dev' allows the 'Asym' feature: 'Asym' is allowed in the \"Local\" of a local party. The 'Asym' feature is asymmetric: a remote that is the 'Asym' (or that uses the local 'Asym') allows 'AsymRemote'." ) ).ShouldBeTrue();
+                "'FakeDomain/$Other/#Dev' declares the 'Asym' feature: 'Asym' is declared in the \"Local\" of a local party that is the feature. The 'Asym' feature is asymmetric: a remote that is the 'Asym' (or that uses the local 'Asym') declares 'AsymRemote'." ) ).ShouldBeTrue();
         }
     }
 

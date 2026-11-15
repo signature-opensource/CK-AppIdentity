@@ -128,7 +128,7 @@ public class StaticFeatureTests
     [CancelAfter( 5000 )]
     public async Task static_features_start_after_the_initialization_and_stop_before_the_teardown_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "SA, SB", typeof( SBFeatureDriver ), typeof( SAFeatureDriver ) );
+        using var host = BuildHost( c => { c["Local:SA"] = "true"; c["Local:SB"] = "true"; }, typeof( SBFeatureDriver ), typeof( SAFeatureDriver ) );
         await host.StartAsync( cancel );
         _log.ShouldBe( ["Setup:SA", "Setup:SB", "Started:SA", "Started:SB"] );
         await host.StopAsync( cancel );
@@ -143,7 +143,7 @@ public class StaticFeatureTests
         // Adding a party is a job of the agent: from the agent's loop, this would never complete.
         IRemoteParty? added = null;
         _onStarted = async ( s, monitor ) => added ??= await s.AddRemoteAsync( monitor, c => c["PartyName"] = "Dyn" );
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "SA", typeof( SAFeatureDriver ) );
+        using var host = BuildHost( c => c["Local:SA"] = "true", typeof( SAFeatureDriver ) );
         await host.StartAsync( cancel );
         added.ShouldNotBeNull().IsDynamic.ShouldBeTrue();
         await host.StopAsync( cancel );
@@ -154,7 +154,7 @@ public class StaticFeatureTests
     public async Task a_failing_start_fails_the_host_start_and_stops_the_started_features_Async( CancellationToken cancel )
     {
         _failingStart = "SB";
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "SA, SB", typeof( SAFeatureDriver ), typeof( SBFeatureDriver ) );
+        using var host = BuildHost( c => { c["Local:SA"] = "true"; c["Local:SB"] = "true"; }, typeof( SAFeatureDriver ), typeof( SBFeatureDriver ) );
         await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
         _log.ShouldBe( ["Setup:SA", "Setup:SB", "Started:SA", "Stopping:SA"] );
         await host.StopAsync( cancel );
@@ -169,7 +169,7 @@ public class StaticFeatureTests
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "D/$App/#Dev";
-            c["Local:AllowFeatures"] = "SA";
+            c["Local:SA"] = "true";
         } ).ShouldNotBeNull();
         var services = new ServiceCollection();
         services.AddSingleton( c );
@@ -192,10 +192,10 @@ public class StaticFeatureTests
     {
         using var host = BuildHost( c =>
         {
-            c["Local:AllowFeatures"] = "SA";
+            c["Local:SA"] = "true";
             // A tenant domain of the initial configuration is static: it can allow SA.
             c["Parties:0:FullName"] = "T/$T";
-            c["Parties:0:Local:AllowFeatures"] = "SA";
+            c["Parties:0:Local:SA"] = "true";
             c["Parties:0:Parties:0:PartyName"] = "TR";
         }, typeof( SAFeatureDriver ), typeof( SDFeatureDriver ) );
         await host.StartAsync( cancel );
@@ -207,13 +207,13 @@ public class StaticFeatureTests
         sa.IsAllowedFeature( tenant ).ShouldBeTrue();
 
         // A dynamic remote, a dynamic tenant domain or a remote of a dynamic tenant domain that allows SA fail.
-        (await s.AddRemoteAsync( TestHelper.Monitor, c => { c["PartyName"] = "R1"; c["AllowFeatures"] = "SA"; } )).ShouldBeNull();
-        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D1/$D1"; c["Local:AllowFeatures"] = "SA"; } )).ShouldBeNull();
+        (await s.AddRemoteAsync( TestHelper.Monitor, c => { c["PartyName"] = "R1"; c["SA"] = "true"; } )).ShouldBeNull();
+        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D1/$D1"; c["Local:SA"] = "true"; } )).ShouldBeNull();
         (await s.AddTenantDomainAsync( TestHelper.Monitor, c =>
         {
             c["FullName"] = "D2/$D2";
             c["Parties:0:PartyName"] = "R2";
-            c["Parties:0:AllowFeatures"] = "SA";
+            c["Parties:0:SA"] = "true";
         } )).ShouldBeNull();
 
         // Dynamic parties are still supported: without SA, they are set up. The default of SD doesn't apply to them.
@@ -233,22 +233,22 @@ public class StaticFeatureTests
     [CancelAfter( 5000 )]
     public async Task the_dynamic_remotes_of_a_static_feature_are_supported_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Local:AllowFeatures"] = "SC", typeof( LocalSCFeatureDriver ) );
+        using var host = BuildHost( c => c["Local:SC"] = "true", typeof( LocalSCFeatureDriver ) );
         await host.StartAsync( cancel );
         var s = host.Services.GetRequiredService<ApplicationIdentityService>();
         var sc = host.Services.GetRequiredService<LocalSCFeatureDriver>();
         sc.IsAllowedFeature( s ).ShouldBeTrue();
 
         // A dynamic remote that is a remote of the feature: allowed, set up by SetupDynamicFeatureRemoteAsync.
-        var r = (await s.AddRemoteAsync( TestHelper.Monitor, c => { c["PartyName"] = "R"; c["AllowFeatures"] = "SCRemote"; } )).ShouldNotBeNull();
+        var r = (await s.AddRemoteAsync( TestHelper.Monitor, c => { c["PartyName"] = "R"; c["SCRemote"] = "true"; } )).ShouldNotBeNull();
         sc.IsAllowedFeature( r ).ShouldBeTrue();
         await r.DestroyAsync();
         _log.ShouldBe( ["Setup:SC", "Started:SC", "SetupDynamicFeatureRemote:SC:$R", "TeardownDynamicFeatureRemote:SC:$R"] );
 
         // A dynamic tenant domain that would be the feature fails.
-        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D1/$D1"; c["Local:AllowFeatures"] = "SC"; } )).ShouldBeNull();
+        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D1/$D1"; c["Local:SC"] = "true"; } )).ShouldBeNull();
         // A dynamic remote that would be the feature (its local party is not the "SC") fails.
-        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D2/$D2"; c["Parties:0:PartyName"] = "X"; c["Parties:0:AllowFeatures"] = "SCRemote"; } )).ShouldBeNull();
+        (await s.AddTenantDomainAsync( TestHelper.Monitor, c => { c["FullName"] = "D2/$D2"; c["Parties:0:PartyName"] = "X"; c["Parties:0:SCRemote"] = "true"; } )).ShouldBeNull();
         await host.StopAsync( cancel );
     }
 }

@@ -68,7 +68,7 @@ public class AppIdentityAppBuilderContributorTests
             {
               "FullName": "Sample/$Front",
               "Defaults": { "ListeningAddress": [ "tcp:127.0.0.1:37300" ] },
-              "Local": { "AllowFeatures": "HttpEndpoint" },
+              "Local": { "HttpEndpoint": true },
               "Parties": [ { "PartyName": "$Back" } ],
               "Logging": { "LogLevel": { "Default": "Warning" } }
             }

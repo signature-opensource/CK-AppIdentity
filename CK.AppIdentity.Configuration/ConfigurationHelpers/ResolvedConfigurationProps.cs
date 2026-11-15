@@ -1,41 +1,34 @@
 using CK.Core;
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace CK.AppIdentity;
 
 /// <summary>
-/// The combinable properties of a party configuration (a "Local" section or a remote): the Allow/DisallowFeatures and the
-/// assemblies. They are resolved from the "Defaults" sections above the party (from the root down) and the party's own
-/// keys: the nearest level wins. A structural level (the root, a tenant domain, a group) has none: <see cref="Empty"/>.
-/// <para>
-/// The feature names are case insensitive (like the full names of the parties): the sets use <see cref="StringComparer.OrdinalIgnoreCase"/>.
-/// </para>
+/// The combinable properties of a party configuration (a "Local" section or a remote): the levels where its feature
+/// declarations are looked up and its assemblies. They are resolved from the party's own keys and the "Defaults"
+/// sections above the party: the nearest level wins. A structural level (the root, a tenant domain, a group) has none:
+/// <see cref="Empty"/>.
 /// </summary>
 readonly struct ResolvedConfigurationProps
 {
-    public readonly IReadOnlySet<string> AllowFeatures;
-    public readonly IReadOnlySet<string> DisallowFeatures;
+    /// <summary>
+    /// The party section, then the "Defaults" sections above it, the nearest first.
+    /// </summary>
+    public readonly ImmutableArray<ImmutableConfigurationSection> FeatureLevels;
     public readonly AssemblyConfiguration AssemblyConfiguration;
 
-    ResolvedConfigurationProps( IReadOnlySet<string> allowFeatures,
-                                IReadOnlySet<string> disallowFeatures,
+    ResolvedConfigurationProps( ImmutableArray<ImmutableConfigurationSection> featureLevels,
                                 AssemblyConfiguration assemblyConfiguration )
     {
-        AllowFeatures = allowFeatures;
-        DisallowFeatures = disallowFeatures;
+        FeatureLevels = featureLevels;
         AssemblyConfiguration = assemblyConfiguration;
     }
 
     /// <summary>
     /// The properties of a structural level.
     /// </summary>
-    public static ResolvedConfigurationProps Empty => new ResolvedConfigurationProps( ImmutableHashSet.Create<string>( StringComparer.OrdinalIgnoreCase ),
-                                                                                      ImmutableHashSet.Create<string>( StringComparer.OrdinalIgnoreCase ),
-                                                                                      AssemblyConfiguration.Empty );
+    public static ResolvedConfigurationProps Empty => new ResolvedConfigurationProps( [], AssemblyConfiguration.Empty );
 
     /// <summary>
     /// Resolves the properties of a party configuration section.
@@ -46,53 +39,20 @@ readonly struct ResolvedConfigurationProps
     /// <returns>True on success, false on error.</returns>
     public static bool TryResolve( IActivityMonitor monitor, ImmutableConfigurationSection party, out ResolvedConfigurationProps props )
     {
-        bool success = true;
-        var allow = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
-        var disallow = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
-        // The "Defaults" above (from the root down: the nearest wins), then the party itself.
+        // The party itself, then the "Defaults" above it (the nearest first).
         var levels = party.LookupAllSectionWithDistance( ConfigurationSectionExtension.DefaultsKey )
                           .Where( d => d.Item2 > 0 )
+                          .OrderBy( d => d.Item2 )
                           .Select( d => d.Item1 )
-                          .Append( party );
-        foreach( var level in levels )
-        {
-            if( TryReadAllowDisallowFeatures( monitor, level, out var a, out var d ) )
-            {
-                allow.ExceptWith( d );
-                allow.UnionWith( a );
-                disallow.ExceptWith( a );
-                disallow.UnionWith( d );
-            }
-            else
-            {
-                success = false;
-            }
-        }
+                          .Prepend( party )
+                          .ToImmutableArray();
         var assemblies = AssemblyConfiguration.Resolve( monitor, party );
-        if( success && assemblies != null )
+        if( assemblies != null )
         {
-            props = new ResolvedConfigurationProps( allow, disallow, assemblies );
+            props = new ResolvedConfigurationProps( levels, assemblies );
             return true;
         }
         props = Empty;
-        return false;
-    }
-
-    static bool TryReadAllowDisallowFeatures( IActivityMonitor monitor,
-                                              ImmutableConfigurationSection level,
-                                              [NotNullWhen( true )] out HashSet<string>? allow,
-                                              [NotNullWhen( true )] out HashSet<string>? disallow )
-    {
-        allow = level.ReadUniqueStringSet( monitor, "AllowFeatures", StringComparer.OrdinalIgnoreCase );
-        disallow = level.ReadUniqueStringSet( monitor, "DisallowFeatures", StringComparer.OrdinalIgnoreCase );
-        if( allow != null && disallow != null )
-        {
-            if( !allow.Overlaps( disallow ) )
-            {
-                return true;
-            }
-            monitor.Error( $"The same feature cannot be both in '{level.Path}:AllowFeatures' and 'DisallowFeatures': {allow.Intersect( disallow ).Concatenate()}." );
-        }
         return false;
     }
 }

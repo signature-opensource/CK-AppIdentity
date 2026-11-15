@@ -27,8 +27,8 @@ public class ConfigurationDefaultsTests
     [Test]
     public void the_structural_levels_only_have_their_identity_and_their_structure()
     {
-        ShouldFail( c => c["AllowFeatures"] = "A",
-                    "'CK-AppIdentity:AllowFeatures' is not allowed: 'CK-AppIdentity' is the root" );
+        ShouldFail( c => c["KeyManagement"] = "true",
+                    "'CK-AppIdentity:KeyManagement' is not allowed: 'CK-AppIdentity' is the root" );
         ShouldFail( c => c["Assemblies:CK.Core"] = "C",
                     "'CK-AppIdentity:Assemblies' is not allowed: 'CK-AppIdentity' is the root" );
         ShouldFail( c =>
@@ -50,12 +50,12 @@ public class ConfigurationDefaultsTests
         ShouldFail( c =>
         {
             c["Parties:0:PartyName"] = "Remote";
-            c["Parties:0:Local:AllowFeatures"] = "A";
+            c["Parties:0:Local:A"] = "true";
         }, "'CK-AppIdentity:Parties:0:Local' is not allowed: 'CK-AppIdentity:Parties:0' is a remote party" );
         ShouldFail( c =>
         {
             c["Parties:0:PartyName"] = "Remote";
-            c["Parties:0:Defaults:AllowFeatures"] = "A";
+            c["Parties:0:Defaults:A"] = "true";
         }, "'CK-AppIdentity:Parties:0:Defaults' is not allowed: 'CK-AppIdentity:Parties:0' is a remote party" );
     }
 
@@ -74,42 +74,50 @@ public class ConfigurationDefaultsTests
         var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "Acme/$App";
-            c["Defaults:AllowFeatures"] = "A";
-            c["Defaults:DisallowFeatures"] = "Z";
-            c["Local:AllowFeatures"] = "L";
+            c["Defaults:A"] = "true";
+            c["Defaults:Z"] = "false";
+            c["Local:L:Setting"] = "1";
             c["Parties:0:PartyName"] = "R1";
             c["Parties:1:FullName"] = "Acme/Tenant/$Tenant";
-            c["Parties:1:Defaults:AllowFeatures"] = "Z";
-            c["Parties:1:Defaults:DisallowFeatures"] = "A";
-            c["Parties:1:Local:AllowFeatures"] = "A";
+            c["Parties:1:Defaults:Z"] = "true";
+            c["Parties:1:Defaults:A"] = "false";
+            c["Parties:1:Local:A"] = "true";
             c["Parties:1:Parties:0:PartyName"] = "R2";
             c["Parties:2:DomainName"] = "Acme/Group";
-            c["Parties:2:Defaults:AllowFeatures"] = "G";
+            c["Parties:2:Defaults:G"] = "true";
             c["Parties:2:Parties:0:PartyName"] = "R3";
-            c["Parties:2:Parties:0:DisallowFeatures"] = "A";
+            c["Parties:2:Parties:0:A"] = "false";
         } ).ShouldNotBeNull();
 
-        // The root is a structural level: its local party is its "Local".
-        config.AllowFeatures.ShouldBeEmpty();
-        config.DisallowFeatures.ShouldBeEmpty();
-        config.LocalConfiguration.AllowFeatures.ShouldBe( ["A", "L"], ignoreOrder: true );
-        config.LocalConfiguration.DisallowFeatures.ShouldBe( ["Z"] );
+        // The root is a structural level: it declares nothing, its local party is its "Local".
+        config.GetFeatureDeclaration( "A" ).ShouldBeNull();
+        // A section declares its feature.
+        config.LocalConfiguration.GetFeatureDeclaration( "L" ).ShouldBe( true );
+        config.LocalConfiguration.GetFeatureDeclaration( "a" ).ShouldBe( true );
+        config.LocalConfiguration.GetFeatureDeclaration( "Z" ).ShouldBe( false );
+        config.LocalConfiguration.GetFeatureDeclaration( "G" ).ShouldBeNull();
+        config.LocalConfiguration.GetBooleanKeys().ShouldBe( ["A", "Z"], ignoreOrder: true );
 
         var r1 = config.Remotes.Single( r => r.PartyName == "$R1" );
-        r1.AllowFeatures.ShouldBe( ["A"] );
-        r1.DisallowFeatures.ShouldBe( ["Z"] );
+        r1.GetFeatureDeclaration( "A" ).ShouldBe( true );
+        r1.GetFeatureDeclaration( "Z" ).ShouldBe( false );
+        r1.GetFeatureDeclaration( "L" ).ShouldBeNull();
 
+        // The nearest wins: the tenant's "Defaults", then its own keys.
         var tenant = config.TenantDomains.Single();
-        tenant.AllowFeatures.ShouldBeEmpty();
-        tenant.LocalConfiguration.AllowFeatures.ShouldBe( ["Z", "A"], ignoreOrder: true );
-        tenant.LocalConfiguration.DisallowFeatures.ShouldBeEmpty();
+        tenant.GetFeatureDeclaration( "A" ).ShouldBeNull();
+        tenant.LocalConfiguration.GetFeatureDeclaration( "A" ).ShouldBe( true );
+        tenant.LocalConfiguration.GetFeatureDeclaration( "Z" ).ShouldBe( true );
         var r2 = tenant.Remotes.Single();
-        r2.AllowFeatures.ShouldBe( ["Z"] );
-        r2.DisallowFeatures.ShouldBe( ["A"] );
+        r2.GetFeatureDeclaration( "A" ).ShouldBe( false );
+        r2.GetFeatureDeclaration( "Z" ).ShouldBe( true );
 
         var r3 = config.Remotes.Single( r => r.PartyName == "$R3" );
-        r3.AllowFeatures.ShouldBe( ["G"] );
-        r3.DisallowFeatures.ShouldBe( ["Z", "A"], ignoreOrder: true );
+        r3.GetFeatureDeclaration( "G" ).ShouldBe( true );
+        r3.GetFeatureDeclaration( "A" ).ShouldBe( false );
+        r3.GetFeatureDeclaration( "Z" ).ShouldBe( false );
+        r3.IsAllowedFeature( "Other", isAllowedByDefault: true ).ShouldBeTrue();
+        r3.IsAllowedFeature( "Other", isAllowedByDefault: false ).ShouldBeFalse();
     }
 
     [Test]
@@ -133,10 +141,10 @@ public class ConfigurationDefaultsTests
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "Acme/$App";
-            c["Defaults:AllowFeatures"] = "Asym";
+            c["Defaults:Asym"] = "true";
             c["Parties:0:PartyName"] = "R1";
             c["Parties:1:PartyName"] = "R2";
-            c["Parties:1:DisallowFeatures"] = "Asym";
+            c["Parties:1:Asym"] = "false";
         } ).ShouldNotBeNull();
         var s = new ApplicationIdentityService( c, new ServiceCollection().BuildServiceProvider() );
         var driver = new FeatureBuilderInitializationTests.AsymFeatureDriver( s, isAllowedByDefault: false, featureName: null );
@@ -145,11 +153,11 @@ public class ConfigurationDefaultsTests
         driver.IsAllowedFeature( s.Remotes.Single( r => r.PartyName == "$R1" ) ).ShouldBeTrue();
         driver.IsAllowedFeature( s.Remotes.Single( r => r.PartyName == "$R2" ) ).ShouldBeFalse();
 
-        // Allowed only in the root's Local: the remotes don't have it.
+        // Declared only in the root's Local: the remotes don't have it.
         var c2 = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
             c["FullName"] = "Acme/$App";
-            c["Local:AllowFeatures"] = "Asym";
+            c["Local:Asym"] = "true";
             c["Parties:0:PartyName"] = "R1";
         } ).ShouldNotBeNull();
         var s2 = new ApplicationIdentityService( c2, new ServiceCollection().BuildServiceProvider() );

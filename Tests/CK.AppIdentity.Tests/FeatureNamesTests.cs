@@ -16,7 +16,7 @@ namespace CK.AppIdentity.Tests;
 [TestFixture]
 public class FeatureNamesTests
 {
-    // Allowed by default: only "DisallowFeatures" switches it off.
+    // Allowed by default: only "OptOut": false switches it off.
     public sealed class OptOutFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         public OptOutFeatureDriver( ApplicationIdentityService s ) : base( s, null, true ) { }
@@ -62,14 +62,14 @@ public class FeatureNamesTests
     {
         var (sp, s) = await StartAsync( c =>
         {
-            c["Local:DisallowFeatures"] = "OPTOUT";
-            c["Parties:0:AllowFeatures"] = "asymremote";
+            c["Local:OPTOUT"] = "false";
+            c["Parties:0:asymremote"] = "true";
         }, cancel );
         await using( sp )
         {
             await s.InitializationTask.WaitAsync( cancel );
             var optOut = sp.GetRequiredService<OptOutFeatureDriver>();
-            optOut.IsAllowedFeature( s ).ShouldBeFalse( "'OPTOUT' disallows 'OptOut'." );
+            optOut.IsAllowedFeature( s ).ShouldBeFalse( "'OPTOUT': false turns 'OptOut' off." );
             optOut.IsAllowedFeature( s.Remotes.Single() ).ShouldBeTrue();
             sp.GetRequiredService<FeatureBuilderInitializationTests.LocalAsymFeatureDriver>().IsAllowedFeature( s.Remotes.Single() ).ShouldBeTrue();
         }
@@ -82,16 +82,17 @@ public class FeatureNamesTests
         using var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 200 );
         var (sp, s) = await StartAsync( c =>
         {
-            c["Local:DisallowFeatures"] = "OptOutt";
+            c["Local:OptOutt"] = "false";
             // "Asym" on a local party and "AsymRemote" on a remote are known names.
-            c["Parties:0:DisallowFeatures"] = "OptOutt, AsymRemote";
+            c["Parties:0:OptOutt"] = "false";
+            c["Parties:0:AsymRemote"] = "false";
         }, cancel );
         await using( sp )
         {
             await s.InitializationTask.WaitAsync( cancel );
-            sp.GetRequiredService<OptOutFeatureDriver>().IsAllowedFeature( s ).ShouldBeTrue( "The typo disallows nothing." );
+            sp.GetRequiredService<OptOutFeatureDriver>().IsAllowedFeature( s ).ShouldBeTrue( "The typo turns nothing off." );
             var texts = await CollectAsync( logs, "Unknown feature 'OptOutt'" );
-            texts.ShouldContain( t => t.StartsWith( "Unknown feature 'OptOutt' in the AllowFeatures or DisallowFeatures of '" )
+            texts.ShouldContain( t => t.StartsWith( "Unknown feature 'OptOutt' declared by '" )
                                       && t.Contains( "Names/$App" ) && t.Contains( "Names/$Remote" ) );
             texts.ShouldNotContain( t => t.Contains( "Unknown feature 'AsymRemote'" ) );
         }
@@ -104,7 +105,7 @@ public class FeatureNamesTests
         var (sp, s) = await StartAsync( c =>
         {
             c["StrictConfigurationMode"] = "true";
-            c["Parties:0:DisallowFeatures"] = "Tranport";
+            c["Parties:0:Tranport"] = "false";
         }, cancel );
         await using( sp )
         {
@@ -123,12 +124,12 @@ public class FeatureNamesTests
             (await s.AddRemoteAsync( TestHelper.Monitor, c =>
             {
                 c["PartyName"] = "Dynamic";
-                c["DisallowFeatures"] = "OptOutt";
+                c["OptOutt"] = "false";
             } )).ShouldBeNull();
             (await s.AddRemoteAsync( TestHelper.Monitor, c =>
             {
                 c["PartyName"] = "Dynamic";
-                c["DisallowFeatures"] = "optout";
+                c["optout"] = "false";
             } )).ShouldNotBeNull();
         }
     }

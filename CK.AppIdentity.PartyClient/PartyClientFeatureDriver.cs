@@ -8,7 +8,7 @@ namespace CK.AppIdentity;
 
 /// <summary>
 /// The "PartyClient" feature: the clients of the local parties (the root and the tenant domains, initial or dynamic).
-/// It is allowed by default: "DisallowFeatures": "PartyClient" makes a party without clients.
+/// It is allowed by default: <c>"PartyClient": false</c> makes a party without clients.
 /// <para>
 /// A client is <b>declared</b> by a party, in its "Local:PartyClient:{Name}" section: only the configuration says which
 /// party has which client. A client is a bag of client features (<see cref="ClientFeature"/>): the keys of its section
@@ -23,7 +23,6 @@ namespace CK.AppIdentity;
 ///   client, a unique abstraction implemented once.</item>
 ///   <item>The features are created in their order (a feature after the ones it requires), then their options are
 ///   selected from their section, created from the services and given to them (see <see cref="ClientFeature.Options"/>).</item>
-///   <item>A party that doesn't allow the feature but declares clients is an error.</item>
 /// </list>
 /// </summary>
 public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
@@ -115,18 +114,11 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
 
     bool SetupLocal( IActivityMonitor monitor, ILocalParty local )
     {
+        // Declaring clients declares the feature (its section): a party without the feature has no clients.
+        if( !IsAllowedFeature( local ) ) return true;
         // The declaration is read on the party only (no "Defaults"): a party declares its own clients.
         var section = local.LocalConfiguration.Configuration.TryGetSection( PartyClientSectionName );
         var declared = section?.GetChildren() ?? [];
-        if( !IsAllowedFeature( local ) )
-        {
-            if( declared.Count > 0 )
-            {
-                monitor.Error( $"'{local.FullName}' declares clients ('{declared.Select( c => c.Key ).Concatenate( "', '" )}') but doesn't allow the '{FeatureName}' feature." );
-                return false;
-            }
-            return true;
-        }
         bool success = true;
         var clients = new List<PartyClient>( declared.Count );
         foreach( var c in declared )
