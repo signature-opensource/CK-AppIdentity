@@ -34,6 +34,33 @@ static class StructuralKeys
         "StoreRootPath", "TrashBinRetention", "StrictConfigurationMode"
     };
 
+    // The keys of a party that are not features (the other keys of a party are its features: "true", "false" or the
+    // feature's section). The identity and the structure are checked on their own.
+    static readonly HashSet<string> _localParty = new( StringComparer.OrdinalIgnoreCase ) { "PublicUrl", "Assemblies", "DefaultAssembly" };
+
+    static readonly HashSet<string> _remoteParty = new( StringComparer.OrdinalIgnoreCase )
+    {
+        "FullName", "DomainName", "PartyName", "EnvironmentName", "Address", "Assemblies", "DefaultAssembly"
+    };
+
+    // A "Defaults" section holds the default values of the local parties and of the remotes below it.
+    static readonly HashSet<string> _defaults = new( StringComparer.OrdinalIgnoreCase ) { "PublicUrl", "Assemblies", "DefaultAssembly" };
+
+    /// <summary>
+    /// Gets the keys of a local party (its "Local" section) that are not features.
+    /// </summary>
+    public static IReadOnlySet<string> LocalPartyKeys => _localParty;
+
+    /// <summary>
+    /// Gets the keys of a remote party that are not features.
+    /// </summary>
+    public static IReadOnlySet<string> RemotePartyKeys => _remoteParty;
+
+    /// <summary>
+    /// Gets the keys of a "Defaults" section that are not features.
+    /// </summary>
+    public static IReadOnlySet<string> DefaultsKeys => _defaults;
+
     /// <summary>
     /// Gets the keys of the root.
     /// </summary>

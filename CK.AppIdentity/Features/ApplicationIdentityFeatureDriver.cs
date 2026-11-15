@@ -343,6 +343,6 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <returns>The awaitable.</returns>
     protected Task OnDescriptionChangedAsync( IActivityMonitor monitor, ILocalParty? party = null )
     {
-        return _s._descriptionDriver?.RefreshAsync( monitor, party ) ?? Task.CompletedTask;
+        return _s._describer.RefreshAsync( monitor, party );
     }
 }

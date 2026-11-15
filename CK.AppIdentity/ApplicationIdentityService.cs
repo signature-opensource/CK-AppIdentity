@@ -26,8 +26,8 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
 {
     readonly AppIdentityAgent _agent;
     internal readonly List<ApplicationIdentityFeatureDriver> _builders;
-    // Set by the PartyDescriptionFeatureDriver's constructor.
-    internal PartyDescriptionFeatureDriver? _descriptionDriver;
+    // The description of the parties (intrinsic).
+    internal readonly PartyDescriber _describer;
     internal TaskCompletionSource _initialization;
     readonly internal PerfectEventSender<IOwnedParty> _allPartyChanged;
     internal TenantDomainParty[] _domains;
@@ -52,6 +52,7 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     {
         Throw.CheckNotNullArgument( serviceProvider );
         _serviceProvider = serviceProvider;
+        _describer = new PartyDescriber( this );
         _builders = new List<ApplicationIdentityFeatureDriver>();
         _initialization = new TaskCompletionSource( TaskCreationOptions.RunContinuationsAsynchronously );
         _systemClock = serviceProvider.GetService<ISystemClock>() ?? DefaultClock;

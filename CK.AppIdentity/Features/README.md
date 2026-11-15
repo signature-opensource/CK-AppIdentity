@@ -161,11 +161,16 @@ feature (`"HttpEndpoint": { ... }`); `"KeyManagement": false` turns off a featur
 declaration is the party's own key, otherwise the one of the nearest "Defaults" above it. Without declaration, the
 opt-in/opt-out default of the FeatureDriver (described above) applies.
 
-The names are case insensitive (like the full names of the parties). A key whose value is `true` or `false` and that is
-not the name of a registered feature (its `FeatureName`, or `FeatureName` + "Remote" for an asymmetric feature) is
-reported when the agent starts, and when a dynamic party is added: a warning, an error in `StrictConfigurationMode` (the
-start or the addition fails). A typo in `"KeyManagment": false` would otherwise silently leave a feature allowed by
-default on.
+**The keys of a party are a closed set:** its own keys (`PublicUrl`, `Assemblies` and `DefaultAssembly` in a `Local`;
+the identity, `Address`, `Assemblies` and `DefaultAssembly` on a remote) or features. The settings of a feature are in
+its section (`"KeyManagement": { "KeyRotationDays": 30 }`), and what a package brings to a feature is an option of the
+feature, in the same section.
+
+The names are case insensitive (like the full names of the parties). A key that is neither a key of the party nor the
+name of a registered feature (its `FeatureName`, or `FeatureName` + "Remote" for an asymmetric feature) is reported when
+the agent starts, and when a dynamic party is added: a warning, an error in `StrictConfigurationMode` (the start or the
+addition fails). A typo in `"KeyManagment": false` would otherwise silently leave a feature allowed by default on, and
+a setting misplaced at the root of a party would be ignored.
 
 Thanks to the topological ordering of the FeatureDrivers (described above), a Driver can decide whether a Feature is available
 depending on the status of another Feature (absence, presence, or even some of its configurations). 

@@ -137,8 +137,8 @@ A party states what it is to the others: its public URL, its client applications
 a `PartyDescription` of CK.AppIdentity.Abstractions). The AuthCenter, for instance, builds the links of its mails with the
 URL of the party through which the user acts, and derives the origins it accepts from the URLs of its remotes.
 
-The "PartyDescription" feature ([`PartyDescriptionFeatureDriver`](PartyDescription/PartyDescriptionFeatureDriver.cs), a
-static feature allowed by default) sets it:
+The description is intrinsic to the parties, not a feature: the `ApplicationIdentityService` sets it
+([`PartyDescriber`](PartyDescription/PartyDescriber.cs)):
 - **A local party's public URL is its `Local:PublicUrl`** configuration: an absolute `http` or `https` URL without path,
   query nor fragment (`PartyDescription.TryParsePublicUrl`); an invalid one fails the start.
 - **The feature drivers complete the description of every local party** (the root and the tenant domains alike): a

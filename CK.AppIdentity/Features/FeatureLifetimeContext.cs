@@ -116,10 +116,16 @@ public sealed class FeatureLifetimeContext
     internal async Task<Exception?> ExecuteSetupAsync()
     {
         _targetParty = null;
+        var describer = _agent.ApplicationIdentityService._describer;
+        var locals = GetAllLocals().ToList();
+        // The description is intrinsic: prepared before the drivers set up the parties, computed once they have.
+        bool described = describer.Prepare( _monitor, locals, GetAllRemotes() );
+        _trampoline.Trampoline.Add( () => Task.FromResult( described ) );
         foreach( var d in _drivers )
         {
             _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) ? d.SetupAsync( this ) : Task.FromResult( false ) );
         }
+        if( described ) _trampoline.Trampoline.Add( () => describer.DescribeInitialAsync( _monitor, locals ) );
         await _trampoline.ExecuteAllAsync( _monitor );
         if( _trampoline.Result == TrampolineResult.TotalSuccess ) return null;
         return _trampoline.Error ?? new CKException( $"Initialization result is '{_trampoline.Result}'. It is not safe to continue." );
@@ -128,10 +134,16 @@ public sealed class FeatureLifetimeContext
     internal async Task<TrampolineResult> ExecuteSetupDynamicRemoteAsync( IOwnedParty remote )
     {
         _targetParty = remote;
+        var describer = _agent.ApplicationIdentityService._describer;
+        var locals = GetAllLocals().ToList();
+        bool described = describer.Prepare( _monitor, locals, GetAllRemotes() );
+        _trampoline.Trampoline.Add( () => Task.FromResult( described ) );
         foreach( var d in _drivers )
         {
             _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) ? d.SetupDynamicRemoteAsync( this, remote ) : Task.FromResult( false ) );
         }
+        // A tenant domain added later is described once the drivers have set it up.
+        if( described && locals.Count > 0 ) _trampoline.Trampoline.Add( () => describer.DescribeAsync( _monitor, locals ) );
         await _trampoline.ExecuteAllAsync( _monitor );
         return _trampoline.Result;
     }

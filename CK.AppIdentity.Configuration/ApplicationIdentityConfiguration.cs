@@ -72,18 +72,24 @@ public class ApplicationIdentityConfiguration
     public bool IsAllowedFeature( string featureName, bool isAllowedByDefault ) => GetFeatureDeclaration( featureName ) ?? isAllowedByDefault;
 
     /// <summary>
-    /// Gets the keys of this party and of the "Defaults" above it whose value is <c>true</c> or <c>false</c>: the
-    /// declarations of features that are not configured by a section. A key here that names no feature is a typo
-    /// (that could leave a feature allowed by default on).
+    /// Gets the keys of this party and of the "Defaults" above it that are not keys of the party: the keys of a party
+    /// are its own ones (<see cref="IsPartyKey(string)"/>) or features (<c>true</c>, <c>false</c> or the feature's
+    /// section). A key here that names no feature is an error (a typo could leave a feature allowed by default on).
     /// </summary>
     /// <returns>The distinct keys (case insensitive).</returns>
-    public IEnumerable<string> GetBooleanKeys()
+    public IEnumerable<string> GetFeatureKeys()
     {
-        return _featureLevels.SelectMany( l => l.GetChildren() )
-                             .Where( c => c.Value != null
-                                          && (string.Equals( c.Value, "true", StringComparison.OrdinalIgnoreCase )
-                                              || string.Equals( c.Value, "false", StringComparison.OrdinalIgnoreCase )) )
-                             .Select( c => c.Key )
-                             .Distinct( StringComparer.OrdinalIgnoreCase );
+        if( _featureLevels.IsDefaultOrEmpty ) return [];
+        return _featureLevels[0].GetChildren().Select( c => c.Key ).Where( k => !IsPartyKey( k ) )
+                                .Concat( _featureLevels.Skip( 1 ).SelectMany( l => l.GetChildren() ).Select( c => c.Key ).Where( k => !StructuralKeys.DefaultsKeys.Contains( k ) ) )
+                                .Distinct( StringComparer.OrdinalIgnoreCase );
     }
+
+    /// <summary>
+    /// Gets whether a key is a key of this party that is not a feature (<c>PublicUrl</c> of a local party, <c>Address</c>
+    /// of a remote, the assemblies...).
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>True for a key of the party.</returns>
+    public virtual bool IsPartyKey( string key ) => StructuralKeys.RemotePartyKeys.Contains( key );
 }

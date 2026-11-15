@@ -62,7 +62,7 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     internal Task RaiseRemoteDescriptionChangedAsync( IActivityMonitor monitor, RemoteParty remote ) => _remoteDescriptionChanged.SafeRaiseAsync( monitor, remote );
 
     /// <summary>
-    /// Sets the description of this local party (see <see cref="PartyDescriptionFeatureDriver"/>) and raises
+    /// Sets the description of this local party (see <see cref="PartyDescriber"/>) and raises
     /// <see cref="DescriptionChanged"/> when it changed.
     /// </summary>
     internal async Task SetLocalDescriptionAsync( IActivityMonitor monitor, PartyDescription description )

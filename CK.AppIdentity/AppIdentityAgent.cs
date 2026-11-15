@@ -350,10 +350,10 @@ public sealed class AppIdentityAgent : MicroAgent
         }
     }
 
-    // A key of a party (or of the "Defaults" above it) whose value is true or false declares a feature: it must be the
-    // name of a registered feature (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive.
-    // An unknown name (a typo that would leave a feature allowed by default on) is a warning, an error in
-    // StrictConfigurationMode.
+    // The keys of a party (and of the "Defaults" above it) are its own keys or features: a feature key must be the name
+    // of a registered feature (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive. An
+    // unknown key (a typo that would leave a feature allowed by default on, a setting misplaced at the root of a party
+    // instead of its feature's section) is a warning, an error in StrictConfigurationMode.
     bool CheckFeatureNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         var known = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
@@ -366,7 +366,7 @@ public sealed class AppIdentityAgent : MicroAgent
         foreach( var p in parties )
         {
             ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
-            foreach( var name in c.GetBooleanKeys() )
+            foreach( var name in c.GetFeatureKeys() )
             {
                 if( known.Contains( name ) ) continue;
                 unknown ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );

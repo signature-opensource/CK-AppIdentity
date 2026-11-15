@@ -93,14 +93,10 @@ public class PartyClientFeatureTests
         builder.Services.AddSingleton<ApplicationIdentityService>();
         builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
         // The order of the drivers is their dependencies' one (the engine does it in a real application).
-        // The description driver comes first: it describes the parties once all the drivers have set them up.
-        builder.Services.AddSingleton<PartyDescriptionFeatureDriver>();
-        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
         builder.Services.AddSingleton<ServingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ServingFeatureDriver>() );
         // What the engine generates in a real application.
-        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( PartyDescriptionFeatureDriver ),
-                                                                                      typeof( ServingFeatureDriver ),
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( ServingFeatureDriver ),
                                                                                       typeof( PartyClientFeatureDriver ),
                                                                                       typeof( ServedClientFeature ),
                                                                                       typeof( ToolClientFeature ) ) );

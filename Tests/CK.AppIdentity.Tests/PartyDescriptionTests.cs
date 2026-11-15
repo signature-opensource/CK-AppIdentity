@@ -64,19 +64,7 @@ public class PartyDescriptionTests
         configure?.Invoke( ckApp );
         var configuration = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, ckApp ).ShouldNotBeNull();
         var builder = Host.CreateEmptyApplicationBuilder( new HostApplicationBuilderSettings { DisableDefaults = true } );
-        builder.Services.AddSingleton( configuration );
-        builder.Services.AddSingleton<ApplicationIdentityService>();
-        builder.Services.AddSingleton<IHostedService>( sp => sp.GetRequiredService<ApplicationIdentityService>() );
-        builder.Services.AddSingleton<PartyDescriptionFeatureDriver>();
-        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<PartyDescriptionFeatureDriver>() );
-        builder.Services.AddSingleton<TestContributorFeatureDriver>();
-        builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<TestContributorFeatureDriver>() );
-        foreach( var t in drivers )
-        {
-            builder.Services.AddSingleton( t );
-            builder.Services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( t ) );
-        }
-        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( drivers.Prepend( typeof( TestContributorFeatureDriver ) ).Prepend( typeof( PartyDescriptionFeatureDriver ) ) ) );
+        builder.Services.AddApplicationIdentityForTests( configuration, drivers.Prepend( typeof( TestContributorFeatureDriver ) ) );
         return builder.CKBuild();
     }
 

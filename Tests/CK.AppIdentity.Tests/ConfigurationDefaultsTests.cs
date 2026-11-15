@@ -97,7 +97,8 @@ public class ConfigurationDefaultsTests
         config.LocalConfiguration.GetFeatureDeclaration( "a" ).ShouldBe( true );
         config.LocalConfiguration.GetFeatureDeclaration( "Z" ).ShouldBe( false );
         config.LocalConfiguration.GetFeatureDeclaration( "G" ).ShouldBeNull();
-        config.LocalConfiguration.GetBooleanKeys().ShouldBe( ["A", "Z"], ignoreOrder: true );
+        // The keys of a party are its own ones (PublicUrl...) or features.
+        config.LocalConfiguration.GetFeatureKeys().ShouldBe( ["L", "A", "Z"], ignoreOrder: true );
 
         var r1 = config.Remotes.Single( r => r.PartyName == "$R1" );
         r1.GetFeatureDeclaration( "A" ).ShouldBe( true );
