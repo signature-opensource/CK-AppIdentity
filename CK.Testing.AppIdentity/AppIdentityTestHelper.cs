@@ -76,6 +76,22 @@ public static class AppIdentityTestHelper
     }
 
     /// <summary>
+    /// Registers the <see cref="PartyComponentDirectory"/> of the feature drivers already registered in these services (the
+    /// concrete <see cref="ApplicationIdentityFeatureDriver"/> service types) and of other components (the client features,
+    /// a driver that is required but not registered...). Call it once the drivers are registered.
+    /// </summary>
+    /// <param name="services">These services.</param>
+    /// <param name="otherComponents">The other party components of the directory.</param>
+    /// <returns>These services.</returns>
+    public static IServiceCollection AddPartyComponentDirectory( this IServiceCollection services, params Type[] otherComponents )
+    {
+        var drivers = services.Select( d => d.ServiceType )
+                              .Where( t => t.IsClass && !t.IsAbstract && typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( t ) );
+        services.AddSingleton( CreateComponentDirectory( drivers.Concat( otherComponents ) ) );
+        return services;
+    }
+
+    /// <summary>
     /// Creates a service provider with the <see cref="PartyComponentDirectory"/> of party component types: for a test
     /// that creates its <see cref="ApplicationIdentityService"/> and its drivers itself.
     /// </summary>

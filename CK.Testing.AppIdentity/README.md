@@ -1,4 +1,4 @@
-﻿# CK.Testing.AppIdentity
+# CK.Testing.AppIdentity
 
 Assembles an `ApplicationIdentityService` without the engine, for the tests of the run time of CK.AppIdentity and of the
 packages that bring feature drivers.
@@ -12,6 +12,7 @@ the code that the generated directory is written from. There is no other path: a
 | Method | Use |
 |--------|-----|
 | `IServiceCollection.AddApplicationIdentityForTests( configuration, drivers, otherComponents )` | Registers the configuration, the `ApplicationIdentityService` (and its `IHostedService`), the feature drivers in their order and the directory of the drivers and of the other components (the client features...). |
+| `IServiceCollection.AddPartyComponentDirectory( otherComponents )` | The directory of the feature drivers already registered in the services, and of other components. |
 | `CreateComponentDirectory( types )` | The directory alone. |
 | `CreateServiceProvider( types )` | A service provider with the directory alone: for a test that creates its `ApplicationIdentityService` and its drivers itself. |
 
