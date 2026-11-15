@@ -91,6 +91,59 @@ public static class AppIdentityTestHelper
         return services;
     }
 
+    sealed class TestPartyComponentOptionDirectory : PartyComponentOptionDirectory
+    {
+        public TestPartyComponentOptionDirectory( IReadOnlyDictionary<Type, IReadOnlyList<PartyComponentOptionInfo>> options )
+            : base( options )
+        {
+        }
+    }
+
+    /// <summary>
+    /// Registers a <see cref="PartyComponentOptionDirectory"/> of option types (<see cref="IPartyComponentOption{TOwner}"/>),
+    /// as the engine generates it, but simpler: the options of an owner are in the given order (their topology attributes
+    /// are ignored, they have no requirements) and they are the options of their declared owner type only (not of the types
+    /// derived from it). Their name and whether they are enabled by default come from their attribute; they are created by
+    /// reflection: the <see cref="Microsoft.Extensions.Configuration.IConfiguration"/> parameter of their constructor is
+    /// their configuration, the other ones are services.
+    /// </summary>
+    /// <param name="services">These services.</param>
+    /// <param name="options">The option types, in their order.</param>
+    /// <returns>These services.</returns>
+    public static IServiceCollection AddPartyComponentOptions( this IServiceCollection services, params Type[] options )
+    {
+        var byOwner = new Dictionary<Type, List<PartyComponentOptionInfo>>();
+        foreach( var t in options )
+        {
+            var owner = t.GetInterfaces().Single( i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> ) )
+                         .GetGenericArguments()[0];
+            var a = t.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().Single();
+            var ctor = t.GetConstructors().Single();
+            var name = t.Name.EndsWith( "Option", StringComparison.Ordinal ) && t.Name.Length > 6 ? t.Name[..^6] : t.Name;
+            var info = new PartyComponentOptionInfo( name, t, a.IsEnabledByDefault, [], ( sp, configuration ) =>
+            {
+                var args = ctor.GetParameters()
+                               .Select( p => p.ParameterType == typeof( Microsoft.Extensions.Configuration.IConfiguration )
+                                                ? configuration
+                                                : sp.GetRequiredService( p.ParameterType ) )
+                               .ToArray();
+                try
+                {
+                    return ctor.Invoke( args );
+                }
+                catch( System.Reflection.TargetInvocationException ex ) when( ex.InnerException != null )
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw( ex.InnerException );
+                    throw;
+                }
+            } );
+            if( !byOwner.TryGetValue( owner, out var list ) ) byOwner.Add( owner, list = new List<PartyComponentOptionInfo>() );
+            list.Add( info );
+        }
+        services.AddSingleton<PartyComponentOptionDirectory>( new TestPartyComponentOptionDirectory( byOwner.ToDictionary( kv => kv.Key, kv => (IReadOnlyList<PartyComponentOptionInfo>)kv.Value ) ) );
+        return services;
+    }
+
     /// <summary>
     /// Creates a service provider with the <see cref="PartyComponentDirectory"/> of party component types: for a test
     /// that creates its <see cref="ApplicationIdentityService"/> and its drivers itself.

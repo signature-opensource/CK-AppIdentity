@@ -78,7 +78,7 @@ see [CK.AppIdentity.Engine](../../CK.AppIdentity.Engine/README.md).
 - `TrySelect( monitor, ownerType, ownerSection, out selected )`: the options that the owner's configuration enables, in
   their order, each with its configuration section (a `SelectedPartyComponentOption`).
 - `TryCreate( monitor, ownerType, ownerSection, services, out created )`: selects the options and creates them. An
-  option that throws is an error, logged with its configuration path ("Unable to create the option '...'").
+  option that throws is an error, logged with its configuration path and the exception message ("Unable to create the option '...': ...").
 
 The configuration of an option of a feature driver is looked up in the feature's section of the party, then in the
 "Defaults" above it: each option on its own, the nearest wins (`"Defaults": { "Fake": { "Compression": { "Level": 3 } } }`

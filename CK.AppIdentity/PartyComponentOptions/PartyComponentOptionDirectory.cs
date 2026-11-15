@@ -220,7 +220,7 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
             catch( Exception ex )
             {
                 var path = configuration?.Path ?? (ownerPath != null ? $"{ownerPath}:{info.Name}" : info.Name);
-                monitor.Error( $"Unable to create the option '{path}'.", ex );
+                monitor.Error( $"Unable to create the option '{path}': {ex.Message}", ex );
                 success = false;
             }
         }

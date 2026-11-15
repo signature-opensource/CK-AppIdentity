@@ -113,7 +113,7 @@ public class PartyComponentOptionDirectoryTests
         {
             directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), Section( """{ "Main": { "Level": "high" } }""" ), auto.Services, out created ).ShouldBeFalse();
             created.ShouldBeEmpty();
-            texts.ShouldContain( "Unable to create the option 'Owner:Main'." );
+            texts.ShouldContain( t => t.StartsWith( "Unable to create the option 'Owner:Main': Level must be an integer, not 'high'." ) );
         }
     }
 
