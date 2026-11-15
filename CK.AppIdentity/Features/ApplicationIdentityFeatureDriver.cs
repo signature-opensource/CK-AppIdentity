@@ -2,6 +2,7 @@ using CK.Core;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace CK.AppIdentity;
@@ -17,6 +18,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly ApplicationIdentityService _s;
     readonly string _featureName;
     readonly bool _isAllowedByDefault;
+    // The party component of this driver (a generated specialization is described by its base type): the owner type of its options.
+    readonly System.Type _componentType;
+    // The options of each party (created before the setup of the party).
+    readonly ConditionalWeakTable<IParty, IReadOnlyList<object>> _options;
     // The drivers of an asymmetric feature share this (null for a symmetric feature).
     internal readonly AsymmetricDrivers? _asymmetric;
     // Set by ApplicationIdentityStaticFeatureDriver.
@@ -78,6 +83,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             else asymmetric.Remote = this;
         }
         _asymmetric = asymmetric;
+        _componentType = info.ComponentType;
+        _options = new ConditionalWeakTable<IParty, IReadOnlyList<object>>();
         _isAllowedByDefault = !info.IsOptional;
         _featureName = name;
         // Adding the builder to the list here captures the topological
@@ -198,6 +205,56 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     }
 
     static ApplicationIdentityConfiguration GetConfiguration( IParty p ) => p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
+
+    /// <summary>
+    /// Gets the options of this feature for a party, in their order: the options of this driver
+    /// (<see cref="IPartyComponentOption{TOwner}"/>, <see cref="FeatureOptionAttribute"/>) that the feature's section
+    /// enables. They are created before this driver sets the party up (an option reads its configuration in its
+    /// constructor). Empty when the feature is not allowed on the party.
+    /// </summary>
+    /// <param name="party">The party.</param>
+    /// <returns>The options.</returns>
+    public IReadOnlyList<object> GetOptions( IParty party )
+    {
+        Throw.CheckNotNullArgument( party );
+        return _options.TryGetValue( party, out var o ) ? o : [];
+    }
+
+    /// <summary>
+    /// Gets an option of this feature for a party (see <see cref="GetOptions(IParty)"/>).
+    /// </summary>
+    /// <typeparam name="T">The option type.</typeparam>
+    /// <param name="party">The party.</param>
+    /// <returns>The option, null when it is not enabled.</returns>
+    public T? GetOption<T>( IParty party ) where T : class => GetOptions( party ).OfType<T>().FirstOrDefault();
+
+    // Creates the options of the parties on which this feature is allowed (once per party), before the driver's setup.
+    // The option of a feature is looked up in the party's own keys, then in the "Defaults" above it (the nearest wins).
+    internal bool CreateOptions( IActivityMonitor monitor, IEnumerable<IParty> parties )
+    {
+        var directory = _s.OptionDirectory;
+        if( directory == null ) return true;
+        var options = directory.GetOptions( _componentType );
+        if( options.Count == 0 ) return true;
+        bool success = true;
+        foreach( var p in parties )
+        {
+            if( _options.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
+            var c = GetConfiguration( p );
+            var key = GetFeatureName( p );
+            if( PartyComponentOptionDirectory.TryCreate( monitor,
+                                                         options,
+                                                         name => c.TryGetFeatureSection( key, name ),
+                                                         $"{c.Configuration.Path}:{key}",
+                                                         _s.Services,
+                                                         out var created ) )
+            {
+                _options.Add( p, created );
+            }
+            else success = false;
+        }
+        return success;
+    }
 
     // Called before the setup of the first registered driver of an asymmetric feature: a remote that declares only "XXX"
     // is an error ("XXX" is declared by a local party that is the feature). A local party can declare "XXXRemote": its

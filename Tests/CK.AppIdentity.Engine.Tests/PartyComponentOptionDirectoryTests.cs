@@ -3,6 +3,7 @@ using CK.Core;
 using CK.Setup;
 using CK.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using Shouldly;
 using System;
@@ -16,7 +17,7 @@ namespace CK.AppIdentity.Engine.Tests;
 [TestFixture]
 public class PartyComponentOptionDirectoryTests
 {
-    static readonly Type[] _model = [typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
+    static readonly Type[] _model = [typeof( PartyComponentOptionDirectory ), typeof( PartyComponentDirectory ), typeof( ApplicationIdentityService ),
                                      typeof( FakePartyFeatureDriver ), typeof( MainOption ), typeof( HeaderOption ), typeof( CompressionOption ),
                                      typeof( FakeClientFeature ), typeof( FakeDerivedClientFeature ), typeof( CachingOption ), typeof( DerivedOnlyOption )];
 
@@ -92,17 +93,64 @@ public class PartyComponentOptionDirectoryTests
         var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
         var compression = directory.GetOptions( typeof( FakePartyFeatureDriver ) ).Single( o => o.Name == "Compression" );
         compression.OptionType.ShouldBe( typeof( CompressionOption ) );
-        var o = compression.Create( auto.Services ).ShouldBeOfType<CompressionOption>();
+        var o = compression.Create( auto.Services, null ).ShouldBeOfType<CompressionOption>();
         o.Service.ShouldBeSameAs( auto.Services.GetRequiredService<FakeService>() );
-        directory.GetOptions( typeof( FakePartyFeatureDriver ) ).Single( o => o.Name == "Main" ).Create( auto.Services ).ShouldBeOfType<MainOption>();
+        // The IConfiguration parameter of its constructor is its configuration.
+        var main = directory.GetOptions( typeof( FakePartyFeatureDriver ) ).Single( o => o.Name == "Main" );
+        main.Create( auto.Services, null ).ShouldBeOfType<MainOption>().Level.ShouldBe( 1 );
+        main.Create( auto.Services, Section( """{ "Level": 3 }""" ) ).ShouldBeOfType<MainOption>().Level.ShouldBe( 3 );
+    }
+
+    [Test]
+    public async Task the_options_are_created_with_their_configuration_and_an_invalid_one_is_an_error_Async()
+    {
+        await using var auto = await CreateServicesAsync();
+        var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
+        directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), Section( """{ "Main": { "Level": 3 } }""" ), auto.Services, out var created ).ShouldBeTrue();
+        created.Select( o => o.GetType() ).ShouldBe( [typeof( HeaderOption ), typeof( MainOption ), typeof( CompressionOption )] );
+        created.OfType<MainOption>().Single().Level.ShouldBe( 3 );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), Section( """{ "Main": { "Level": "high" } }""" ), auto.Services, out created ).ShouldBeFalse();
+            created.ShouldBeEmpty();
+            texts.ShouldContain( "Unable to create the option 'Owner:Main'." );
+        }
+    }
+
+    [Test]
+    public async Task a_feature_driver_holds_the_options_of_each_party_Async()
+    {
+        var configuration = TestHelper.CreateDefaultEngineConfiguration();
+        configuration.FirstBinPath.Types.Add( _model );
+        var r = await configuration.RunSuccessfullyAsync();
+        await using var auto = r.LoadMap().CreateAutomaticServices( services =>
+        {
+            services.AddSingleton<FakeService>();
+            services.AddSingleton( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+            {
+                c["StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "OptionsStore" );
+                c["FullName"] = "Test/$OptionsOwner";
+                // Each option is looked up in the party's section, then in the "Defaults" above it.
+                c["Defaults:FakeParty:Main:Level"] = "5";
+                c["Local:FakeParty:Header"] = "false";
+            } ).ShouldNotBeNull() );
+        } );
+        var party = auto.Services.GetRequiredService<ApplicationIdentityService>();
+        await ((IHostedService)party).StartAsync( default );
+        await party.InitializationTask;
+        var driver = auto.Services.GetRequiredService<FakePartyFeatureDriver>();
+        driver.GetOptions( party ).Select( o => o.GetType() ).ShouldBe( [typeof( MainOption ), typeof( CompressionOption )] );
+        driver.GetOption<MainOption>( party ).ShouldNotBeNull().Level.ShouldBe( 5 );
+        driver.GetOption<HeaderOption>( party ).ShouldBeNull();
+        await ((IHostedService)party).StopAsync( default );
     }
 
     // The selection is a pure function of the options and the configuration: it is tested on hand made options.
     static readonly PartyComponentOptionInfo[] _options =
     [
-        new PartyComponentOptionInfo( "Header", typeof( HeaderOption ), true, [], _ => new HeaderOption() ),
-        new PartyComponentOptionInfo( "Main", typeof( MainOption ), false, [], _ => new MainOption() ),
-        new PartyComponentOptionInfo( "Compression", typeof( CompressionOption ), true, ["Main"], sp => new CompressionOption( new FakeService() ) ),
+        new PartyComponentOptionInfo( "Header", typeof( HeaderOption ), true, [], (_, _) => new HeaderOption() ),
+        new PartyComponentOptionInfo( "Main", typeof( MainOption ), false, [], (_, c) => new MainOption( c ) ),
+        new PartyComponentOptionInfo( "Compression", typeof( CompressionOption ), true, ["Main"], (sp, _) => new CompressionOption( new FakeService() ) ),
     ];
 
     static ImmutableConfigurationSection Section( string json )
@@ -156,13 +204,13 @@ public class PartyComponentOptionDirectoryTests
     {
         var options = new[]
         {
-            new PartyComponentOptionInfo( "A", typeof( object ), false, [], _ => new object() ),
-            new PartyComponentOptionInfo( "B", typeof( object ), true, ["A"], _ => new object() ),
-            new PartyComponentOptionInfo( "C", typeof( object ), true, ["B"], _ => new object() ),
+            new PartyComponentOptionInfo( "A", typeof( object ), false, [], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "B", typeof( object ), true, ["A"], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "C", typeof( object ), true, ["B"], (_, _) => new object() ),
         };
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, null, out var selected ).ShouldBeTrue();
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, (ImmutableConfigurationSection?)null, out var selected ).ShouldBeTrue();
             selected.ShouldBeEmpty();
             texts.ShouldContain( "The option 'B' (enabled by default) is disabled: it requires the option 'A' that is disabled." );
             texts.ShouldContain( "The option 'C' (enabled by default) is disabled: it requires the option 'B' that is disabled." );
@@ -195,5 +243,9 @@ public class PartyComponentOptionDirectoryTests
                                      typeof( Bad.TwoConstructorsOption ) );
         await CheckEngineErrorAsync( "have the same name 'Main'.",
                                      typeof( MainOption ), typeof( Bad.MainOption ) );
+        await CheckEngineErrorAsync( "has more than one IConfiguration parameter: an option has one configuration.",
+                                     typeof( Bad.TwoConfigurationsOption ) );
+        await CheckEngineErrorAsync( "the configuration of an option is a plain IConfiguration.",
+                                     typeof( Bad.SectionOption ) );
     }
 }

@@ -63,6 +63,22 @@ public class ApplicationIdentityConfiguration
     }
 
     /// <summary>
+    /// Gets a section of the configuration of a feature (a setting or an option of the feature): the
+    /// <c>{featureName}:{path}</c> section of the party, otherwise of the nearest "Defaults" above it.
+    /// </summary>
+    /// <param name="featureName">The feature name (its key).</param>
+    /// <param name="path">The path in the feature's section.</param>
+    /// <returns>The section, null when it is not configured.</returns>
+    public ImmutableConfigurationSection? TryGetFeatureSection( string featureName, string path )
+    {
+        foreach( var level in _featureLevels )
+        {
+            if( level.TryGetSection( $"{featureName}:{path}" ) is { } s ) return s;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Computes whether a feature is allowed for this party: it is declared (see <see cref="GetFeatureDeclaration(string)"/>),
     /// or it is not turned off and <paramref name="isAllowedByDefault"/> is true.
     /// </summary>

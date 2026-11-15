@@ -7,8 +7,11 @@ namespace CK.AppIdentity;
 /// or of a party client (decorated with the PartyClientOption attribute of CK.AppIdentity.PartyClient). It applies to its
 /// <typeparamref name="TOwner"/> and to the owners derived from it.
 /// <para>
-/// An option is a plain class (not an auto service): it is created from the services of its owner when the owner applies
-/// its options, then forgotten. What applying an option means is the owner's: an owner defines its own base for its options.
+/// An option is a plain class (not an auto service) that declares its data: its single public constructor reads its
+/// configuration (its <c>IConfiguration</c> parameter, null when the option is enabled by default or by <c>true</c>) into
+/// typed properties, and throws on an invalid value; its other parameters are services. Its owner creates it and holds it
+/// (a feature driver per party, a client feature its own ones). What applying an option means is the owner's: an owner
+/// that acts on its options defines their base.
 /// </para>
 /// <para>
 /// The options of an owner are ordered by the engine: the topology attributes between options (<c>[Requires]</c>,

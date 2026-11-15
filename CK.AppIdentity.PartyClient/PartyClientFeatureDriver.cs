@@ -206,23 +206,9 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     // Selects the options of a created feature from its section, creates them and gives them to the feature.
     bool TrySetOptions( IActivityMonitor monitor, ClientFeature feature, ImmutableConfigurationSection section )
     {
-        var options = new List<(object Option, ImmutableConfigurationSection? Configuration)>();
-        if( _optionDirectory != null )
-        {
-            if( !_optionDirectory.TrySelect( monitor, feature.GetType(), section, out var selected ) ) return false;
-            foreach( var (info, configuration) in selected )
-            {
-                try
-                {
-                    options.Add( (info.Create( _services ), configuration) );
-                }
-                catch( Exception ex )
-                {
-                    monitor.Error( $"Unable to create the option '{info.Name}' of {feature}.", ex );
-                    return false;
-                }
-            }
-        }
-        return feature.SetOptions( monitor, options );
+        if( _optionDirectory == null ) return true;
+        if( !_optionDirectory.TryCreate( monitor, feature.GetType(), section, _services, out var options ) ) return false;
+        feature.Options = options;
+        return true;
     }
 }

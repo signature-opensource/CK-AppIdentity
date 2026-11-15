@@ -1,4 +1,5 @@
 using CK.Core;
+using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,9 +31,18 @@ public sealed class FakeService
 }
 
 // The order: Header (before Main, order only), Main, Compression (after Main, only with it).
+// Main reads its configuration: { "Level": 3 } (1 by default). An invalid level throws.
 [FeatureOption]
 public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
+    public MainOption( IConfiguration? configuration )
+    {
+        var level = configuration?["Level"];
+        if( level != null && !int.TryParse( level, out _ ) ) Throw.ArgumentException( nameof( configuration ), $"Level must be an integer, not '{level}'." );
+        Level = level != null ? int.Parse( level ) : 1;
+    }
+
+    public int Level { get; }
 }
 
 [FeatureOption( IsEnabledByDefault = true ), OptionalRequiredBy<MainOption>]

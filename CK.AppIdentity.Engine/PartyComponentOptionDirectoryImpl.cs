@@ -2,6 +2,7 @@ using CK.AppIdentity;
 using CK.CodeGen;
 using CK.Core;
 using CK.Engine.TypeCollector;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +15,8 @@ namespace CK.Setup;
 /// of the BinPath, ordered by a ResourceSpace island per owner type.
 /// <list type="bullet">
 ///   <item>An option is a concrete class that implements <see cref="IPartyComponentOption{TOwner}"/> (once), decorated
-///   with the <see cref="IPartyComponentOptionAttribute"/> of its kind of owner, with one public constructor.</item>
+///   with the <see cref="IPartyComponentOptionAttribute"/> of its kind of owner, with one public constructor: its
+///   <see cref="IConfiguration"/> parameter (at most one) is its configuration, the other ones are services.</item>
 ///   <item>The owners are the concrete party components of the BinPath to which an option applies (its owner type or a
 ///   type derived from it).</item>
 ///   <item>The island of an owner: its options are the allowed types, the compatible types are the options of an owner
@@ -73,12 +75,18 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                      .AppendSourceString( o.Name ).Append( ", typeof(" ).Append( t.ToGlobalTypeName() ).Append( "), " )
                      .Append( o.IsEnabledByDefault ? "true" : "false" ).Append( ", new string[] {" );
                 foreach( var r in requires ) scope.AppendSourceString( r ).Append( "," );
-                scope.Append( "}, sp => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
+                scope.Append( "}, (sp, configuration) => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
                 bool first = true;
                 foreach( var p in o.Constructor.GetParameters() )
                 {
                     if( !first ) scope.Append( ", " );
                     first = false;
+                    // The option's configuration (null when it is enabled by default or by true), not a service.
+                    if( p.ParameterType == typeof( IConfiguration ) )
+                    {
+                        scope.Append( "configuration" );
+                        continue;
+                    }
                     scope.Append( "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<" )
                          .Append( p.ParameterType.ToGlobalTypeName() ).Append( ">( sp )" );
                 }
@@ -128,7 +136,21 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
             var ctors = t.GetConstructors();
             if( ctors.Length != 1 )
             {
-                monitor.Error( $"The option '{t.ToCSharpName()}' must have exactly one public constructor (its parameters are resolved from the services of its owner)." );
+                monitor.Error( $"The option '{t.ToCSharpName()}' must have exactly one public constructor (its IConfiguration parameter is its configuration, the other ones are resolved from the services of its owner)." );
+                success = false;
+                continue;
+            }
+            var parameters = ctors[0].GetParameters();
+            if( parameters.Count( p => p.ParameterType == typeof( IConfiguration ) ) > 1 )
+            {
+                monitor.Error( $"The constructor of the option '{t.ToCSharpName()}' has more than one IConfiguration parameter: an option has one configuration." );
+                success = false;
+                continue;
+            }
+            var section = parameters.FirstOrDefault( p => p.ParameterType != typeof( IConfiguration ) && typeof( IConfiguration ).IsAssignableFrom( p.ParameterType ) );
+            if( section != null )
+            {
+                monitor.Error( $"The parameter '{section.Name}' of the option '{t.ToCSharpName()}' is a '{section.ParameterType.ToCSharpName()}': the configuration of an option is a plain IConfiguration." );
                 success = false;
                 continue;
             }

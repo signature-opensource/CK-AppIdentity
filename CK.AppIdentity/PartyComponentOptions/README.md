@@ -20,7 +20,14 @@ component it applies to, and is decorated with the attribute of its kind of owne
 [FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]
 public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 {
-    public CompressionOption( FakeService service ) => Service = service;
+    public CompressionOption( IConfiguration? configuration, FakeService service )
+    {
+        var level = configuration?["Level"];
+        Level = level != null ? int.Parse( level ) : 1; // An invalid value throws.
+        Service = service;
+    }
+
+    public int Level { get; }
 
     public FakeService Service { get; }
 }
@@ -31,9 +38,19 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 - **An option applies to its owner type and to the types derived from it**: an option of a base client feature is an option of
   every client derived from it.
 - **An option is opt-in by default**: `IsEnabledByDefault = true` makes it opt-out.
-- **An option is not an auto service**: it is created from the services of its owner when the owner applies its
-  options (its single public constructor receives them), then forgotten.
-- **What applying an option means is the owner's**: an owner defines the base type or the interface of its options.
+- **An option declares its data**: its single public constructor reads its configuration, its `IConfiguration`
+  parameter (a plain one, at most one), into typed properties. The configuration is null when the option is enabled by
+  default or by `true`. **An invalid value is an exception**: the configuration is meant to be validated before it is
+  used (by a "configurator"), a bad value at run time is exceptional. The other parameters are services of its owner.
+- **An option is not an auto service**: it is created with its owner's party (a feature driver) or with its owner (a
+  client feature), and held by it.
+- **Every owner holds its options**: a feature driver holds the options of each party
+  (`ApplicationIdentityFeatureDriver.GetOptions( party )`, `GetOption<T>( party )`), created before it sets the party up
+  (an option that can't be created fails the setup); a client feature holds its own ones (`ClientFeature.Options`,
+  `GetOption<T>()`), created with it. A service of the package that brings an option asks the owner for it: it never reads
+  the configuration itself.
+- **What applying an option means is the owner's**: when the owner acts on its options, it defines their base type or
+  their interface and calls them.
 
 ## The order and the requirements
 
@@ -55,11 +72,17 @@ see [CK.AppIdentity.Engine](../../CK.AppIdentity.Engine/README.md).
 
 - `OwnerTypes`: the owner types that have options.
 - `GetOptions( ownerType )`: the options of an owner type ([`PartyComponentOptionInfo`](PartyComponentOptionInfo.cs):
-  `Name`, `OptionType`, `IsEnabledByDefault`, `Requires`), in their order. `PartyComponentOptionInfo.Create( services )`
-  creates an option from the services of its owner, without reflection.
+  `Name`, `OptionType`, `IsEnabledByDefault`, `Requires`), in their order. `PartyComponentOptionInfo.Create( services,
+  configuration )` creates an option, without reflection.
 - `IsOptionName( ownerType, key )`: whether a key of the owner's section is the name of one of its options.
 - `TrySelect( monitor, ownerType, ownerSection, out selected )`: the options that the owner's configuration enables, in
   their order, each with its configuration section (a `SelectedPartyComponentOption`).
+- `TryCreate( monitor, ownerType, ownerSection, services, out created )`: selects the options and creates them. An
+  option that throws is an error, logged with its configuration path ("Unable to create the option '...'").
+
+The configuration of an option of a feature driver is looked up in the feature's section of the party, then in the
+"Defaults" above it: each option on its own, the nearest wins (`"Defaults": { "Fake": { "Compression": { "Level": 3 } } }`
+applies to every party below that doesn't configure "Compression").
 
 ## The configuration
 

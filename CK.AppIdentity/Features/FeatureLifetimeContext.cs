@@ -113,6 +113,9 @@ public sealed class FeatureLifetimeContext
         return d._asymmetric?.First != d || d.CheckAsymmetricNames( _monitor, GetAllLocals().Concat<IParty>( GetAllRemotes() ) );
     }
 
+    // The options of a driver for the parties of the operation, created before its setup.
+    bool CreateOptions( ApplicationIdentityFeatureDriver d ) => d.CreateOptions( _monitor, GetAllLocals().Concat<IParty>( GetAllRemotes() ) );
+
     internal async Task<Exception?> ExecuteSetupAsync()
     {
         _targetParty = null;
@@ -123,7 +126,7 @@ public sealed class FeatureLifetimeContext
         _trampoline.Trampoline.Add( () => Task.FromResult( described ) );
         foreach( var d in _drivers )
         {
-            _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) ? d.SetupAsync( this ) : Task.FromResult( false ) );
+            _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) && CreateOptions( d ) ? d.SetupAsync( this ) : Task.FromResult( false ) );
         }
         if( described ) _trampoline.Trampoline.Add( () => describer.DescribeInitialAsync( _monitor, locals ) );
         await _trampoline.ExecuteAllAsync( _monitor );
@@ -140,7 +143,7 @@ public sealed class FeatureLifetimeContext
         _trampoline.Trampoline.Add( () => Task.FromResult( described ) );
         foreach( var d in _drivers )
         {
-            _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) ? d.SetupDynamicRemoteAsync( this, remote ) : Task.FromResult( false ) );
+            _trampoline.Trampoline.Add( () => CheckAsymmetricNames( d ) && CreateOptions( d ) ? d.SetupDynamicRemoteAsync( this, remote ) : Task.FromResult( false ) );
         }
         // A tenant domain added later is described once the drivers have set it up.
         if( described && locals.Count > 0 ) _trampoline.Trampoline.Add( () => describer.DescribeAsync( _monitor, locals ) );

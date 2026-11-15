@@ -60,29 +60,18 @@ public abstract class ClientFeature : IPartyComponent
 
     /// <summary>
     /// Gets the options of this feature, in their order: the ones of its type (or of a base of it, see
-    /// <see cref="PartyClientOptionAttribute"/>) enabled by its section. They are set once, when the feature is created
-    /// (see <see cref="InitializeOptions"/>).
+    /// <see cref="PartyClientOptionAttribute"/>) enabled by its section. They are created once, with the feature: an option
+    /// reads its configuration in its constructor (an invalid one makes the client an error). Applying an option is the
+    /// feature's business.
     /// </summary>
-    public IReadOnlyList<object> Options { get; private set; } = [];
+    public IReadOnlyList<object> Options { get; internal set; } = [];
 
     /// <summary>
-    /// Called once, when the feature is created, with its selected options (in their order) and their configuration
-    /// section (null for an option enabled by <c>true</c> or by default). Applying an option is the feature's business.
-    /// <para>
-    /// Accepts the options by default. Returning false (an error must be logged) makes the client an error.
-    /// </para>
+    /// Gets an option of this feature (see <see cref="Options"/>).
     /// </summary>
-    /// <param name="monitor">The monitor to use.</param>
-    /// <param name="options">The selected options and their configuration.</param>
-    /// <returns>True on success, false on error.</returns>
-    protected virtual bool InitializeOptions( IActivityMonitor monitor, IReadOnlyList<(object Option, ImmutableConfigurationSection? Configuration)> options ) => true;
-
-    internal bool SetOptions( IActivityMonitor monitor, IReadOnlyList<(object Option, ImmutableConfigurationSection? Configuration)> options )
-    {
-        if( !InitializeOptions( monitor, options ) ) return false;
-        Options = options.Select( o => o.Option ).ToArray();
-        return true;
-    }
+    /// <typeparam name="T">The option type.</typeparam>
+    /// <returns>The option, null when it is not enabled.</returns>
+    public T? GetOption<T>() where T : class => Options.OfType<T>().FirstOrDefault();
 
     /// <summary>
     /// Contributes to the description of the client (<see cref="PartyClient.Description"/>): its request path (when the

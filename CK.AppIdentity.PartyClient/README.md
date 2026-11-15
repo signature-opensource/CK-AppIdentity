@@ -76,11 +76,11 @@ A package can add an option to a client feature: a class decorated with `[PartyC
 applies to `TFeature` and to the features derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 
-- **The feature driver of the party selects them:** once a feature is created, `PartyClientFeatureDriver` selects the
-  options of its type from its section (their key is their name), creates them from the services and gives them to the
-  feature: `ClientFeature.Options`, in their order.
-- **The feature applies them:** `ClientFeature.InitializeOptions( monitor, options )` is called once with the options and
-  their configuration section. It accepts them by default.
+- **The feature driver of the party creates them:** once a feature is created, `PartyClientFeatureDriver` selects the
+  options of its type from its section (their key is their name), creates them (each one reads its configuration in its
+  constructor: an invalid one throws and makes the client an error) and gives them to the feature: `ClientFeature.Options`,
+  in their order, and `ClientFeature.GetOption<T>()`.
+- **The feature applies them:** applying an option is the feature's business (the base type of its options).
 - **A driver ignores the option keys** of the section it receives: it refuses only a key that is neither one of its own
   nor an option name of its feature (`PartyComponentOptionDirectory.IsOptionName`).
 

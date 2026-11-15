@@ -1,5 +1,6 @@
 using CK.Core;
 using CK.Setup;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,8 +12,10 @@ namespace CK.AppIdentity;
 /// engine: for each owner type, its options (and the options of its base types) in their order, with their
 /// relations and the code that creates them. No runtime reflection.
 /// <para>
-/// An owner selects its options from its configuration section (<see cref="TrySelect"/>), then creates and applies the
-/// selected ones (<see cref="PartyComponentOptionInfo.Create(IServiceProvider)"/>), in this order.
+/// The options of an owner are selected from its configuration section and created (<see cref="TryCreate(IActivityMonitor, Type, ImmutableConfigurationSection?, IServiceProvider, out IReadOnlyList{object})"/>),
+/// in their order: an option reads its configuration in its constructor (an <see cref="IConfiguration"/> parameter). A
+/// feature driver holds the options of each party (see <c>ApplicationIdentityFeatureDriver.GetOptions</c>), a client
+/// feature its own ones.
 /// </para>
 /// </summary>
 [ContextBoundDelegation( "CK.Setup.PartyComponentOptionDirectoryImpl, CK.AppIdentity.Engine" )]
@@ -87,14 +90,33 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
                                   ImmutableConfigurationSection? ownerSection,
                                   out IReadOnlyList<SelectedPartyComponentOption> selected )
     {
+        return TrySelect( monitor, options, name => ownerSection?.TryGetSection( name ), out selected );
+    }
+
+    /// <summary>
+    /// Selects options: see <see cref="TrySelect(IActivityMonitor, IReadOnlyList{PartyComponentOptionInfo}, ImmutableConfigurationSection?, out IReadOnlyList{SelectedPartyComponentOption})"/>.
+    /// The configuration of each option is found by <paramref name="findOption"/>: the configuration of a feature driver
+    /// is looked up in the party's section, then in the "Defaults" above it, for each option.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="options">The ordered options of the owner.</param>
+    /// <param name="findOption">Finds the configuration of an option by its name. Null when not configured.</param>
+    /// <param name="selected">The selected options, in their order.</param>
+    /// <returns>True on success, false on error (errors are logged).</returns>
+    public static bool TrySelect( IActivityMonitor monitor,
+                                  IReadOnlyList<PartyComponentOptionInfo> options,
+                                  Func<string, ImmutableConfigurationSection?> findOption,
+                                  out IReadOnlyList<SelectedPartyComponentOption> selected )
+    {
         Throw.CheckNotNullArgument( monitor );
         Throw.CheckNotNullArgument( options );
+        Throw.CheckNotNullArgument( findOption );
         selected = [];
         bool success = true;
         var enabled = new Dictionary<string, (PartyComponentOptionInfo Info, bool IsExplicit, ImmutableConfigurationSection? Section)>( StringComparer.OrdinalIgnoreCase );
         foreach( var o in options )
         {
-            var s = ownerSection?.TryGetSection( o.Name );
+            var s = findOption( o.Name );
             if( s == null )
             {
                 if( o.IsEnabledByDefault ) enabled.Add( o.Name, (o, false, null) );
@@ -145,6 +167,65 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
                           .Select( o => new SelectedPartyComponentOption( o, enabled[o.Name].Section ) )
                           .ToArray();
         return true;
+    }
+
+    /// <summary>
+    /// Selects the options of an owner from its configuration section and creates them, in their order (see
+    /// <see cref="PartyComponentOptionInfo.Create(IServiceProvider, IConfiguration?)"/>). An option that can't be created
+    /// (an invalid configuration throws) is an error.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="ownerType">The owner type.</param>
+    /// <param name="ownerSection">The configuration section of the owner. Null when the owner has none.</param>
+    /// <param name="services">The owner's services.</param>
+    /// <param name="created">The created options, in their order.</param>
+    /// <returns>True on success, false on error (errors are logged).</returns>
+    public bool TryCreate( IActivityMonitor monitor,
+                           Type ownerType,
+                           ImmutableConfigurationSection? ownerSection,
+                           IServiceProvider services,
+                           out IReadOnlyList<object> created )
+    {
+        return TryCreate( monitor, GetOptions( ownerType ), name => ownerSection?.TryGetSection( name ), ownerSection?.Path, services, out created );
+    }
+
+    /// <summary>
+    /// Selects options and creates them: see <see cref="TryCreate(IActivityMonitor, Type, ImmutableConfigurationSection?, IServiceProvider, out IReadOnlyList{object})"/>.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="options">The ordered options of the owner.</param>
+    /// <param name="findOption">Finds the configuration of an option by its name. Null when not configured.</param>
+    /// <param name="ownerPath">The configuration path of the owner (for the errors).</param>
+    /// <param name="services">The owner's services.</param>
+    /// <param name="created">The created options, in their order.</param>
+    /// <returns>True on success, false on error (errors are logged).</returns>
+    public static bool TryCreate( IActivityMonitor monitor,
+                                  IReadOnlyList<PartyComponentOptionInfo> options,
+                                  Func<string, ImmutableConfigurationSection?> findOption,
+                                  string? ownerPath,
+                                  IServiceProvider services,
+                                  out IReadOnlyList<object> created )
+    {
+        created = [];
+        if( !TrySelect( monitor, options, findOption, out var selected ) ) return false;
+        var result = new object[selected.Count];
+        bool success = true;
+        for( int i = 0; i < result.Length; i++ )
+        {
+            var (info, configuration) = selected[i];
+            try
+            {
+                result[i] = info.Create( services, configuration );
+            }
+            catch( Exception ex )
+            {
+                var path = configuration?.Path ?? (ownerPath != null ? $"{ownerPath}:{info.Name}" : info.Name);
+                monitor.Error( $"Unable to create the option '{path}'.", ex );
+                success = false;
+            }
+        }
+        if( success ) created = result;
+        return success;
     }
 }
 

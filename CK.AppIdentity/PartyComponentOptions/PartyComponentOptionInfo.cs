@@ -1,4 +1,5 @@
 using CK.Core;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 
@@ -9,7 +10,7 @@ namespace CK.AppIdentity;
 /// </summary>
 public sealed class PartyComponentOptionInfo
 {
-    readonly Func<IServiceProvider, object> _factory;
+    readonly Func<IServiceProvider, IConfiguration?, object> _factory;
 
     /// <summary>
     /// Initializes a new <see cref="PartyComponentOptionInfo"/>. Called by the generated code.
@@ -18,12 +19,12 @@ public sealed class PartyComponentOptionInfo
     /// <param name="optionType">The option type.</param>
     /// <param name="isEnabledByDefault">Whether the option is enabled by default.</param>
     /// <param name="requires">The options without which this one cannot be enabled (its non optional relations).</param>
-    /// <param name="factory">Creates the option from the services of its owner.</param>
+    /// <param name="factory">Creates the option from the services of its owner and its configuration.</param>
     public PartyComponentOptionInfo( string name,
                                      Type optionType,
                                      bool isEnabledByDefault,
                                      IReadOnlyList<string> requires,
-                                     Func<IServiceProvider, object> factory )
+                                     Func<IServiceProvider, IConfiguration?, object> factory )
     {
         Name = name;
         OptionType = optionType;
@@ -54,14 +55,18 @@ public sealed class PartyComponentOptionInfo
     public IReadOnlyList<string> Requires { get; }
 
     /// <summary>
-    /// Creates the option from the services of its owner: its constructor parameters are resolved from them.
+    /// Creates the option: its <see cref="IConfiguration"/> constructor parameter, if any, is its configuration, the other
+    /// ones are resolved from the services of its owner. An invalid configuration is an exception.
     /// </summary>
     /// <param name="services">The owner's services.</param>
+    /// <param name="configuration">
+    /// The option's section in the section of its owner. Null when the option is enabled by default or by <c>true</c>.
+    /// </param>
     /// <returns>The option.</returns>
-    public object Create( IServiceProvider services )
+    public object Create( IServiceProvider services, IConfiguration? configuration )
     {
         Throw.CheckNotNullArgument( services );
-        return _factory( services );
+        return _factory( services, configuration );
     }
 
     /// <inheritdoc />
