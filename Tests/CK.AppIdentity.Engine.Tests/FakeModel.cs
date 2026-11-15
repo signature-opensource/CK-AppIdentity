@@ -129,6 +129,7 @@ static class FakeDrivers
 /// The requirements: an abstraction (unique), a feature that implements it, another one that implements it too, a
 /// feature that requires it and a feature that requires the (not allowed by default) FakeFeatureDriver.
 /// </summary>
+[IsSingle]
 public interface IFakeBuild : IPartyComponentAbstraction
 {
 }

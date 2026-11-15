@@ -37,9 +37,9 @@ A client feature declares its requirements with `[Requires<T>]` (a party compone
 
 - **a feature of its party:** `[Requires<HttpEndpointFeatureDriver>]`: the party must allow it;
 - **an abstraction implemented by another feature of the client:** `[Requires<IWebAppBuild>]`. An abstraction is an
-  interface that extends `IPartyComponentAbstraction`. It is unique by default (a client has at most one implementation
-  of it), `[IsMultiple]` makes it multiple. A requirement on an abstraction means "present": on a unique abstraction,
-  exactly one implementation. [`IWebAppBuild`](IWebAppBuild.cs) (the web build of a client: its `ProjectPath`, its
+  interface that extends `IPartyComponentAbstraction` and declares its cardinality: `[IsSingle]` (a client has at most
+  one implementation of it) or `[IsMultiple]`. A requirement on an abstraction means "present": on a single
+  abstraction, exactly one implementation. [`IWebAppBuild`](IWebAppBuild.cs) (the web build of a client: its `ProjectPath`, its
   `OutputPath`, `GetDevServerStart`) is the one of this package.
 
 The engine reads them (no runtime reflection): the `PartyComponentDirectory` of CK.AppIdentity has the requirements, the

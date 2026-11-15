@@ -15,8 +15,9 @@ namespace CK.Setup;
 ///   required type is a party component of the BinPath or an abstraction (an interface that extends
 ///   <see cref="IPartyComponentAbstraction"/>); anything else is an error.</item>
 ///   <item>The abstractions of a component are the interfaces that it implements and that extend
-///   <see cref="IPartyComponentAbstraction"/>. An abstraction decorated with <c>[IsMultiple]</c> can be implemented more
-///   than once in a scope.</item>
+///   <see cref="IPartyComponentAbstraction"/>. An abstraction declares its cardinality: <c>[IsSingle]</c> (at most one
+///   implementation in a scope) or <c>[IsMultiple]</c> (it can be implemented more than once in a scope); an abstraction
+///   that declares none is an error.</item>
 ///   <item>The order: a required component before the ones that require it, the implementations of a required
 ///   abstraction before the ones that require it; otherwise by full name. A cycle is an error.</item>
 /// </list>
@@ -45,7 +46,7 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
             abstractions.Add( t, a );
             foreach( var i in a )
             {
-                if( i.GetCustomAttributes( typeof( IsMultipleAttribute ), false ).Length > 0 ) multiple.Add( i );
+                if( IsMultipleAbstraction( monitor, i, ref success ) ) multiple.Add( i );
             }
             var r = new List<Type>();
             foreach( var attr in t.GetCustomAttributes( inherit: false ) )
@@ -56,6 +57,7 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
                 {
                     if( IsAbstraction( required ) || componentSet.Contains( required ) )
                     {
+                        if( IsAbstraction( required ) && IsMultipleAbstraction( monitor, required, ref success ) ) multiple.Add( required );
                         if( !r.Contains( required ) ) r.Add( required );
                     }
                     else
@@ -89,6 +91,27 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
         return CSCodeGenerationResult.Success;
 
         static bool IsAbstraction( Type i ) => i.IsInterface && i != typeof( IPartyComponentAbstraction ) && typeof( IPartyComponentAbstraction ).IsAssignableFrom( i );
+
+        // The cardinality of an abstraction is declared by a mapping attribute ([IsSingle], [IsMultiple]), on it or
+        // inherited from the abstractions it extends.
+        static bool IsMultipleAbstraction( IActivityMonitor monitor, Type i, ref bool success )
+        {
+            bool single = false;
+            foreach( var t in i.GetInterfaces().Prepend( i ) )
+            {
+                foreach( var a in t.GetCustomAttributes( inherit: false ) )
+                {
+                    if( a is IMultipleMappingAttribute ) return true;
+                    if( a is ISingleMappingAttribute ) single = true;
+                }
+            }
+            if( !single )
+            {
+                monitor.Error( $"The party component abstraction '{i:C}' must declare its cardinality: [IsSingle] (at most one implementation in a scope) or [IsMultiple]." );
+                success = false;
+            }
+            return false;
+        }
     }
 
     // Kahn: a component is ready when its required components and all the implementations of its required abstractions

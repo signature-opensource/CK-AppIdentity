@@ -8,6 +8,7 @@ namespace CK.AppIdentity;
 /// Blazor WebAssembly one...) and knows where its output is and how to start its dev server. The hosting of a client
 /// (the party that serves it) requires it. A client has at most one.
 /// </summary>
+[IsSingle]
 public interface IWebAppBuild : IPartyComponentAbstraction
 {
     /// <summary>

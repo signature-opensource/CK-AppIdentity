@@ -41,8 +41,9 @@ knows them without any reflection at runtime.
   client features).
 - **Their requirements** are the type arguments of their `[Requires<...>]`: a component of the BinPath or an abstraction
   (an interface that extends `IPartyComponentAbstraction`). Anything else is an error.
-- **Their abstractions** are the interfaces they implement that extend `IPartyComponentAbstraction`; an abstraction
-  decorated with `[IsMultiple]` can be implemented more than once in a scope.
+- **Their abstractions** are the interfaces they implement that extend `IPartyComponentAbstraction`. An abstraction
+  declares its cardinality: `[IsSingle]` (at most one implementation in a scope) or `[IsMultiple]` (it can be
+  implemented more than once in a scope); declaring none is an error.
 - **Their order:** a required component before the ones that require it, the implementations of a required abstraction
   before the ones that require it, otherwise by full name. A cycle is an error.
 
