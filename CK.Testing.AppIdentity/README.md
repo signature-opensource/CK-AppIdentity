@@ -15,5 +15,8 @@ the code that the generated directory is written from. There is no other path: a
 | `IServiceCollection.AddPartyComponentDirectory( otherComponents )` | The directory of the feature drivers already registered in the services, and of other components. |
 | `CreateComponentDirectory( types )` | The directory alone. |
 | `CreateServiceProvider( types )` | A service provider with the directory alone: for a test that creates its `ApplicationIdentityService` and its drivers itself. |
+| `IServiceCollection.AddPartyComponentOptions( optionTypes )` | A `PartyComponentOptionDirectory` of option types, simpler than the generated one: the options of an owner are in the given order (no requirements) and apply to their declared owner type only; they are created by reflection (their `IConfiguration` parameter is their configuration). |
 
-The tests that run the engine (a compiled map) have the generated directory: they don't need this package.
+The tests that run the engine (a compiled map) have the generated directories: they don't need this package. A test that
+lists the types of its map lists them too: `typeof( PartyComponentDirectory )`, and `typeof( PartyComponentOptionDirectory )`
+when options are used.
