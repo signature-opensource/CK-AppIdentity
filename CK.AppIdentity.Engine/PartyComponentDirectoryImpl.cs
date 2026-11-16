@@ -22,6 +22,8 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
 
         var result = PartyComponentAnalysis.Analyze( monitor, group.TypeSet );
         if( result == null ) return CSCodeGenerationResult.Failed;
+        // The types drive: the keys of the projected party must name members of their type sets.
+        if( !TypeSetMembershipCheck.Run( monitor, group, result ) ) return CSCodeGenerationResult.Failed;
 
         scope.Append( "public " ).Append( scope.Name )
              .Append( "() : base( new global::CK.AppIdentity.PartyComponentInfo[] {" ).NewLine();

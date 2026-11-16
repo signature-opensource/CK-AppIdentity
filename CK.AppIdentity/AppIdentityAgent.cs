@@ -378,19 +378,25 @@ public sealed class AppIdentityAgent : MicroAgent
                 if( !unknown.TryGetValue( name, out var list ) ) unknown.Add( name, list = new List<IParty>() );
                 list.Add( p );
             }
+            // The types drive: a declared feature must be a member of the party's set (false is fine). The two sides of an
+            // asymmetric feature read the same key ("XXXRemote" on a remote): one of them must be a member.
+            foreach( var g in _service._builders.GroupBy( d => d.GetFeatureName( p ), StringComparer.OrdinalIgnoreCase ) )
+            {
+                var declaration = c.GetFeatureDeclarationSection( g.Key );
+                if( declaration != null
+                    && !string.Equals( declaration.Value, "false", StringComparison.OrdinalIgnoreCase )
+                    && !g.Any( d => d.IsMember( p ) ) )
+                {
+                    notMember ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );
+                    if( !notMember.TryGetValue( g.Key, out var list ) ) notMember.Add( g.Key, list = new List<IParty>() );
+                    list.Add( p );
+                }
+            }
             foreach( var d in _service._builders )
             {
                 var key = d.GetFeatureName( p );
                 var declaration = c.GetFeatureDeclarationSection( key );
-                if( declaration == null ) continue;
-                // The types drive: a declared feature must be a member of the party's set (false is fine).
-                if( !d.IsMember( p ) && !string.Equals( declaration.Value, "false", StringComparison.OrdinalIgnoreCase ) )
-                {
-                    notMember ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );
-                    if( !notMember.TryGetValue( key, out var list ) ) notMember.Add( key, list = new List<IParty>() );
-                    list.Add( p );
-                    continue;
-                }
+                if( declaration == null || !d.IsMember( p ) ) continue;
                 var value = declaration.Value;
                 if( value == null ) continue;
                 bool isFalse = string.Equals( value, "false", StringComparison.OrdinalIgnoreCase );

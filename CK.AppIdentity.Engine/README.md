@@ -63,6 +63,21 @@ test with it):
 
 The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
 
+## The types drive: the type sets of the parties
+
+The App builder contributor (`AppIdentityAppBuilderContributor`) gives each local party (the root, the tenant domains) and
+each client of the root party its type set (`TypeSetConfiguration`): its "Types" and "ExcludedTypes". A set that nothing
+restricts has all the types of its App (the playground). The generated `PartyComponentDirectory` knows the party
+components that are members of each set (`IsMember`): a component that is not a member of the set of a party (of its
+local party for a remote) or of a client doesn't apply to it.
+
+**A key doesn't bring its type in.** The generator checks the projection of the party (the "CK-AppIdentity" section of
+the host's "appsettings.json", written by the App builder before the engine runs): a key that declares a feature of a
+party ("XXXRemote" on a remote: one of the two sides must be a member), a client feature or an option of a feature's
+section (`true` or a section) must name a member of its set; it is an engine error otherwise. `false` is fine, an
+unknown key is left to the run time (a warning). Without a projection (a test, a "CKSetup.xml"), there is nothing to
+check. The run time applies the same rule (`AppIdentityAgent`, the "PartyClient" feature).
+
 ## The parties of the Apps ("ckonf.json")
 
 When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the
