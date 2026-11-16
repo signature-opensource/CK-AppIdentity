@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The generated PartyComponentOptionDirectory (ContextBoundDelegation). -->
-    <PackageReference Include="CK.StObj.Model" Version="36.0.1-0.uc.0.ci.17" />
+    <PackageReference Include="CK.StObj.Model" Version="36.0.1-0.uc.0.ci.18" />
     <ProjectReference Include="..\CK.AppIdentity.Abstractions\CK.AppIdentity.Abstractions.csproj" />
   </ItemGroup>
 </Project>
