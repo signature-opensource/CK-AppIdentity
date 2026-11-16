@@ -124,9 +124,36 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
             }
             else infos.Add( i );
         }
+        return CheckScope( monitor, scopeName, infos, IsMultipleAbstraction, isOuterAvailable ) && success;
+    }
+
+    /// <summary>
+    /// Checks the requirements of the components of a scope (the drivers of a party, the features of a client): each
+    /// required abstraction is implemented in the scope (or in its outer scope), a unique abstraction is implemented at
+    /// most once in the scope, and each required concrete component is in the scope or accepted by <paramref name="isOuterAvailable"/>.
+    /// The same rules apply at build time (the engine checks the scopes declared by the configuration of the parties)
+    /// and at run time.
+    /// </summary>
+    /// <param name="monitor">The monitor that receives the errors.</param>
+    /// <param name="scopeName">The name of the scope, for the errors.</param>
+    /// <param name="infos">The components of the scope.</param>
+    /// <param name="isMultipleAbstraction">Whether an abstraction can be implemented more than once in a scope.</param>
+    /// <param name="isOuterAvailable">Whether a required type is available out of the scope.</param>
+    /// <returns>True on success, false on error (errors are logged).</returns>
+    public static bool CheckScope( IActivityMonitor monitor,
+                                   string scopeName,
+                                   IReadOnlyCollection<PartyComponentInfo> infos,
+                                   Func<Type, bool> isMultipleAbstraction,
+                                   Func<Type, bool> isOuterAvailable )
+    {
+        Throw.CheckNotNullArgument( monitor );
+        Throw.CheckNotNullArgument( infos );
+        Throw.CheckNotNullArgument( isMultipleAbstraction );
+        Throw.CheckNotNullArgument( isOuterAvailable );
+        bool success = true;
         foreach( var g in infos.SelectMany( i => i.Abstractions.Select( a => (Abstraction: a, Info: i) ) ).GroupBy( x => x.Abstraction ) )
         {
-            if( g.Count() > 1 && !IsMultipleAbstraction( g.Key ) )
+            if( g.Count() > 1 && !isMultipleAbstraction( g.Key ) )
             {
                 monitor.Error( $"{scopeName} has more than one '{g.Key.Name}' ('{g.Select( x => x.Info.ComponentType.Name ).Concatenate( "', '" )}'): it can have at most one." );
                 success = false;

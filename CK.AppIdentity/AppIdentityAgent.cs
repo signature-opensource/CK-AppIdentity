@@ -146,7 +146,8 @@ public sealed class AppIdentityAgent : MicroAgent
             Exception? error;
             try
             {
-                if( CheckFeatureKeys( monitor, _service.AllParties.Prepend<IParty>( _service ) ) )
+                if( CheckFeatureKeys( monitor, _service.AllParties.Prepend<IParty>( _service ) )
+                    && CheckPartyScopes( monitor, _service.TenantDomains.Prepend<ILocalParty>( _service ) ) )
                 {
                     var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
                     error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
@@ -271,7 +272,8 @@ public sealed class AppIdentityAgent : MicroAgent
         using( monitor.OpenInfo( $"Initializing {added.Count} parties ({_service._builders.Count} feature builders)." ) )
         {
             if( !CheckNewParties( monitor, added )
-                || !CheckFeatureKeys( monitor, added.Remotes.Concat<IParty>( added.Tenants.SelectMany( t => t.Remotes.Prepend<IParty>( t ) ) ) ) )
+                || !CheckFeatureKeys( monitor, added.Remotes.Concat<IParty>( added.Tenants.SelectMany( t => t.Remotes.Prepend<IParty>( t ) ) ) )
+                || !CheckPartyScopes( monitor, added.Tenants ) )
             {
                 monitor.CloseGroup( "Failed." );
                 return false;
@@ -449,6 +451,25 @@ public sealed class AppIdentityAgent : MicroAgent
             else monitor.Warn( text );
         }
         return success && !strict;
+    }
+
+    // The scope of a local party is its allowed features: a required feature (or abstraction) must be allowed too, a
+    // unique abstraction is implemented at most once (the same rules as the clients, checked at build time too).
+    bool CheckPartyScopes( IActivityMonitor monitor, IEnumerable<ILocalParty> locals )
+    {
+        // Without feature driver, nothing to check (and there may be no directory).
+        if( _service._builders.Count == 0 ) return true;
+        bool success = true;
+        var directory = _service.ComponentDirectory;
+        foreach( var local in locals )
+        {
+            var scope = _service._builders.Where( d => d.IsAllowedFeature( local ) )
+                                          .Select( d => directory.Find( d.ComponentType ) )
+                                          .Where( i => i != null )
+                                          .ToList();
+            success &= PartyComponentDirectory.CheckScope( monitor, $"'{local}'", scope!, directory.IsMultipleAbstraction, _ => false );
+        }
+        return success;
     }
 
     bool CheckNewParties( IActivityMonitor monitor, AddedDynamicParties added )

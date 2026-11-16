@@ -99,4 +99,52 @@ public class TypeSetMembershipTests
         (await RunWithProjectionAsync( """{ "CK-AppIdentity": { "FullName": "Test/$Host", "Local": { "FakeParty": { "Main": false }, "PartyClient": { "A": { "Build": true, "Fake": false } } } } }""" ))
             .Status.ShouldNotBe( RunStatus.Failed );
     }
+
+    // The sets are not restricted (the playground): the scopes declared by the projection are checked.
+    static async Task<(RunStatus Status, string[] Texts)> RunScopesAsync( string appsettings )
+    {
+        var host = TestHelper.TestProjectFolder.Combine( "obj/ScopeHost" );
+        System.IO.Directory.CreateDirectory( host );
+        System.IO.File.WriteAllText( host.AppendPart( "appsettings.json" ), appsettings );
+        var configuration = TestHelper.CreateDefaultEngineConfiguration();
+        configuration.FirstBinPath.ProjectPath = host;
+        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ),
+                                              typeof( PartyComponentDirectory ),
+                                              typeof( ApplicationIdentityService ),
+                                              typeof( PartyClientFeatureDriver ),
+                                              typeof( FakePartyFeatureDriver ),
+                                              typeof( BuildClientFeature ),
+                                              typeof( BuildClientFeatureDriver ),
+                                              typeof( OtherBuildClientFeature ),
+                                              typeof( OtherBuildClientFeatureDriver ),
+                                              typeof( NeedsFakeClientFeature ),
+                                              typeof( NeedsFakeClientFeatureDriver ) );
+        configuration.FirstBinPath.AddTypeSet( new TypeSetConfiguration( "$Host" ) );
+        configuration.FirstBinPath.AddTypeSet( new TypeSetConfiguration( "A" ) { Parent = "$Host" } );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            var r = await configuration.RunAsync();
+            return (r.Status, texts.ToArray());
+        }
+    }
+
+    [Test]
+    public async Task the_scopes_declared_by_the_projection_are_checked_Async()
+    {
+        // The set of the client has both builds (they are members): declaring one of them is fine.
+        (await RunScopesAsync( """{ "CK-AppIdentity": { "FullName": "Test/$Host", "Local": { "PartyClient": { "A": { "Build": true } } } } }""" ))
+            .Status.ShouldNotBe( RunStatus.Failed );
+
+        // Declaring both is ambiguous: IFakeBuild is single.
+        var (status, texts) = await RunScopesAsync( """{ "CK-AppIdentity": { "FullName": "Test/$Host", "Local": { "PartyClient": { "A": { "Build": true, "OtherBuild": true } } } } }""" );
+        status.ShouldBe( RunStatus.Failed );
+        texts.ShouldContain( t => t.StartsWith( "the client 'A' has more than one 'IFakeBuild'" ) );
+
+        // NeedsFake requires the FakeParty feature of its party: the party must declare it.
+        (status, texts) = await RunScopesAsync( """{ "CK-AppIdentity": { "FullName": "Test/$Host", "Local": { "PartyClient": { "A": { "NeedsFake": true } } } } }""" );
+        status.ShouldBe( RunStatus.Failed );
+        texts.ShouldContain( t => t.StartsWith( "'NeedsFakeClientFeature' of the client 'A' requires 'FakePartyFeatureDriver' that the client 'A' doesn't have." ) );
+        (await RunScopesAsync( """{ "CK-AppIdentity": { "FullName": "Test/$Host", "Local": { "FakeParty": true, "PartyClient": { "A": { "NeedsFake": true } } } } }""" ))
+            .Status.ShouldNotBe( RunStatus.Failed );
+    }
 }

@@ -78,6 +78,14 @@ section (`true` or a section) must name a member of its set; it is an engine err
 unknown key is left to the run time (a warning). Without a projection (a test, a "CKSetup.xml"), there is nothing to
 check. The run time applies the same rule (`AppIdentityAgent`, the "PartyClient" feature).
 
+**The scopes.** The same projection gives what each local party and each client will have: its declared members
+(`true` or a section) and its members that are not optional and not turned off. Their requirements and the uniqueness of
+their abstractions are checked with the rules of the run time (`PartyComponentDirectory.CheckScope`): a required component
+or abstraction is there (a client's outer scope is the drivers of its party), a single abstraction (`[IsSingle]`) is
+implemented at most once. The uniqueness applies to the declared scope, not to the set: a set that nothing restricts has
+all the implementations, a client that declares two of them is ambiguous. The run time checks the same scopes at start
+(the parties and the clients).
+
 ## The parties of the Apps ("ckonf.json")
 
 When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the

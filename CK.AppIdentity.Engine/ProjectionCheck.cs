@@ -9,13 +9,25 @@ using System.Linq;
 namespace CK.Setup;
 
 /// <summary>
-/// The build time check of the types drive: in the projection of the party (the "CK-AppIdentity" section of the host's
-/// "appsettings.json", written by the App builder before the engine runs), a key that declares a party component must
-/// name a member of the type set of its party (or of its client); an option enabled in a feature's section must be a
-/// member too. A key doesn't bring its type in. <c>false</c> is fine, an unknown key is left to the run time (a warning).
-/// Without a projection (a test, a "CKSetup.xml"), there is nothing to check.
+/// The build time checks of the projection of the party (the "CK-AppIdentity" section of the host's "appsettings.json",
+/// written by the App builder before the engine runs). Without a projection (a test, a "CKSetup.xml"), there is nothing
+/// to check.
+/// <list type="bullet">
+///   <item>
+///   The types drive: a key that declares a party component must name a member of the type set of its party (or of its
+///   client); an option enabled in a feature's section must be a member too. A key doesn't bring its type in.
+///   <c>false</c> is fine, an unknown key is left to the run time (a warning).
+///   </item>
+///   <item>
+///   The scopes: the drivers that a local party has (its declared members and the ones that are not optional and not
+///   turned off) and the features that a client has (the same, with the drivers of its party as its outer scope) follow
+///   the rules of <see cref="PartyComponentDirectory.CheckScope(IActivityMonitor, string, IReadOnlyCollection{PartyComponentInfo}, Func{Type, bool}, Func{Type, bool})"/>:
+///   a required component or abstraction is there, a unique abstraction is implemented at most once. The uniqueness
+///   applies to the declared scope, not to the set (a set that nothing restricts has all the implementations).
+///   </item>
+/// </list>
 /// </summary>
-static class TypeSetMembershipCheck
+static class ProjectionCheck
 {
     const string PartyClientSectionName = "PartyClient";
     static readonly HashSet<string> _typeSetKeys = new( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
@@ -49,6 +61,7 @@ static class TypeSetMembershipCheck
         var drivers = result.Components.Where( i => typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( i.ComponentType ) ).ToList();
         var clientFeatures = result.Components.Where( i => !typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( i.ComponentType ) ).ToList();
         var options = CollectOptions( monitor, group );
+        var partyDrivers = new Dictionary<string, HashSet<Type>>( StringComparer.OrdinalIgnoreCase );
         bool success = true;
 
         CheckParty( c.PartyName, c.LocalConfiguration, c.Remotes );
@@ -56,8 +69,11 @@ static class TypeSetMembershipCheck
         // The clients are declared by the root party only.
         if( c.LocalConfiguration.Configuration.TryGetSection( PartyClientSectionName ) is { } clients )
         {
+            var outer = partyDrivers[c.PartyName];
             foreach( var client in clients.GetChildren() )
             {
+                var scope = clientFeatures.Where( f => IsMember( client.Key, f.ComponentType ) && IsActive( f, client.TryGetSection( f.FeatureName ) ) ).ToList();
+                success &= PartyComponentDirectory.CheckScope( monitor, $"the client '{client.Key}'", scope, result.MultipleAbstractions.Contains, outer.Contains );
                 foreach( var k in client.GetChildren() )
                 {
                     if( _typeSetKeys.Contains( k.Key ) || IsFalse( k ) ) continue;
@@ -80,6 +96,9 @@ static class TypeSetMembershipCheck
         {
             CheckKeys( partyName, local, isLocal: true );
             foreach( var r in remotes ) CheckKeys( partyName, r, isLocal: false );
+            var scope = drivers.Where( d => IsMember( partyName, d.ComponentType ) && IsActive( d, local.GetFeatureDeclarationSection( d.FeatureName ) ) ).ToList();
+            partyDrivers[partyName] = scope.Select( d => d.ComponentType ).ToHashSet();
+            success &= PartyComponentDirectory.CheckScope( monitor, $"the party '{partyName}'", scope, result.MultipleAbstractions.Contains, _ => false );
         }
 
         // The keys of a party (and of the "Defaults" above it): the drivers that read a key; it is fine when one of them
@@ -126,6 +145,12 @@ static class TypeSetMembershipCheck
             success = false;
         }
     }
+
+    // Whether a component is active given its declaration: a Required one always, otherwise its declaration (true or a
+    // section, not false) or, without declaration, its activation (ByDefault).
+    static bool IsActive( PartyComponentInfo i, ImmutableConfigurationSection? declaration )
+        => i.Activation == TypeActivation.Required
+           || (declaration != null ? !IsFalse( declaration ) : i.Activation == TypeActivation.ByDefault);
 
     // The key of a feature driver in a party: its feature name, "XXXRemote" for an asymmetric feature on a remote.
     static string ConfigurationKey( PartyComponentInfo d, bool isLocal ) => !isLocal && d.Side != FeatureSide.None ? d.FeatureName + "Remote" : d.FeatureName;

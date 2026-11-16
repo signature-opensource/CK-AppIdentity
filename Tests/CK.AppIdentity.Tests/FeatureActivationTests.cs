@@ -39,6 +39,14 @@ public class FeatureActivationTests
         public MustFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
+    // Needy requires OptIn: a party that has Needy must have OptIn.
+    [PartyFeature( "Needy", TypeActivation.Optional )]
+    [Requires<OptInFeatureDriver>]
+    public sealed class NeedyFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
+    {
+        public NeedyFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
+    }
+
     static async Task<(ServiceProvider Services, ApplicationIdentityService Service)> StartAsync( Action<MutableConfigurationSection> configure,
                                                                                                  CancellationToken cancel,
                                                                                                  Dictionary<string, IEnumerable<Type>>? typeSets = null )
@@ -58,7 +66,9 @@ public class FeatureActivationTests
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<OptOutFeatureDriver>() );
         services.AddSingleton<MustFeatureDriver>();
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<MustFeatureDriver>() );
-        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( [typeof( OptInFeatureDriver ), typeof( OptOutFeatureDriver ), typeof( MustFeatureDriver )], typeSets ) );
+        services.AddSingleton<NeedyFeatureDriver>();
+        services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<NeedyFeatureDriver>() );
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( [typeof( OptInFeatureDriver ), typeof( OptOutFeatureDriver ), typeof( MustFeatureDriver ), typeof( NeedyFeatureDriver )], typeSets ) );
         var sp = services.BuildServiceProvider();
         var s = sp.GetRequiredService<ApplicationIdentityService>();
         await ((IHostedService)s).StartAsync( cancel );
@@ -162,6 +172,25 @@ public class FeatureActivationTests
             await Should.ThrowAsync<CKException>( () => s.InitializationTask.WaitAsync( cancel ) );
             var texts = await CollectAsync( logs, "The feature 'OptOut' is declared by" );
             texts.ShouldContain( t => t.StartsWith( "The feature 'OptOut' is declared by '" ) && t.Contains( "Activation/$Remote" ) && t.Contains( "is not a member of the type set of their party" ) );
+        }
+    }
+
+    [Test]
+    [CancelAfter( 5000 )]
+    public async Task the_scope_of_a_party_is_checked_at_start_Async( CancellationToken cancel )
+    {
+        using var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 200 );
+        var (sp, s) = await StartAsync( c => c["Local:Needy"] = "true", cancel );
+        await using( sp )
+        {
+            await Should.ThrowAsync<CKException>( () => s.InitializationTask.WaitAsync( cancel ) );
+            var texts = await CollectAsync( logs, "requires 'OptInFeatureDriver'" );
+            texts.ShouldContain( t => t.StartsWith( "'NeedyFeatureDriver' of 'Application: Activation/$App" ) && t.Contains( "requires 'OptInFeatureDriver' that" ) );
+        }
+        (sp, s) = await StartAsync( c => { c["Local:Needy"] = "true"; c["Local:OptIn"] = "true"; }, cancel );
+        await using( sp )
+        {
+            await s.InitializationTask.WaitAsync( cancel );
         }
     }
 }

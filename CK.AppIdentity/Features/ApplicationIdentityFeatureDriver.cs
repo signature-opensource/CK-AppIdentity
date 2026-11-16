@@ -135,6 +135,9 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <returns>True when this feature is a member of the party's set (or when the party has no known set).</returns>
     public bool IsMember( IParty p ) => _s.ComponentDirectory.IsMember( TypeSetName( p ), _componentType );
 
+    // The party component that this driver is (a generated specialization is described by its base type).
+    internal System.Type ComponentType => _componentType;
+
     // The type set of a local party is named after its party name; a remote uses the one of its local party.
     internal static string TypeSetName( IParty p ) => p is ILocalParty || p is not IOwnedParty o ? p.PartyName : o.Owner.PartyName;
 
