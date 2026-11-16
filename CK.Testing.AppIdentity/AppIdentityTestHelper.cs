@@ -1,6 +1,7 @@
 using CK.AppIdentity;
 using CK.Core;
-using CK.Engine.TypeCollector;
+using CK.TypeCache;
+using CK.TypeSet;
 using CK.Setup;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

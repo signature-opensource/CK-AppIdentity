@@ -1,7 +1,8 @@
 using CK.AppIdentity;
 using CK.CodeGen;
 using CK.Core;
-using CK.Engine.TypeCollector;
+using CK.TypeCache;
+using CK.TypeSet;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
