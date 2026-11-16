@@ -146,7 +146,7 @@ public sealed class AppIdentityAgent : MicroAgent
             Exception? error;
             try
             {
-                if( CheckFeatureNames( monitor, _service.AllParties.Prepend<IParty>( _service ) ) )
+                if( CheckFeatureKeys( monitor, _service.AllParties.Prepend<IParty>( _service ) ) )
                 {
                     var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
                     error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
@@ -271,7 +271,7 @@ public sealed class AppIdentityAgent : MicroAgent
         using( monitor.OpenInfo( $"Initializing {added.Count} parties ({_service._builders.Count} feature builders)." ) )
         {
             if( !CheckNewParties( monitor, added )
-                || !CheckFeatureNames( monitor, added.Remotes.Concat<IParty>( added.Tenants.SelectMany( t => t.Remotes.Prepend<IParty>( t ) ) ) ) )
+                || !CheckFeatureKeys( monitor, added.Remotes.Concat<IParty>( added.Tenants.SelectMany( t => t.Remotes.Prepend<IParty>( t ) ) ) ) )
             {
                 monitor.CloseGroup( "Failed." );
                 return false;
@@ -354,7 +354,9 @@ public sealed class AppIdentityAgent : MicroAgent
     // of a registered feature (FeatureName, and FeatureName + "Remote" for an asymmetric feature), case insensitive. An
     // unknown key (a typo that would leave a feature allowed by default on, a setting misplaced at the root of a party
     // instead of its feature's section) is a warning, an error in StrictConfigurationMode.
-    bool CheckFeatureNames( IActivityMonitor monitor, IEnumerable<IParty> parties )
+    // The declarations follow the activation of their feature: false on a Required feature is an error, a redundant
+    // true (ByDefault, Required) or false (Optional) is a warning.
+    bool CheckFeatureKeys( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         var known = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
         foreach( var d in _service._builders )
@@ -363,6 +365,8 @@ public sealed class AppIdentityAgent : MicroAgent
             if( d.IsAsymmetric ) known.Add( d.FeatureName + "Remote" );
         }
         Dictionary<string, List<IParty>>? unknown = null;
+        Dictionary<(string Key, string Text), List<IParty>>? redundant = null;
+        Dictionary<string, List<IParty>>? requiredOff = null;
         foreach( var p in parties )
         {
             ApplicationIdentityConfiguration c = p is ILocalParty local ? local.LocalConfiguration : p.Configuration;
@@ -373,8 +377,44 @@ public sealed class AppIdentityAgent : MicroAgent
                 if( !unknown.TryGetValue( name, out var list ) ) unknown.Add( name, list = new List<IParty>() );
                 list.Add( p );
             }
+            foreach( var d in _service._builders )
+            {
+                var key = d.GetFeatureName( p );
+                var value = c.GetFeatureDeclarationSection( key )?.Value;
+                if( value == null ) continue;
+                bool isFalse = string.Equals( value, "false", StringComparison.OrdinalIgnoreCase );
+                if( isFalse && d.Activation == TypeActivation.Required )
+                {
+                    requiredOff ??= new Dictionary<string, List<IParty>>( StringComparer.OrdinalIgnoreCase );
+                    if( !requiredOff.TryGetValue( key, out var list ) ) requiredOff.Add( key, list = new List<IParty>() );
+                    list.Add( p );
+                }
+                else if( isFalse ? d.Activation == TypeActivation.Optional : d.Activation != TypeActivation.Optional )
+                {
+                    var text = isFalse ? "false: the feature is optional, it is off unless declared" : $"true: the feature is {(d.Activation == TypeActivation.Required ? "required" : "allowed by default")}";
+                    redundant ??= new Dictionary<(string, string), List<IParty>>();
+                    if( !redundant.TryGetValue( (key, text), out var list ) ) redundant.Add( (key, text), list = new List<IParty>() );
+                    list.Add( p );
+                }
+            }
         }
-        if( unknown == null ) return true;
+        bool success = true;
+        if( requiredOff != null )
+        {
+            foreach( var (key, list) in requiredOff )
+            {
+                monitor.Error( $"The feature '{key}' is required: it can't be turned off by '{list.Select( p => p.ToString() ).Concatenate( "', '" )}'." );
+            }
+            success = false;
+        }
+        if( redundant != null )
+        {
+            foreach( var ((key, text), list) in redundant )
+            {
+                monitor.Warn( $"Redundant \"{key}\": {text} ('{list.Select( p => p.ToString() ).Concatenate( "', '" )}')." );
+            }
+        }
+        if( unknown == null ) return success;
         bool strict = _service.Configuration.StrictConfigurationMode;
         var knownNames = known.Order( StringComparer.Ordinal ).Concatenate( "', '" );
         foreach( var (name, list) in unknown )
@@ -383,7 +423,7 @@ public sealed class AppIdentityAgent : MicroAgent
             if( strict ) monitor.Error( text + " StrictConfigurationMode is true." );
             else monitor.Warn( text );
         }
-        return !strict;
+        return success && !strict;
     }
 
     bool CheckNewParties( IActivityMonitor monitor, AddedDynamicParties added )

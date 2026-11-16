@@ -16,7 +16,9 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
   client from its configuration. A client feature declares its name and its activation:
   `[PartyClientFeature( "NgApp", TypeActivation.Optional )]` ([`PartyClientFeatureAttribute`](PartyClientFeatureAttribute.cs),
   not inherited: each concrete client feature declares its own). The engine reads it into the `PartyComponentDirectory`
-  (`ClientFeature.Name`); the names are unique among the client features.
+  (`ClientFeature.Name`); the names are unique among the client features. A client has an `Optional` feature when it
+  declares it (`true` or its section), a `ByDefault` one unless it says `false`, a `Required` one always (`false` is an
+  error); a redundant `true` or `false` is a warning.
 - **A party declares its clients**, in its "Local:PartyClient" section: only the configuration says which party has which
   client. The keys of a client are its features (their section is their configuration) and its type set:
 

@@ -17,6 +17,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly ApplicationIdentityService _s;
     readonly string _featureName;
     readonly bool _isAllowedByDefault;
+    readonly TypeActivation _activation;
     // The party component of this driver (a generated specialization is described by its base type): the owner type of its options.
     readonly System.Type _componentType;
     // The options of each party (created before the setup of the party).
@@ -85,6 +86,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         _componentType = info.ComponentType;
         _options = new ConditionalWeakTable<IParty, IReadOnlyList<object>>();
         _isAllowedByDefault = !info.IsOptional;
+        _activation = info.Activation;
         _featureName = name;
         // Adding the builder to the list here captures the topological
         // dependency order of the feature builders.
@@ -121,8 +123,17 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     public bool IsAllowedFeature( IParty p )
     {
         if( _isStatic && IsDynamicFeatureParty( p ) ) return false;
-        return GetConfiguration( p ).IsAllowedFeature( GetFeatureName( p ), _isAllowedByDefault );
+        return IsAllowed( GetConfiguration( p ), GetFeatureName( p ) );
     }
+
+    // A Required feature is always allowed ("false" is a start error, see AppIdentityAgent.CheckFeatureKeys).
+    bool IsAllowed( ApplicationIdentityConfiguration c, string name ) => _activation == TypeActivation.Required
+                                                                         || c.IsAllowedFeature( name, _isAllowedByDefault );
+
+    /// <summary>
+    /// Gets the activation of this feature (declared by its <see cref="PartyFeatureAttribute"/>).
+    /// </summary>
+    public TypeActivation Activation => _activation;
 
     // A dynamic party that is the feature: a static feature cannot be allowed on it. For an asymmetric feature, a remote
     // is the feature when its local party is not (otherwise it uses the feature of its local party).
@@ -131,7 +142,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         if( p is not IOwnedParty { IsDynamic: true } ) return false;
         return _asymmetric == null
                || p is not IRemoteParty r
-               || !GetConfiguration( r.Owner ).IsAllowedFeature( _featureName, _isAllowedByDefault );
+               || !IsAllowed( GetConfiguration( r.Owner ), _featureName );
     }
 
     // Whether the configuration of the party explicitly allows this feature (the default doesn't apply).

@@ -73,10 +73,11 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// Selects options from the configuration section of their owner. In the section, the key of an option is its name:
     /// <list type="bullet">
     ///   <item>a section (<c>"Name": { ... }</c>) or <c>true</c> enables it explicitly;</item>
-    ///   <item><c>false</c> disables it;</item>
+    ///   <item><c>false</c> disables it (an error for a <see cref="TypeActivation.Required"/> option);</item>
     ///   <item>nothing: its default (<see cref="PartyComponentOptionInfo.IsEnabledByDefault"/>).</item>
     /// </list>
-    /// An option enabled explicitly that requires a disabled one is an error. An option enabled by default that requires a
+    /// A redundant <c>true</c> (an option enabled by default) or <c>false</c> (an optional one) is a warning. A required
+    /// option is always enabled. An option enabled explicitly (or required) that requires a disabled one is an error. An option enabled by default that requires a
     /// disabled one is disabled with it (an information is logged). This is a pure function of the options and of the
     /// configuration.
     /// </summary>
@@ -117,15 +118,30 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
         foreach( var o in options )
         {
             var s = findOption( o.Name );
+            // A Required option is always enabled: it is "explicit" (a disabled requirement is an error).
+            bool required = o.Activation == TypeActivation.Required;
             if( s == null )
             {
-                if( o.IsEnabledByDefault ) enabled.Add( o.Name, (o, false, null) );
+                if( o.IsEnabledByDefault ) enabled.Add( o.Name, (o, required, null) );
             }
             else if( s.Value != null )
             {
                 if( bool.TryParse( s.Value, out var b ) )
                 {
-                    if( b ) enabled.Add( o.Name, (o, true, null) );
+                    if( b )
+                    {
+                        if( o.IsEnabledByDefault ) monitor.Warn( $"Redundant '{s.Path}' = true: the option is {(required ? "required" : "enabled by default")}." );
+                        enabled.Add( o.Name, (o, true, null) );
+                    }
+                    else if( required )
+                    {
+                        monitor.Error( $"The option '{s.Path}' is required: it can't be turned off." );
+                        success = false;
+                    }
+                    else if( !o.IsEnabledByDefault )
+                    {
+                        monitor.Warn( $"Redundant '{s.Path}' = false: the option is optional, it is off unless enabled." );
+                    }
                 }
                 else
                 {

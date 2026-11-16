@@ -159,7 +159,15 @@ remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its dr
 A party (a `Local` section, a remote) **declares a feature by its key**: `"AuthCenter": true`, or the section of the
 feature (`"HttpEndpoint": { ... }`); `"KeyManagement": false` turns off a feature that is allowed by default. The
 declaration is the party's own key, otherwise the one of the nearest "Defaults" above it. Without declaration, the
-opt-in/opt-out default of the FeatureDriver (described above) applies.
+activation of the FeatureDriver (described above) applies.
+
+The declarations follow the activation, checked at start (and when a dynamic party is added):
+
+| Activation | No key | `true` | `false` | A section |
+|---|---|---|---|---|
+| `Optional` | off | on | off, a warning (redundant) | on, configured |
+| `ByDefault` | on | on, a warning (redundant) | off | on, configured |
+| `Required` | on | on, a warning (redundant) | **an error**: the party doesn't start | on, configured |
 
 **The keys of a party are a closed set:** its own keys (`PublicUrl`, `Assemblies` and `DefaultAssembly` in a `Local`;
 the identity, `Address`, `Assemblies` and `DefaultAssembly` on a remote) or features. The settings of a feature are in

@@ -137,20 +137,44 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     {
         bool success = true;
         var declared = new List<(IClientFeatureDriver Driver, ImmutableConfigurationSection Section)>();
+        var keys = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
         foreach( var k in client.Configuration.GetChildren() )
         {
             if( TypeSetKeys.Contains( k.Key ) ) continue;
             if( _drivers.TryGetValue( k.Key, out var driver ) )
             {
-                // A feature is declared by its section, or by true when it has no configuration.
-                if( k.Value != null && !(bool.TryParse( k.Value, out var b ) && b) )
+                keys.Add( k.Key );
+                // A feature is declared by its section, or by true when it has no configuration; false turns off a
+                // feature that is not optional (a Required one can't be turned off).
+                var activation = _componentDirectory.Find( driver.FeatureType )!.Activation;
+                if( k.Value == null )
                 {
-                    monitor.Error( $"Invalid \"{k.Path}\" = '{k.Value}': a client feature is declared by true or by its section." );
-                    success = false;
+                    declared.Add( (driver, k) );
+                }
+                else if( bool.TryParse( k.Value, out var b ) )
+                {
+                    if( b )
+                    {
+                        if( activation != TypeActivation.Optional )
+                        {
+                            monitor.Warn( $"Redundant \"{k.Path}\" = true: the client feature is {(activation == TypeActivation.Required ? "required" : "there by default")}." );
+                        }
+                        declared.Add( (driver, k) );
+                    }
+                    else if( activation == TypeActivation.Required )
+                    {
+                        monitor.Error( $"The client feature \"{k.Path}\" is required: it can't be turned off." );
+                        success = false;
+                    }
+                    else if( activation == TypeActivation.Optional )
+                    {
+                        monitor.Warn( $"Redundant \"{k.Path}\" = false: the client feature is optional, it is off unless declared." );
+                    }
                 }
                 else
                 {
-                    declared.Add( (driver, k) );
+                    monitor.Error( $"Invalid \"{k.Path}\" = '{k.Value}': a client feature is declared by true or by its section (false turns off a feature that is there by default)." );
+                    success = false;
                 }
             }
             else
@@ -160,6 +184,14 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
             }
         }
         if( !success ) return false;
+        // The features that are not optional are there without their key (their configuration is empty).
+        foreach( var (name, driver) in _drivers )
+        {
+            if( !keys.Contains( name ) && _componentDirectory.Find( driver.FeatureType )!.Activation != TypeActivation.Optional )
+            {
+                declared.Add( (driver, client.Configuration.GetSection( name )) );
+            }
+        }
         if( declared.Count == 0 )
         {
             monitor.Error( $"The {client} has no feature." );

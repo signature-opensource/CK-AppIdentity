@@ -52,12 +52,23 @@ public class ApplicationIdentityConfiguration
     /// <returns>The declaration or null.</returns>
     public bool? GetFeatureDeclaration( string featureName )
     {
+        return GetFeatureDeclarationSection( featureName ) is { } s
+                ? !(s.Value != null && string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase ))
+                : null;
+    }
+
+    /// <summary>
+    /// Gets the key that declares a feature for this party: the one of the party, otherwise of the nearest "Defaults"
+    /// above it. Its <see cref="ImmutableConfigurationSection.Value"/> is <c>true</c> or <c>false</c>, or it is the
+    /// feature's section. Null when the feature is not declared.
+    /// </summary>
+    /// <param name="featureName">The feature name.</param>
+    /// <returns>The declaring key or null.</returns>
+    public ImmutableConfigurationSection? GetFeatureDeclarationSection( string featureName )
+    {
         foreach( var level in _featureLevels )
         {
-            if( level.TryGetSection( featureName ) is { } s )
-            {
-                return !(s.Value != null && string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase ));
-            }
+            if( level.TryGetSection( featureName ) is { } s ) return s;
         }
         return null;
     }

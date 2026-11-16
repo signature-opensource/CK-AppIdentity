@@ -200,6 +200,43 @@ public class PartyComponentOptionDirectoryTests
     }
 
     [Test]
+    public void selection_follows_the_activation()
+    {
+        var options = new[]
+        {
+            new PartyComponentOptionInfo( "Opt", typeof( object ), TypeActivation.Optional, [], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "ByDefault", typeof( object ), TypeActivation.ByDefault, [], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "Must", typeof( object ), TypeActivation.Required, ["Opt"], (_, _) => new object() ),
+        };
+        // A required option is always enabled: here it requires "Opt" that is disabled, this is an error (not a silent drop).
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( "{}" ), out _ ).ShouldBeFalse();
+            texts.ShouldContain( "The option 'Must' requires the option 'Opt' that is disabled." );
+        }
+        // It can't be turned off.
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": true, "Must": false }""" ), out _ ).ShouldBeFalse();
+            texts.ShouldContain( "The option 'Owner:Must' is required: it can't be turned off." );
+        }
+        // A redundant true or false is a warning.
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": true, "ByDefault": true, "Must": true }""" ), out var selected ).ShouldBeTrue();
+            selected.Select( s => s.Info.Name ).ShouldBe( ["Opt", "ByDefault", "Must"] );
+            texts.ShouldContain( "Redundant 'Owner:ByDefault' = true: the option is enabled by default." );
+            texts.ShouldContain( "Redundant 'Owner:Must' = true: the option is required." );
+        }
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": { "A": 1 }, "ByDefault": false }""" ), out var selected ).ShouldBeTrue();
+            selected.Select( s => s.Info.Name ).ShouldBe( ["Opt", "Must"] );
+            texts.ShouldNotContain( t => t.StartsWith( "Redundant" ) );
+        }
+    }
+
+    [Test]
     public void selection_cascade_of_defaults()
     {
         var options = new[]

@@ -104,8 +104,9 @@ In the owner's configuration section, the key of an option is its name:
 | Case | Result |
 |---|---|
 | The key is absent | The option's default (enabled unless its `Activation` is `Optional`). |
-| `true` or `false` | Enabled or disabled. |
+| `true` or `false` | Enabled or disabled. A redundant `true` (`ByDefault`, `Required`) or `false` (`Optional`) is a warning. |
+| `false` on a `Required` option | An error (a required option is always enabled). |
 | A section | Enabled, with this section as its configuration. |
 | Any other value | An error. |
-| An option enabled in the configuration that requires a disabled one | An error. |
+| An option enabled in the configuration (or required) that requires a disabled one | An error. |
 | An option enabled by default that requires a disabled one | Disabled with it (an information is logged), and so on. |

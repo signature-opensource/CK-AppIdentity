@@ -102,7 +102,9 @@ public class PartyClientFeatureTests
         builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( ServingFeatureDriver ),
                                                                                       typeof( PartyClientFeatureDriver ),
                                                                                       typeof( ServedClientFeature ),
-                                                                                      typeof( ToolClientFeature ) ) );
+                                                                                      typeof( ToolClientFeature ),
+                                                                                      typeof( AlwaysClientFeature ),
+                                                                                      typeof( MustClientFeature ) ) );
         foreach( var d in drivers )
         {
             builder.Services.AddSingleton( d );
@@ -114,6 +116,75 @@ public class PartyClientFeatureTests
     }
 
     static readonly Type[] _drivers = [typeof( ServedClientFeatureDriver ), typeof( ToolClientFeatureDriver )];
+
+    /// <summary>
+    /// A client feature there by default ("Always": false turns it off).
+    /// </summary>
+    [PartyClientFeature( "Always", TypeActivation.ByDefault )]
+    public sealed class AlwaysClientFeature : ClientFeature
+    {
+        public AlwaysClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+    }
+
+    public sealed class AlwaysClientFeatureDriver : ClientFeatureDriver<AlwaysClientFeature>
+    {
+        protected override AlwaysClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+    }
+
+    /// <summary>
+    /// A required client feature: every client has it.
+    /// </summary>
+    [PartyClientFeature( "Must", TypeActivation.Required )]
+    public sealed class MustClientFeature : ClientFeature
+    {
+        public MustClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+    }
+
+    public sealed class MustClientFeatureDriver : ClientFeatureDriver<MustClientFeature>
+    {
+        protected override MustClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
+    }
+
+    static readonly Type[] _activationDrivers = [typeof( ToolClientFeatureDriver ), typeof( AlwaysClientFeatureDriver ), typeof( MustClientFeatureDriver )];
+
+    static string[] FeatureNames( IHost host ) => host.Services.GetRequiredService<ApplicationIdentityService>()
+                                                      .GetRequiredFeature<PartyClientFeature>().Clients.Single()
+                                                      .Features.Select( f => f.Name ).Order().ToArray();
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task the_client_features_follow_their_activation_Async( CancellationToken cancel )
+    {
+        // Always and Must are there without their key.
+        using( var host = BuildHost( c => c["Local:PartyClient:App:Tool"] = "true", _activationDrivers ) )
+        {
+            await host.StartAsync( cancel );
+            FeatureNames( host ).ShouldBe( ["Always", "Must", "Tool"] );
+            await host.StopAsync( cancel );
+        }
+        // false turns off a feature there by default; a redundant declaration is a warning.
+        using( var logs = new AllMonitorsTexts() )
+        using( var host = BuildHost( c =>
+        {
+            c["Local:PartyClient:App:Tool"] = "false";
+            c["Local:PartyClient:App:Always"] = "false";
+            c["Local:PartyClient:App:Must"] = "true";
+        }, _activationDrivers ) )
+        {
+            await host.StartAsync( cancel );
+            FeatureNames( host ).ShouldBe( ["Must"] );
+            (await logs.WaitForAsync( "Redundant \"CK-AppIdentity:Local:PartyClient:App:Tool\" = false: the client feature is optional, it is off unless declared." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "Redundant \"CK-AppIdentity:Local:PartyClient:App:Must\" = true: the client feature is required." )).ShouldBeTrue();
+            await host.StopAsync( cancel );
+        }
+        // A required feature can't be turned off.
+        using( var logs = new AllMonitorsTexts() )
+        using( var host = BuildHost( c => c["Local:PartyClient:App:Must"] = "false", _activationDrivers ) )
+        {
+            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
+            (await logs.WaitForAsync( "The client feature \"CK-AppIdentity:Local:PartyClient:App:Must\" is required: it can't be turned off." )).ShouldBeTrue();
+        }
+    }
 
     [Test]
     [CancelAfter( 10000 )]
@@ -163,7 +234,7 @@ public class PartyClientFeatureTests
         using var host = BuildHost( c => c["Local:PartyClient:App:Tool"] = "maybe", _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( "Invalid \"CK-AppIdentity:Local:PartyClient:App:Tool\" = 'maybe': a client feature is declared by true or by its section." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "Invalid \"CK-AppIdentity:Local:PartyClient:App:Tool\" = 'maybe': a client feature is declared by true or by its section (false turns off a feature that is there by default)." )).ShouldBeTrue();
         }
     }
 
