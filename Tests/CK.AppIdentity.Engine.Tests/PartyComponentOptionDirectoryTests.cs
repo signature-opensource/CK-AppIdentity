@@ -148,9 +148,9 @@ public class PartyComponentOptionDirectoryTests
     // The selection is a pure function of the options and the configuration: it is tested on hand made options.
     static readonly PartyComponentOptionInfo[] _options =
     [
-        new PartyComponentOptionInfo( "Header", typeof( HeaderOption ), true, [], (_, _) => new HeaderOption() ),
-        new PartyComponentOptionInfo( "Main", typeof( MainOption ), false, [], (_, c) => new MainOption( c ) ),
-        new PartyComponentOptionInfo( "Compression", typeof( CompressionOption ), true, ["Main"], (sp, _) => new CompressionOption( new FakeService() ) ),
+        new PartyComponentOptionInfo( "Header", typeof( HeaderOption ), TypeActivation.ByDefault, [], (_, _) => new HeaderOption() ),
+        new PartyComponentOptionInfo( "Main", typeof( MainOption ), TypeActivation.Optional, [], (_, c) => new MainOption( c ) ),
+        new PartyComponentOptionInfo( "Compression", typeof( CompressionOption ), TypeActivation.ByDefault, ["Main"], (sp, _) => new CompressionOption( new FakeService() ) ),
     ];
 
     static ImmutableConfigurationSection Section( string json )
@@ -204,9 +204,9 @@ public class PartyComponentOptionDirectoryTests
     {
         var options = new[]
         {
-            new PartyComponentOptionInfo( "A", typeof( object ), false, [], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "B", typeof( object ), true, ["A"], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "C", typeof( object ), true, ["B"], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "A", typeof( object ), TypeActivation.Optional, [], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "B", typeof( object ), TypeActivation.ByDefault, ["A"], (_, _) => new object() ),
+            new PartyComponentOptionInfo( "C", typeof( object ), TypeActivation.ByDefault, ["B"], (_, _) => new object() ),
         };
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
@@ -237,7 +237,7 @@ public class PartyComponentOptionDirectoryTests
     {
         await CheckEngineErrorAsync( "The option 'CK.AppIdentity.Engine.Tests.Bad.NoAttributeOption' must be decorated with the attribute of its kind of owner",
                                      typeof( Bad.NoAttributeOption ) );
-        await CheckEngineErrorAsync( "its attribute [PartyClientOption] is the one of another kind of owner.",
+        await CheckEngineErrorAsync( "its attribute [PartyClientFeatureOption] is the one of another kind of owner.",
                                      typeof( Bad.WrongKindOption ) );
         await CheckEngineErrorAsync( "The option 'CK.AppIdentity.Engine.Tests.Bad.TwoConstructorsOption' must have exactly one public constructor",
                                      typeof( Bad.TwoConstructorsOption ) );

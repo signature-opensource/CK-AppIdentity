@@ -138,6 +138,7 @@ public class ConfigurationDefaultsTests
     }
 
     // An optional symmetric feature.
+    [PartyFeature( "Asym", TypeActivation.Optional )]
     public sealed class AsymFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         public AsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }

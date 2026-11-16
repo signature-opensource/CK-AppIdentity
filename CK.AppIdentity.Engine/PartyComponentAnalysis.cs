@@ -24,9 +24,11 @@ namespace CK.Setup;
 ///   that declares none is an error.</item>
 ///   <item>The order: a required component before the ones that require it, the implementations of a required
 ///   abstraction before the ones that require it; otherwise by full name. A cycle is an error.</item>
-///   <item>The feature name and the optionality follow the rules of the packages (see <see cref="FeaturePackages"/>);
-///   the side of an asymmetric feature is the one of its <see cref="PartyFeatureAttribute"/> (it requires an explicit
-///   name, and the two sides of a feature agree on their optionality).</item>
+///   <item>A component is a configurable type (see <see cref="ICachedType.TryGetConfigurableType"/>): a feature driver
+///   declares its <see cref="PartyFeatureAttribute"/> (its feature name, its activation and the side of an asymmetric
+///   feature: the two sides of a feature agree on their activation), a client feature its <c>PartyClientFeatureAttribute</c>.
+///   The configuration names are unique in their scope: among the feature drivers (the keys of a party, "XXXRemote" for
+///   the Remote side of an asymmetric feature) and among the client features (the keys of a client).</item>
 /// </list>
 /// </summary>
 public static class PartyComponentAnalysis
@@ -54,7 +56,7 @@ public static class PartyComponentAnalysis
         bool success = true;
         var requires = new Dictionary<Type, List<Type>>();
         var abstractions = new Dictionary<Type, List<Type>>();
-        var names = new Dictionary<Type, (string? Name, bool IsOptional, FeatureSide Side)>();
+        var names = new Dictionary<Type, (string Name, string Key, TypeActivation Activation, FeatureSide Side)>();
         var multiple = new HashSet<Type>();
         foreach( var c in cached )
         {
@@ -85,28 +87,48 @@ public static class PartyComponentAnalysis
                 }
             }
             requires.Add( t, r );
-            if( !FeaturePackages.TryGetFeatureName( monitor, c, out var packageName, out _ ) )
+            if( !c.TryGetConfigurableType( monitor, out var configurable ) )
             {
                 success = false;
                 continue;
             }
-            var feature = FindPartyFeature( t );
-            var side = feature?.Side ?? FeatureSide.None;
-            if( side != FeatureSide.None && feature!.FeatureName == null )
+            bool isDriver = typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( t );
+            if( configurable == null )
             {
-                monitor.Error( $"The feature driver '{t:C}' is the {side} side of an asymmetric feature: its [PartyFeature] must give the feature name." );
+                monitor.Error( isDriver
+                                ? $"The feature driver '{t:C}' must declare its feature: [PartyFeature( \"Name\", TypeActivation.Optional )] for instance."
+                                : $"The client feature '{t:C}' must declare its name: [PartyClientFeature( \"Name\", TypeActivation.Optional )] for instance." );
                 success = false;
+                continue;
             }
-            // The feature name of a side is the name of the feature (the package name of the Remote side is "XXXRemote").
-            var featureName = side != FeatureSide.None ? feature!.FeatureName : packageName;
-            names.Add( t, (featureName, FeaturePackages.IsOptional( c ), side) );
+            var feature = configurable as PartyFeatureAttribute;
+            if( isDriver != (feature != null) )
+            {
+                monitor.Error( isDriver
+                                ? $"The feature driver '{t:C}' must be decorated with [PartyFeature] (not [{configurable.GetType().ToCSharpName()}])."
+                                : $"The client feature '{t:C}' cannot be decorated with [PartyFeature]: it is not a feature driver." );
+                success = false;
+                continue;
+            }
+            // The feature name of a side is the name of the feature (the configuration name of the Remote side is "XXXRemote").
+            var side = feature?.Side ?? FeatureSide.None;
+            names.Add( t, (feature?.FeatureName ?? configurable.Name, configurable.Name, configurable.Activation, side) );
         }
         if( !success ) return null;
+        // The scopes of the names: the keys of a party (the feature drivers) and the keys of a client (the client features).
+        foreach( var scope in names.GroupBy( kv => typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( kv.Key ) ) )
+        {
+            foreach( var g in scope.GroupBy( kv => kv.Value.Key, StringComparer.OrdinalIgnoreCase ).Where( g => g.Count() > 1 ) )
+            {
+                monitor.Error( $"The {(scope.Key ? "feature drivers" : "client features")} '{g.Select( kv => kv.Key.ToCSharpName() ).Order().Concatenate( "', '" )}' have the same name '{g.Key}': a name is unique among the {(scope.Key ? "features of a party" : "features of a client")}." );
+                success = false;
+            }
+        }
         foreach( var g in names.Where( kv => kv.Value.Side != FeatureSide.None ).GroupBy( kv => kv.Value.Name, StringComparer.OrdinalIgnoreCase ) )
         {
-            if( g.Select( kv => kv.Value.IsOptional ).Distinct().Count() > 1 )
+            if( g.Select( kv => kv.Value.Activation ).Distinct().Count() > 1 )
             {
-                monitor.Error( $"The two sides of the asymmetric feature '{g.Key}' ('{g.Select( kv => kv.Key.ToCSharpName() ).Concatenate( "', '" )}') must agree on their optionality." );
+                monitor.Error( $"The two sides of the asymmetric feature '{g.Key}' ('{g.Select( kv => kv.Key.ToCSharpName() ).Concatenate( "', '" )}') must agree on their activation." );
                 success = false;
             }
         }
@@ -117,7 +139,7 @@ public static class PartyComponentAnalysis
                                                                  requires[t],
                                                                  abstractions[t],
                                                                  names[t].Name,
-                                                                 names[t].IsOptional,
+                                                                 names[t].Activation,
                                                                  names[t].Side ) ).ToList();
         return new Result( infos, multiple );
 
@@ -142,17 +164,6 @@ public static class PartyComponentAnalysis
                 success = false;
             }
             return false;
-        }
-
-        // The closest [PartyFeature] in the base classes (the one that names the feature).
-        static PartyFeatureAttribute? FindPartyFeature( Type t )
-        {
-            for( var b = t; b != null; b = b.BaseType )
-            {
-                var a = b.GetCustomAttribute<PartyFeatureAttribute>( inherit: false );
-                if( a != null ) return a;
-            }
-            return null;
         }
     }
 

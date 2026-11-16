@@ -28,25 +28,25 @@ Features.
 
 ![FeatureDriver](../docs/FeatureDriver.png)
 
-A Feature can be opt-in (optional: a party has it only when it declares it) or opt-out (allowed by default: a party has it
-unless it turns it off). The driver declares it with its [`PartyFeatureAttribute`](PartyFeatureAttribute.cs): without
-its own attribute, a driver is opt-in (the attribute of the base class applies), `[PartyFeature( IsOptional = false )]`
-makes it opt-out.
+A driver declares its feature with its [`PartyFeatureAttribute`](PartyFeatureAttribute.cs): its name and its activation,
+explicitly (the attribute is not inherited, a driver without it is an error of the engine). A Feature can be opt-in
+(`TypeActivation.Optional`: a party has it only when it declares it), opt-out (`TypeActivation.ByDefault`: a party has it
+unless it turns it off) or always there (`TypeActivation.Required`).
 ```csharp
-[PartyFeature( IsOptional = false )]
+[PartyFeature( "KeyManagement", TypeActivation.ByDefault )]
 public sealed class KeyManagementFeatureDriver : ApplicationIdentityFeatureDriver
 {
     public KeyManagementFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 }
 ```
-The engine computes the feature names, the optionality and the sides of the drivers (`PartyComponentAnalysis`,
+The engine reads the feature names, the activation and the sides of the drivers (`PartyComponentAnalysis`,
 CK.AppIdentity.Engine) into the generated `PartyComponentDirectory`: a driver reads them there (no reflection at run time).
 A test that assembles its services without the engine gets the same directory from CK.Testing.AppIdentity.
 
 The configuration then takes over: a party **declares** a feature by its key (see [Feature configuration](#feature-configuration)):
 
-- The feature name is the driver type name without its suffix: a `XXXFeatureDriver` manages the "*XXX*" feature. It is this name that is
-  the key in the configuration.
+- The feature name is the name declared by the driver's `[PartyFeature]` (a `XXXFeatureDriver` usually manages the "*XXX*"
+  feature). It is this name that is the key in the configuration.
 - The driver implementation can then use the `bool IsAllowedFeature( IParty p )` helper method, which gives it the
   declaration of the party (its own key, then the "Defaults" above it), or the opt-in/opt-out default when there is none.
 - Setup methods can fail. Rather than throwing an exception, they are prompted to issue error logs and simply return false (but if they

@@ -8,10 +8,8 @@
     <PackageReference Include="CK.StObj.Engine" Version="36.0.1-0.uc.0.ci.17" />
     <!-- The App builder contributor (the parties of the "ckonf.json"). -->
     <PackageReference Include="CK.Engine" Version="36.0.1-0.uc.0.ci.17" />
-    <!-- The rules of the packages (FeaturePackages: the feature names, the optionality). -->
-    <PackageReference Include="CK.Engine.TypeSet" Version="36.0.2-0.uc.0.ci.14" />
     <!-- The options of an owner are ordered by a ResourceSpace island. -->
-    <PackageReference Include="CK.ResourceSpace" Version="36.0.2-0.uc.0.ci.11" />
+    <PackageReference Include="CK.ResourceSpace" Version="36.0.2-0.uc.0.ci.13" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CK.AppIdentity\CK.AppIdentity.csproj" />

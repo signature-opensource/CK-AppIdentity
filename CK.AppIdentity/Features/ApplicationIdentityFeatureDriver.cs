@@ -12,7 +12,6 @@ namespace CK.AppIdentity;
 /// any other singleton services, including other <see cref="ApplicationIdentityFeatureDriver"/>. 
 /// </summary>
 [CKTypeDefiner]
-[PartyFeature]
 public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFeatureDriver
 {
     readonly ApplicationIdentityService _s;
@@ -36,7 +35,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     }
 
     /// <summary>
-    /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/>. Its feature name, whether it is optional and the
+    /// Initializes a new <see cref="ApplicationIdentityFeatureDriver"/>. Its feature name, its activation and the
     /// side of an asymmetric feature are declared by its <see cref="PartyFeatureAttribute"/> and read in the
     /// <see cref="ApplicationIdentityService.ComponentDirectory"/> (the engine computes them).
     /// <para>
@@ -140,8 +139,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
 
     /// <summary>
     /// Gets this feature name.
-    /// This is this type name without the "FeatureDriver" suffix, or the name declared by its <see cref="PartyFeatureAttribute"/>
-    /// (the same for the two sides of an asymmetric feature).
+    /// This is the name declared by its <see cref="PartyFeatureAttribute"/> (the same for the two sides of an asymmetric
+    /// feature).
     /// </summary>
     public string FeatureName => _featureName;
 
@@ -208,7 +207,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
 
     /// <summary>
     /// Gets the options of this feature for a party, in their order: the options of this driver
-    /// (<see cref="IPartyComponentOption{TOwner}"/>, <see cref="FeatureOptionAttribute"/>) that the feature's section
+    /// (<see cref="IPartyComponentOption{TOwner}"/>, <see cref="PartyFeatureOptionAttribute"/>) that the feature's section
     /// enables. They are created before this driver sets the party up (an option reads its configuration in its
     /// constructor). Empty when the feature is not allowed on the party.
     /// </summary>

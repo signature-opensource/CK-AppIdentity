@@ -19,6 +19,7 @@ public class PartyClientFeatureTests
     /// <summary>
     /// An opt-in feature that the clients of the <see cref="ServedClientFactory"/> require.
     /// </summary>
+    [PartyFeature( "Serving", TypeActivation.Optional )]
     public sealed class ServingFeatureDriver : ApplicationIdentityFeatureDriver
     {
         public ServingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
@@ -37,6 +38,7 @@ public class PartyClientFeatureTests
     /// derived from its client name and has a "Color".
     /// </summary>
     [Requires<ServingFeatureDriver>]
+    [PartyClientFeature( "Served", TypeActivation.Optional )]
     public sealed class ServedClientFeature : ClientFeature
     {
         public ServedClientFeature( PartyClient client, ImmutableConfigurationSection configuration )
@@ -72,6 +74,7 @@ public class PartyClientFeatureTests
     /// <summary>
     /// A local client feature ("Tool"): not served, no requirement.
     /// </summary>
+    [PartyClientFeature( "Tool", TypeActivation.Optional )]
     public sealed class ToolClientFeature : ClientFeature
     {
         public ToolClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }

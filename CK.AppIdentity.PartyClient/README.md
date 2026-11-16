@@ -13,9 +13,10 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
 
 - **A package brings a client feature:** a class that specializes [`ClientFeature`](ClientFeature.cs), and its driver, a
   [`ClientFeatureDriver<T>`](IClientFeatureDriver.cs) (an `[IsMultiple]` auto service) that creates the feature of a
-  client from its configuration. The name of a feature is its type name without the "ClientFeature" suffix
-  (`NgAppClientFeature` is "NgApp", `[ClientFeatureName]` on `ClientFeature`): the engine computes it into the
-  `PartyComponentDirectory` (`ClientFeature.Name`).
+  client from its configuration. A client feature declares its name and its activation:
+  `[PartyClientFeature( "NgApp", TypeActivation.Optional )]` ([`PartyClientFeatureAttribute`](PartyClientFeatureAttribute.cs),
+  not inherited: each concrete client feature declares its own). The engine reads it into the `PartyComponentDirectory`
+  (`ClientFeature.Name`); the names are unique among the client features.
 - **A party declares its clients**, in its "Local:PartyClient" section: only the configuration says which party has which
   client. The keys of a client are its features (their section is their configuration) and its type set:
 
@@ -71,8 +72,8 @@ The declarations are read on the party only: a "Defaults" section doesn't declar
 
 ## The options of a client feature
 
-A package can add an option to a client feature: a class decorated with `[PartyClientOption]`
-([`PartyClientOptionAttribute`](PartyClientOptionAttribute.cs)) that implements `IPartyComponentOption<TFeature>`. It
+A package can add an option to a client feature: a class decorated with `[PartyClientFeatureOption( "Name", TypeActivation.X )]`
+([`PartyClientFeatureOptionAttribute`](PartyClientFeatureOptionAttribute.cs)) that implements `IPartyComponentOption<TFeature>`. It
 applies to `TFeature` and to the features derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 

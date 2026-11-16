@@ -9,23 +9,17 @@ namespace CK.AppIdentity;
 /// A feature of a <see cref="PartyClient"/>: a client is a bag of client features, as a party is a bag of features. A
 /// package that brings a client feature specializes this class and its <see cref="ClientFeatureDriver{T}"/>.
 /// <para>
-/// Its name is its type name without the "ClientFeature" suffix (<c>NgAppClientFeature</c> is "NgApp"): it is its key in
-/// the "Local:PartyClient:{Name}" section of its client. Its requirements are declared with <c>[Requires&lt;T&gt;]</c>: a
+/// Its name is declared by its <see cref="PartyClientFeatureAttribute"/> (<c>[PartyClientFeature( "NgApp", TypeActivation.Optional )]</c>):
+/// it is its key in the "Local:PartyClient:{Name}" section of its client. Its requirements are declared with <c>[Requires&lt;T&gt;]</c>: a
 /// feature driver of the party (<c>[Requires&lt;HttpEndpointFeatureDriver&gt;]</c>), an abstraction implemented by another
 /// feature of the client (<c>[Requires&lt;IWebAppBuild&gt;]</c>, see <see cref="IPartyComponentAbstraction"/>).
 /// </para>
 /// <para>
-/// A client feature is a party component: it owns options (<see cref="PartyClientOptionAttribute"/>).
+/// A client feature is a party component: it owns options (<see cref="PartyClientFeatureOptionAttribute"/>).
 /// </para>
 /// </summary>
-[ClientFeatureName]
 public abstract class ClientFeature : IPartyComponent
 {
-    /// <summary>
-    /// The suffix of the type name of a client feature: its name is its type name without it.
-    /// </summary>
-    public const string TypeNameSuffix = "ClientFeature";
-
     /// <summary>
     /// Initializes a new client feature.
     /// </summary>
@@ -48,7 +42,7 @@ public abstract class ClientFeature : IPartyComponent
     public PartyClient Client { get; }
 
     /// <summary>
-    /// Gets the name of this feature: its type name without the "ClientFeature" suffix (the engine computes it, see
+    /// Gets the name of this feature: the one declared by its <see cref="PartyClientFeatureAttribute"/> (the engine reads it, see
     /// <see cref="PartyComponentInfo.FeatureName"/>). Available once the feature is created.
     /// </summary>
     public string Name => _name ?? Throw.InvalidOperationException<string>( $"The name of the client feature '{GetType().Name}' is set once it is created." );
@@ -60,7 +54,7 @@ public abstract class ClientFeature : IPartyComponent
 
     /// <summary>
     /// Gets the options of this feature, in their order: the ones of its type (or of a base of it, see
-    /// <see cref="PartyClientOptionAttribute"/>) enabled by its section. They are created once, with the feature: an option
+    /// <see cref="PartyClientFeatureOptionAttribute"/>) enabled by its section. They are created once, with the feature: an option
     /// reads its configuration in its constructor (an invalid one makes the client an error). Applying an option is the
     /// feature's business.
     /// </summary>

@@ -25,64 +25,51 @@ public enum FeatureSide
 }
 
 /// <summary>
-/// Declares the feature of a feature driver (an <see cref="ApplicationIdentityFeatureDriver"/>): its name and whether it is
-/// optional. It decorates <see cref="ApplicationIdentityFeatureDriver"/>: a driver without its own attribute manages the
-/// feature named by its type name without the "FeatureDriver" suffix, and is optional (a party has it only when it
-/// declares it). A driver declares its own attribute to change this:
+/// Declares the feature of a feature driver (a concrete <see cref="ApplicationIdentityFeatureDriver"/>): its name and its
+/// activation. It is not inherited: each driver declares its own feature.
 /// <list type="bullet">
-///   <item><c>[PartyFeature( IsOptional = false )]</c>: the feature is allowed by default (a party has it unless it turns it off).</item>
 ///   <item>
-///   <c>[PartyFeature( "AuthCenter", Side = FeatureSide.Local )]</c> and <c>[PartyFeature( "AuthCenter", Side = FeatureSide.Remote )]</c>:
-///   the two drivers of an asymmetric feature. The Local side is declared by "AuthCenter", the Remote side by
-///   "AuthCenterRemote" (their feature names, see <see cref="INamedFeatureAttribute"/>).
+///   <c>[PartyFeature( "HttpEndpoint", TypeActivation.Optional )]</c>: a party has the feature only when it declares it;
+///   <see cref="TypeActivation.ByDefault"/>: a party has it unless it turns it off; <see cref="TypeActivation.Required"/>:
+///   a party always has it.
+///   </item>
+///   <item>
+///   <c>[PartyFeature( "AuthCenter", TypeActivation.Optional, Side = FeatureSide.Local )]</c> and
+///   <c>[PartyFeature( "AuthCenter", TypeActivation.Optional, Side = FeatureSide.Remote )]</c>: the two drivers of an
+///   asymmetric feature. The Local side is declared by "AuthCenter", the Remote side by "AuthCenterRemote" (their
+///   configuration names, see <see cref="IConfigurableTypeAttribute.Name"/>); they agree on their activation.
 ///   </item>
 /// </list>
-/// The engine reads it (the feature names, the optionality, the sides): the drivers get them from the
+/// The engine reads it (the feature names, the activation, the sides): the drivers get them from the
 /// <see cref="PartyComponentDirectory"/>.
 /// </summary>
 [AttributeUsage( AttributeTargets.Class, AllowMultiple = false, Inherited = false )]
-public sealed class PartyFeatureAttribute : Attribute, INamedFeatureAttribute, IOptionalResourceGroupAttribute
+public sealed class PartyFeatureAttribute : Attribute, IConfigurableTypeAttribute
 {
     /// <summary>
-    /// The suffix of the type name of a feature driver.
-    /// </summary>
-    public const string DriverTypeNameSuffix = "FeatureDriver";
-
-    /// <summary>
-    /// Initializes a new attribute: the feature name is the type name without its "FeatureDriver" suffix.
-    /// </summary>
-    public PartyFeatureAttribute()
-    {
-    }
-
-    /// <summary>
-    /// Initializes a new attribute with an explicit feature name (required by the drivers of an asymmetric feature).
+    /// Initializes a new attribute.
     /// </summary>
     /// <param name="featureName">The feature name.</param>
-    public PartyFeatureAttribute( string featureName )
+    /// <param name="activation">The activation of the feature.</param>
+    public PartyFeatureAttribute( string featureName, TypeActivation activation )
     {
-        Throw.CheckNotNullOrWhiteSpaceArgument( featureName );
         FeatureName = featureName;
+        Activation = activation;
     }
 
     /// <summary>
-    /// Gets the explicit feature name. Null when it is the type name without the "FeatureDriver" suffix.
+    /// Gets the feature name. The configuration name of the Remote side of an asymmetric feature is this name followed
+    /// by "Remote" (see <see cref="IConfigurableTypeAttribute.Name"/>).
     /// </summary>
-    public string? FeatureName { get; }
+    public string FeatureName { get; }
 
     /// <summary>
-    /// Gets or sets the side of an asymmetric feature. When it is not <see cref="FeatureSide.None"/>, the <see cref="FeatureName"/>
-    /// is required.
+    /// Gets or sets the side of an asymmetric feature.
     /// </summary>
     public FeatureSide Side { get; init; }
 
-    /// <summary>
-    /// Gets or sets whether the feature is optional: a party has it only when it declares it. Defaults to true. False
-    /// makes the feature allowed by default (a party has it unless it turns it off).
-    /// </summary>
-    public bool IsOptional { get; init; } = true;
+    /// <inheritdoc />
+    public TypeActivation Activation { get; }
 
-    string? INamedFeatureAttribute.Name => FeatureName == null ? null : Side == FeatureSide.Remote ? FeatureName + "Remote" : FeatureName;
-
-    string? INamedFeatureAttribute.TypeNameSuffix => FeatureName == null ? DriverTypeNameSuffix : null;
+    string IConfigurableTypeAttribute.Name => Side == FeatureSide.Remote ? FeatureName + "Remote" : FeatureName;
 }

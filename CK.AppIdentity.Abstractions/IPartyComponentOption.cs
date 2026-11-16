@@ -3,8 +3,8 @@ using CK.Core;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// An option of a party component: an option of a feature driver (decorated with <see cref="FeatureOptionAttribute"/>)
-/// or of a party client (decorated with the PartyClientOption attribute of CK.AppIdentity.PartyClient). It applies to its
+/// An option of a party component: an option of a feature driver (decorated with <see cref="PartyFeatureOptionAttribute"/>)
+/// or of a client feature (decorated with the PartyClientFeatureOption attribute of CK.AppIdentity.PartyClient). It applies to its
 /// <typeparamref name="TOwner"/> and to the owners derived from it.
 /// <para>
 /// An option is a plain class (not an auto service) that declares its data: its single public constructor reads its
@@ -16,7 +16,7 @@ namespace CK.AppIdentity;
 /// <para>
 /// The options of an owner are ordered by the engine: the topology attributes between options (<c>[Requires]</c>,
 /// <c>[RequiredBy]</c> and their optional forms) order them; a non optional relation also means "only with it".
-/// Its name is its type name without its "Option" suffix, and it is configured in its owner's section (see
+/// Its name is declared by its attribute (an option is a configurable type), and it is configured in its owner's section (see
 /// <c>PartyComponentOptionDirectory</c> in CK.AppIdentity).
 /// </para>
 /// </summary>

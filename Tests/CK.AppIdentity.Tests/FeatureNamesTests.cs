@@ -18,7 +18,7 @@ namespace CK.AppIdentity.Tests;
 public class FeatureNamesTests
 {
     // Allowed by default: only "OptOut": false switches it off.
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "OptOut", TypeActivation.ByDefault )]
     public sealed class OptOutFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         public OptOutFeatureDriver( ApplicationIdentityService s ) : base( s ) { }

@@ -12,7 +12,7 @@ using static CK.Testing.MonitorTestHelper;
 namespace CK.AppIdentity.Engine.Tests;
 
 /// <summary>
-/// The names, the optionality and the sides of the feature drivers (the PartyComponentDirectory content).
+/// The names, the activation and the sides of the feature drivers (the PartyComponentDirectory content).
 /// </summary>
 [TestFixture]
 public class PartyComponentAnalysisTests
@@ -26,16 +26,17 @@ public class PartyComponentAnalysisTests
         protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
+    [PartyFeature( "OptIn", TypeActivation.Optional )]
     public sealed class OptInFeatureDriver : NoopDriver { public OptInFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "ByDefault", TypeActivation.ByDefault )]
     public sealed class ByDefaultFeatureDriver : NoopDriver { public ByDefaultFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( "Center", Side = FeatureSide.Local )]
+    [PartyFeature( "Center", TypeActivation.Optional, Side = FeatureSide.Local )]
     [Requires<RemoteCenterFeatureDriver>]
     public sealed class LocalCenterFeatureDriver : NoopDriver { public LocalCenterFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( "Center", Side = FeatureSide.Remote )]
+    [PartyFeature( "Center", TypeActivation.Optional, Side = FeatureSide.Remote )]
     public sealed class RemoteCenterFeatureDriver : NoopDriver { public RemoteCenterFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
     static PartyComponentAnalysis.Result? Analyze( params Type[] types )
@@ -45,14 +46,15 @@ public class PartyComponentAnalysisTests
     }
 
     [Test]
-    public void the_names_the_optionality_and_the_sides()
+    public void the_names_the_activation_and_the_sides()
     {
         var r = Analyze( typeof( OptInFeatureDriver ), typeof( ByDefaultFeatureDriver ), typeof( LocalCenterFeatureDriver ), typeof( RemoteCenterFeatureDriver ) ).ShouldNotBeNull();
         var byType = r.Components.ToDictionary( c => c.ComponentType );
         byType[typeof( OptInFeatureDriver )].FeatureName.ShouldBe( "OptIn" );
         byType[typeof( OptInFeatureDriver )].IsOptional.ShouldBeTrue();
         byType[typeof( ByDefaultFeatureDriver )].IsOptional.ShouldBeFalse();
-        // The two sides have the name of the feature (their package names are "Center" and "CenterRemote").
+        byType[typeof( ByDefaultFeatureDriver )].Activation.ShouldBe( TypeActivation.ByDefault );
+        // The two sides have the name of the feature (their configuration names are "Center" and "CenterRemote").
         byType[typeof( LocalCenterFeatureDriver )].FeatureName.ShouldBe( "Center" );
         byType[typeof( LocalCenterFeatureDriver )].Side.ShouldBe( FeatureSide.Local );
         byType[typeof( RemoteCenterFeatureDriver )].FeatureName.ShouldBe( "Center" );
@@ -62,41 +64,37 @@ public class PartyComponentAnalysisTests
             .ShouldBeGreaterThan( r.Components.ToList().IndexOf( byType[typeof( RemoteCenterFeatureDriver )] ) );
     }
 
-    [PartyFeature( Side = FeatureSide.Local )]
-    public sealed class LocalNoNameFeatureDriver : NoopDriver { public LocalNoNameFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
+    public sealed class UndeclaredFeatureDriver : NoopDriver { public UndeclaredFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( "Mixed", Side = FeatureSide.Local )]
+    [PartyFeature( "Mixed", TypeActivation.Optional, Side = FeatureSide.Local )]
     public sealed class LocalMixedFeatureDriver : NoopDriver { public LocalMixedFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( "Mixed", Side = FeatureSide.Remote, IsOptional = false )]
+    [PartyFeature( "Mixed", TypeActivation.ByDefault, Side = FeatureSide.Remote )]
     public sealed class RemoteMixedFeatureDriver : NoopDriver { public RemoteMixedFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [PartyFeature( "OptIn" )]
+    [PartyFeature( "OptIn", TypeActivation.Optional )]
     public sealed class OtherOptInFeatureDriver : NoopDriver { public OtherOptInFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
 
-    [TestCase( "NoName", "is the Local side of an asymmetric feature: its [PartyFeature] must give the feature name" )]
-    [TestCase( "Mixed", "must agree on their optionality" )]
-    [TestCase( "SameName", "a name can be borne by more than one package only when all of them are IsMultiple" )]
+    // The configuration name of the Remote side is "CenterRemote": it is in the same scope as the other features.
+    [PartyFeature( "CenterRemote", TypeActivation.Optional )]
+    public sealed class CenterRemoteFeatureDriver : NoopDriver { public CenterRemoteFeatureDriver( ApplicationIdentityService s ) : base( s ) { } }
+
+    [TestCase( "Undeclared", "UndeclaredFeatureDriver' must declare its feature" )]
+    [TestCase( "Mixed", "must agree on their activation" )]
+    [TestCase( "SameName", "have the same name 'OptIn': a name is unique among the features of a party" )]
+    [TestCase( "SameAsRemote", "have the same name 'CenterRemote'" )]
     public void the_errors( string kind, string expected )
     {
         Type[] types = kind switch
         {
-            "NoName" => [typeof( LocalNoNameFeatureDriver )],
+            "Undeclared" => [typeof( UndeclaredFeatureDriver )],
             "Mixed" => [typeof( LocalMixedFeatureDriver ), typeof( RemoteMixedFeatureDriver )],
+            "SameAsRemote" => [typeof( LocalCenterFeatureDriver ), typeof( RemoteCenterFeatureDriver ), typeof( CenterRemoteFeatureDriver )],
             _ => [typeof( OptInFeatureDriver ), typeof( OtherOptInFeatureDriver )]
         };
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
-            if( kind == "SameName" )
-            {
-                // The names are unique among the packages of a BinPath (the engine checks them with the type sets).
-                var cache = new GlobalTypeCache();
-                FeaturePackages.CollectFeatureNames( TestHelper.Monitor, types.Select( cache.Get ) ).ShouldBeNull();
-            }
-            else
-            {
-                Analyze( types ).ShouldBeNull();
-            }
+            Analyze( types ).ShouldBeNull();
             texts.ShouldContain( t => t.Contains( expected ) );
         }
     }

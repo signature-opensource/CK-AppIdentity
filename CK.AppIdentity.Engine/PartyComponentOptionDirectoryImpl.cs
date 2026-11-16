@@ -30,7 +30,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         public required ICachedType Type { get; init; }
         public required Type Owner { get; init; }
         public required string Name { get; init; }
-        public required bool IsEnabledByDefault { get; init; }
+        public required TypeActivation Activation { get; init; }
         public required ConstructorInfo Constructor { get; init; }
     }
 
@@ -73,7 +73,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                 var t = o.Type.Type;
                 scope.Append( "new global::CK.AppIdentity.PartyComponentOptionInfo( " )
                      .AppendSourceString( o.Name ).Append( ", typeof(" ).Append( t.ToGlobalTypeName() ).Append( "), " )
-                     .Append( o.IsEnabledByDefault ? "true" : "false" ).Append( ", new string[] {" );
+                     .Append( "global::CK.Core.TypeActivation." ).Append( o.Activation.ToString() ).Append( ", new string[] {" );
                 foreach( var r in requires ) scope.AppendSourceString( r ).Append( "," );
                 scope.Append( "}, (sp, configuration) => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
                 bool first = true;
@@ -122,7 +122,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
             var attributes = t.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().ToList();
             if( attributes.Count != 1 )
             {
-                monitor.Error( $"The option '{t.ToCSharpName()}' must be decorated with the attribute of its kind of owner: [FeatureOption] for the options of a feature driver, [PartyClientOption] for the options of a party client." );
+                monitor.Error( $"The option '{t.ToCSharpName()}' must be decorated with the attribute of its kind of owner: [PartyFeatureOption] for the options of a feature driver, [PartyClientFeatureOption] for the options of a client feature." );
                 success = false;
                 continue;
             }
@@ -154,8 +154,13 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                 success = false;
                 continue;
             }
-            var name = t.Name.EndsWith( "Option", StringComparison.Ordinal ) && t.Name.Length > 6 ? t.Name[..^6] : t.Name;
-            options.Add( new OptionModel { Type = cached, Owner = owner, Name = name, IsEnabledByDefault = a.IsEnabledByDefault, Constructor = ctors[0] } );
+            // The name and the activation are checked by the type cache (an option is a configurable type).
+            if( !cached.TryGetConfigurableType( monitor, out _ ) )
+            {
+                success = false;
+                continue;
+            }
+            options.Add( new OptionModel { Type = cached, Owner = owner, Name = a.Name, Activation = a.Activation, Constructor = ctors[0] } );
         }
         return success;
     }

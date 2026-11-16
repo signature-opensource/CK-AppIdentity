@@ -32,7 +32,7 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
             scope.Append( "}, new global::System.Type[] {" );
             foreach( var a in i.Abstractions ) scope.Append( "typeof(" ).Append( a.ToGlobalTypeName() ).Append( ")," );
             scope.Append( "}, " ).AppendSourceString( i.FeatureName )
-                 .Append( ", " ).Append( i.IsOptional )
+                 .Append( ", global::CK.Core.TypeActivation." ).Append( i.Activation.ToString() )
                  .Append( ", global::CK.AppIdentity.FeatureSide." ).Append( i.Side.ToString() ).Append( " )," ).NewLine();
         }
         scope.Append( "}, new global::System.Collections.Generic.HashSet<global::System.Type>() {" );

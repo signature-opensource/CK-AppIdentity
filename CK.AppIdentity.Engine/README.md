@@ -11,8 +11,9 @@ knows them without any reflection at runtime.
 [`PartyComponentOptionDirectoryImpl`](PartyComponentOptionDirectoryImpl.cs) implements the directory for each BinPath:
 
 1. **The options** are the concrete classes of the BinPath that implement `IPartyComponentOption<TOwner>` (once), with
-   exactly one `IPartyComponentOptionAttribute` (`[FeatureOption]` or `[PartyClientOption]`) whose kind of owner matches
-   `TOwner`, and exactly one public constructor: its `IConfiguration` parameter (a plain one, at most one) is the
+   exactly one `IPartyComponentOptionAttribute` (`[PartyFeatureOption]` or `[PartyClientFeatureOption]`) whose kind of owner
+   matches `TOwner` (its name and its activation are checked by the type cache: `ICachedType.TryGetConfigurableType`), and
+   exactly one public constructor: its `IConfiguration` parameter (a plain one, at most one) is the
    option's configuration, the other ones are services.
 2. **The owners** are the concrete party components (`IPartyComponent`) of the BinPath to which at least one option
    applies (its owner type or a type derived from it).
@@ -29,7 +30,7 @@ knows them without any reflection at runtime.
 |---|---|
 | An option of more than one owner type | An option has one owner type. |
 | An option without its attribute, or with more than one | It must be decorated with the attribute of its kind of owner. |
-| An attribute of another kind of owner (`[PartyClientOption]` on an option of a feature driver) | Its attribute is the one of another kind of owner. |
+| An attribute of another kind of owner (`[PartyClientFeatureOption]` on an option of a feature driver) | Its attribute is the one of another kind of owner. |
 | No public constructor, or more than one | It must have exactly one public constructor. |
 | More than one `IConfiguration` parameter | An option has one configuration. |
 | A parameter of a derived configuration type (`IConfigurationSection`, `ImmutableConfigurationSection`) | The configuration of an option is a plain `IConfiguration`. |
@@ -51,11 +52,14 @@ test with it):
   implemented more than once in a scope); declaring none is an error.
 - **Their order:** a required component before the ones that require it, the implementations of a required abstraction
   before the ones that require it, otherwise by full name. A cycle is an error.
-- **Their feature name and their optionality** follow the rules of the packages (`FeaturePackages`, CK.Engine.TypeSet):
-  the closest `[PartyFeature]` of a feature driver (or `[ClientFeatureName]` of a client feature) in its base classes. The
-  side of an asymmetric feature is the one of its `[PartyFeature]`: it requires an explicit name, the two sides agree on
-  their optionality. The feature names are unique among the packages of the BinPath: a party feature and a client feature
-  can't have the same name.
+- **Their feature name and their activation** are declared by each concrete component (they are configurable types:
+  `ICachedType.TryGetConfigurableType`, not inherited): `[PartyFeature( "Name", TypeActivation.X )]` on a feature driver,
+  `[PartyClientFeature( "Name", TypeActivation.X )]` on a client feature. A component without it is an error. The side of
+  an asymmetric feature is the one of its `[PartyFeature]` (the configuration name of the Remote side is "XXXRemote"), the
+  two sides agree on their activation.
+- **The names are unique in their scope**: among the feature drivers (the keys of a party, the "XXXRemote" ones
+  included) and among the client features (the keys of a client). A party feature and a client feature can have the
+  same name.
 
 The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
 

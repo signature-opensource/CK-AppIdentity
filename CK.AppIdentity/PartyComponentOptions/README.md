@@ -13,11 +13,11 @@ component it applies to, and is decorated with the attribute of its kind of owne
 
 | Owner | Attribute | Package |
 |---|---|---|
-| A feature driver (`IApplicationIdentityFeatureDriver`) | `[FeatureOption]` | CK.AppIdentity.Abstractions |
-| A client feature (`ClientFeature`) | `[PartyClientOption]` | CK.AppIdentity.PartyClient |
+| A feature driver (`IApplicationIdentityFeatureDriver`) | `[PartyFeatureOption]` | CK.AppIdentity.Abstractions |
+| A client feature (`ClientFeature`) | `[PartyClientFeatureOption]` | CK.AppIdentity.PartyClient |
 
 ```csharp
-[FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]
+[PartyFeatureOption( "Compression", TypeActivation.ByDefault ), Requires<MainOption>]
 public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 {
     public CompressionOption( IConfiguration? configuration, FakeService service )
@@ -33,11 +33,13 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 }
 ```
 
-- **Its name** is its type name without its "Option" suffix ("Compression"): it is its key in the owner's
-  configuration section.
+- **An option is a configurable type** (`IConfigurableTypeAttribute`, CK.ResourceSpace.Abstractions): its attribute
+  declares its name and its activation explicitly.
+- **Its name** ("Compression") is its key in the owner's configuration section, unique among the options of an owner.
 - **An option applies to its owner type and to the types derived from it**: an option of a base client feature is an option of
   every client derived from it.
-- **An option is opt-in by default**: `IsEnabledByDefault = true` makes it opt-out.
+- **Its activation**: `TypeActivation.Optional` makes it opt-in (enabled only when the owner's configuration says so),
+  `ByDefault` opt-out (enabled unless it says `false`), `Required` always enabled.
 - **An option declares its data**: its single public constructor reads its configuration, its `IConfiguration`
   parameter (a plain one, at most one), into typed properties. The configuration is null when the option is enabled by
   default or by `true`. **An invalid value is an exception**: the configuration is meant to be validated before it is
@@ -72,7 +74,7 @@ see [CK.AppIdentity.Engine](../../CK.AppIdentity.Engine/README.md).
 
 - `OwnerTypes`: the owner types that have options.
 - `GetOptions( ownerType )`: the options of an owner type ([`PartyComponentOptionInfo`](PartyComponentOptionInfo.cs):
-  `Name`, `OptionType`, `IsEnabledByDefault`, `Requires`), in their order. `PartyComponentOptionInfo.Create( services,
+  `Name`, `OptionType`, `Activation`, `Requires`), in their order. `PartyComponentOptionInfo.Create( services,
   configuration )` creates an option, without reflection.
 - `IsOptionName( ownerType, key )`: whether a key of the owner's section is the name of one of its options.
 - `TrySelect( monitor, ownerType, ownerSection, out selected )`: the options that the owner's configuration enables, in
@@ -101,7 +103,7 @@ In the owner's configuration section, the key of an option is its name:
 
 | Case | Result |
 |---|---|
-| The key is absent | The option's default (`IsEnabledByDefault`). |
+| The key is absent | The option's default (enabled unless its `Activation` is `Optional`). |
 | `true` or `false` | Enabled or disabled. |
 | A section | Enabled, with this section as its configuration. |
 | Any other value | An error. |

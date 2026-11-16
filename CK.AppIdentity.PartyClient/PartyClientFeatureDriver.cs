@@ -25,7 +25,7 @@ namespace CK.AppIdentity;
 ///   selected from their section, created from the services and given to them (see <see cref="ClientFeature.Options"/>).</item>
 /// </list>
 /// </summary>
-[PartyFeature( IsOptional = false )]
+[PartyFeature( "PartyClient", TypeActivation.ByDefault )]
 public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
 {
     /// <summary>

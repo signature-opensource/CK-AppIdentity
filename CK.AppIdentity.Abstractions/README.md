@@ -115,6 +115,7 @@ which depends on this package: see its [Features](../CK.AppIdentity/Features/REA
 **The party components.** `IPartyComponent` marks a configurable component of a party: the feature drivers
 (`IApplicationIdentityFeatureDriver` is one) and the clients of a party (the `PartyClient` of CK.AppIdentity.PartyClient).
 A party component is configured in its party's configuration and can receive options from other packages: an option
-implements `IPartyComponentOption<TOwner>`, and the option of a feature driver is decorated with `[FeatureOption]`. See
+implements `IPartyComponentOption<TOwner>`, and the option of a feature driver is decorated with `[PartyFeatureOption]`
+(its name and its activation). See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 

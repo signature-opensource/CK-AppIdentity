@@ -23,7 +23,7 @@ namespace CK.AppIdentity.Tests;
 [TestFixture]
 public class RuntimeRobustnessTests
 {
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "Probe", TypeActivation.ByDefault )]
     public sealed class ProbeFeatureDriver : ApplicationIdentityFeatureDriver
     {
         readonly List<string> _log = new();

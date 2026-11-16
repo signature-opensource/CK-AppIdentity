@@ -135,7 +135,7 @@ public class DomainTests
     }
 
     // Blocks the setup of the dynamic party "$Blocked" until Release is completed.
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "Blocking", TypeActivation.ByDefault )]
     public sealed class BlockingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         public BlockingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }

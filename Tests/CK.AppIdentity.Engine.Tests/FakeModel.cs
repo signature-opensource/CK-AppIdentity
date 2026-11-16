@@ -9,6 +9,7 @@ namespace CK.AppIdentity.Engine.Tests.Fake;
 /// <summary>
 /// A fake feature driver: the owner of the options below.
 /// </summary>
+[PartyFeature( "FakeParty", TypeActivation.Optional )]
 public sealed class FakePartyFeatureDriver : ApplicationIdentityFeatureDriver
 {
     public FakePartyFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
@@ -32,7 +33,7 @@ public sealed class FakeService
 
 // The order: Header (before Main, order only), Main, Compression (after Main, only with it).
 // Main reads its configuration: { "Level": 3 } (1 by default). An invalid level throws.
-[FeatureOption]
+[PartyFeatureOption( "Main", TypeActivation.Optional )]
 public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public MainOption( IConfiguration? configuration )
@@ -45,12 +46,12 @@ public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
     public int Level { get; }
 }
 
-[FeatureOption( IsEnabledByDefault = true ), OptionalRequiredBy<MainOption>]
+[PartyFeatureOption( "Header", TypeActivation.ByDefault ), OptionalRequiredBy<MainOption>]
 public sealed class HeaderOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
-[FeatureOption( IsEnabledByDefault = true ), Requires<MainOption>]
+[PartyFeatureOption( "Compression", TypeActivation.ByDefault ), Requires<MainOption>]
 public sealed class CompressionOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public CompressionOption( FakeService service ) => Service = service;
@@ -60,7 +61,7 @@ public sealed class CompressionOption : IPartyComponentOption<FakePartyFeatureDr
 
 // A non optional [RequiredBy<T>]: Main requires Tracing (Tracing comes first and can be enabled alone).
 // Used only by its own test (not in the common model).
-[FeatureOption, RequiredBy<MainOption>]
+[PartyFeatureOption( "Tracing", TypeActivation.Optional ), RequiredBy<MainOption>]
 public sealed class TracingOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
@@ -68,23 +69,25 @@ public sealed class TracingOption : IPartyComponentOption<FakePartyFeatureDriver
 /// <summary>
 /// A fake client feature type and a client feature type derived from it ("Fake" and "FakeDerived").
 /// </summary>
+[PartyClientFeature( "Fake", TypeActivation.Optional )]
 public class FakeClientFeature : ClientFeature
 {
     public FakeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
+[PartyClientFeature( "FakeDerived", TypeActivation.Optional )]
 public sealed class FakeDerivedClientFeature : FakeClientFeature
 {
     public FakeDerivedClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
 // An option of every FakeClientFeature, and one of the derived feature only, that comes after it.
-[PartyClientOption]
+[PartyClientFeatureOption( "Caching", TypeActivation.Optional )]
 public sealed class CachingOption : IPartyComponentOption<FakeClientFeature>
 {
 }
 
-[PartyClientOption, Requires<CachingOption>]
+[PartyClientFeatureOption( "DerivedOnly", TypeActivation.Optional ), Requires<CachingOption>]
 public sealed class DerivedOnlyOption : IPartyComponentOption<FakeDerivedClientFeature>
 {
 }
@@ -144,17 +147,20 @@ public interface IFakeBuild : IPartyComponentAbstraction
 {
 }
 
+[PartyClientFeature( "Build", TypeActivation.Optional )]
 public sealed class BuildClientFeature : ClientFeature, IFakeBuild
 {
     public BuildClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
+[PartyClientFeature( "OtherBuild", TypeActivation.Optional )]
 public sealed class OtherBuildClientFeature : ClientFeature, IFakeBuild
 {
     public OtherBuildClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
 }
 
 [Requires<IFakeBuild>]
+[PartyClientFeature( "Serve", TypeActivation.Optional )]
 public sealed class ServeClientFeature : ClientFeature
 {
     public ServeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
@@ -163,6 +169,7 @@ public sealed class ServeClientFeature : ClientFeature
 }
 
 [Requires<FakePartyFeatureDriver>]
+[PartyClientFeature( "NeedsFake", TypeActivation.Optional )]
 public sealed class NeedsFakeClientFeature : ClientFeature
 {
     public NeedsFakeClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }

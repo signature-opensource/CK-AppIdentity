@@ -1,4 +1,5 @@
 using CK.AppIdentity.Engine.Tests.Fake;
+using CK.Core;
 
 namespace CK.AppIdentity.Engine.Tests.Bad;
 
@@ -8,12 +9,12 @@ public sealed class NoAttributeOption : IPartyComponentOption<FakePartyFeatureDr
 {
 }
 
-[PartyClientOption]
+[PartyClientFeatureOption( "WrongKind", TypeActivation.Optional )]
 public sealed class WrongKindOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
-[FeatureOption]
+[PartyFeatureOption( "TwoConstructors", TypeActivation.Optional )]
 public sealed class TwoConstructorsOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public TwoConstructorsOption() { }
@@ -21,18 +22,18 @@ public sealed class TwoConstructorsOption : IPartyComponentOption<FakePartyFeatu
     public TwoConstructorsOption( FakeService service ) { }
 }
 
-[FeatureOption]
+[PartyFeatureOption( "Main", TypeActivation.Optional )]
 public sealed class MainOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
 }
 
-[FeatureOption]
+[PartyFeatureOption( "TwoConfigurations", TypeActivation.Optional )]
 public sealed class TwoConfigurationsOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public TwoConfigurationsOption( Microsoft.Extensions.Configuration.IConfiguration a, Microsoft.Extensions.Configuration.IConfiguration b ) { }
 }
 
-[FeatureOption]
+[PartyFeatureOption( "Section", TypeActivation.Optional )]
 public sealed class SectionOption : IPartyComponentOption<FakePartyFeatureDriver>
 {
     public SectionOption( Microsoft.Extensions.Configuration.IConfigurationSection section ) { }

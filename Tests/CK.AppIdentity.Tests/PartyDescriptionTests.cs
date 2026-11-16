@@ -20,7 +20,7 @@ public class PartyDescriptionTests
 {
     // Contributes to the root party's description, once it has set it up: the description driver, that comes first,
     // describes the parties once all the drivers have set them up.
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "TestContributor", TypeActivation.ByDefault )]
     public sealed class TestContributorFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         bool _isSetup;
@@ -237,7 +237,7 @@ public class PartyDescriptionTests
     }
 
     // The first phase hosts a route and announces a data, the second one derives a route from the first phase.
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "Routing", TypeActivation.ByDefault )]
     public sealed class RoutingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
         public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }

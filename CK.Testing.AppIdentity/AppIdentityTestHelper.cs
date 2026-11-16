@@ -103,7 +103,7 @@ public static class AppIdentityTestHelper
     /// Registers a <see cref="PartyComponentOptionDirectory"/> of option types (<see cref="IPartyComponentOption{TOwner}"/>),
     /// as the engine generates it, but simpler: the options of an owner are in the given order (their topology attributes
     /// are ignored, they have no requirements) and they are the options of their declared owner type only (not of the types
-    /// derived from it). Their name and whether they are enabled by default come from their attribute; they are created by
+    /// derived from it). Their name and their activation come from their attribute; they are created by
     /// reflection: the <see cref="Microsoft.Extensions.Configuration.IConfiguration"/> parameter of their constructor is
     /// their configuration, the other ones are services.
     /// </summary>
@@ -119,8 +119,7 @@ public static class AppIdentityTestHelper
                          .GetGenericArguments()[0];
             var a = t.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().Single();
             var ctor = t.GetConstructors().Single();
-            var name = t.Name.EndsWith( "Option", StringComparison.Ordinal ) && t.Name.Length > 6 ? t.Name[..^6] : t.Name;
-            var info = new PartyComponentOptionInfo( name, t, a.IsEnabledByDefault, [], ( sp, configuration ) =>
+            var info = new PartyComponentOptionInfo( a.Name, t, a.Activation, [], ( sp, configuration ) =>
             {
                 var args = ctor.GetParameters()
                                .Select( p => p.ParameterType == typeof( Microsoft.Extensions.Configuration.IConfiguration )

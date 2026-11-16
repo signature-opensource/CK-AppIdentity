@@ -65,7 +65,7 @@ public class FeatureBuilderInitializationTests
     }
 
     [CKTypeDefiner]
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "CheckOrder", TypeActivation.ByDefault )]
     public abstract class CheckOrderFeatureDriver : ApplicationIdentityFeatureDriver
     {
         internal static int _count;
@@ -130,6 +130,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "F1", TypeActivation.Optional )]
     public class F1FeatureDriver : CheckOrderFeatureDriver
     {
         public F1FeatureDriver( ApplicationIdentityService s ) : base( s )
@@ -137,6 +138,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "F2x1", TypeActivation.Optional )]
     public class F2x1FeatureDriver : CheckOrderFeatureDriver
     {
         public F2x1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
@@ -144,6 +146,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "F3x2", TypeActivation.Optional )]
     public class F3x2FeatureDriver : CheckOrderFeatureDriver
     {
         public F3x2FeatureDriver( ApplicationIdentityService s, F2x1FeatureDriver s2 ) : base( s )
@@ -151,6 +154,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "FAx1", TypeActivation.Optional )]
     public class FAx1FeatureDriver : CheckOrderFeatureDriver
     {
         public FAx1FeatureDriver( ApplicationIdentityService s, F1FeatureDriver s1 ) : base( s )
@@ -158,6 +162,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "FBxA", TypeActivation.Optional )]
     public class FBxAFeatureDriver : CheckOrderFeatureDriver
     {
         public FBxAFeatureDriver( ApplicationIdentityService s, FAx1FeatureDriver sa ) : base( s )
@@ -165,6 +170,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "FCxAx3", TypeActivation.Optional )]
     public class FCxAx3FeatureDriver : CheckOrderFeatureDriver
     {
         public FCxAx3FeatureDriver( ApplicationIdentityService s, FAx1FeatureDriver sa, F3x2FeatureDriver f1 ) : base( s )
@@ -172,6 +178,7 @@ public class FeatureBuilderInitializationTests
         }
     }
 
+    [PartyFeature( "FDxBx2", TypeActivation.Optional )]
     public class FDxBx2FeatureDriver : CheckOrderFeatureDriver
     {
         public FDxBx2FeatureDriver( ApplicationIdentityService s, FBxAFeatureDriver sb, F2x1FeatureDriver f2 ) : base( s )
@@ -357,19 +364,19 @@ public class FeatureBuilderInitializationTests
     }
 
     // The "Asym" asymmetric feature: its two sides.
-    [PartyFeature( "Asym", Side = FeatureSide.Local )]
+    [PartyFeature( "Asym", TypeActivation.Optional, Side = FeatureSide.Local )]
     public sealed class LocalAsymFeatureDriver : NoopFeatureDriver
     {
         public LocalAsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
-    [PartyFeature( "Asym", Side = FeatureSide.Remote )]
+    [PartyFeature( "Asym", TypeActivation.Optional, Side = FeatureSide.Remote )]
     public sealed class RemoteAsymFeatureDriver : NoopFeatureDriver
     {
         public RemoteAsymFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "LocalStorage", TypeActivation.ByDefault )]
     public sealed class LocalStorageFeatureDriver : NoopFeatureDriver
     {
         public LocalStorageFeatureDriver( ApplicationIdentityService s ) : base( s ) { }

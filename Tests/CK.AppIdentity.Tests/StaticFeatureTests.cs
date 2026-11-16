@@ -79,26 +79,28 @@ public class StaticFeatureTests
         }
     }
 
+    [PartyFeature( "SA", TypeActivation.Optional )]
     public class SAFeatureDriver : RecordingStaticFeatureDriver
     {
         public SAFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     // Depends on SA: comes after it.
+    [PartyFeature( "SB", TypeActivation.Optional )]
     public class SBFeatureDriver : RecordingStaticFeatureDriver
     {
         public SBFeatureDriver( ApplicationIdentityService s, SAFeatureDriver a ) : base( s ) { }
     }
 
     // Allowed by default.
-    [PartyFeature( IsOptional = false )]
+    [PartyFeature( "SD", TypeActivation.ByDefault )]
     public class SDFeatureDriver : RecordingStaticFeatureDriver
     {
         public SDFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
     // The Local side of the "SC" asymmetric feature: the remotes that use it ("SCRemote") can be dynamic.
-    [PartyFeature( "SC", Side = FeatureSide.Local )]
+    [PartyFeature( "SC", TypeActivation.Optional, Side = FeatureSide.Local )]
     public class LocalSCFeatureDriver : RecordingStaticFeatureDriver
     {
         public LocalSCFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
