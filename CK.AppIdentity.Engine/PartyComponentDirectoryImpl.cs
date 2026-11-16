@@ -37,6 +37,15 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
         }
         scope.Append( "}, new global::System.Collections.Generic.HashSet<global::System.Type>() {" );
         foreach( var m in result.MultipleAbstractions.OrderBy( m => m.FullName, StringComparer.Ordinal ) ) scope.Append( "typeof(" ).Append( m.ToGlobalTypeName() ).Append( ")," );
+        // The party components that are members of each type set (a local party, a client): the types drive.
+        scope.Append( "}, new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlySet<global::System.Type>>() {" ).NewLine();
+        foreach( var (name, set) in group.TypeSets.OrderBy( kv => kv.Key, StringComparer.Ordinal ) )
+        {
+            var members = set.Select( t => t.Type ).ToHashSet();
+            scope.Append( "{ " ).AppendSourceString( name ).Append( ", new global::System.Collections.Generic.HashSet<global::System.Type>() {" );
+            foreach( var i in result.Components.Where( i => members.Contains( i.ComponentType ) ) ) scope.Append( "typeof(" ).Append( i.ComponentType.ToGlobalTypeName() ).Append( ")," );
+            scope.Append( "} }," ).NewLine();
+        }
         scope.Append( "} ) {}" ).NewLine();
         monitor.Info( $"{result.Components.Count} party component(s): '{result.Components.Select( i => i.ComponentType.Name ).Concatenate( "', '" )}'." );
         return CSCodeGenerationResult.Success;

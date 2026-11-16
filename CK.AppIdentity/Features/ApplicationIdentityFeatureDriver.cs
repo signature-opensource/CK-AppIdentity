@@ -123,8 +123,20 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     public bool IsAllowedFeature( IParty p )
     {
         if( _isStatic && IsDynamicFeatureParty( p ) ) return false;
+        if( !IsMember( p ) ) return false;
         return IsAllowed( GetConfiguration( p ), GetFeatureName( p ) );
     }
+
+    /// <summary>
+    /// Gets whether this feature is a member of the type set of a party (the set of its local party for a remote): the
+    /// types drive, a feature that is not a member doesn't apply to the party, whatever its configuration says.
+    /// </summary>
+    /// <param name="p">The party.</param>
+    /// <returns>True when this feature is a member of the party's set (or when the party has no known set).</returns>
+    public bool IsMember( IParty p ) => _s.ComponentDirectory.IsMember( TypeSetName( p ), _componentType );
+
+    // The type set of a local party is named after its party name; a remote uses the one of its local party.
+    internal static string TypeSetName( IParty p ) => p is ILocalParty || p is not IOwnedParty o ? p.PartyName : o.Owner.PartyName;
 
     // A Required feature is always allowed ("false" is a start error, see AppIdentityAgent.CheckFeatureKeys).
     bool IsAllowed( ApplicationIdentityConfiguration c, string name ) => _activation == TypeActivation.Required

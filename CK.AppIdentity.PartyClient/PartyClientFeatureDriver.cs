@@ -147,7 +147,14 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                 // A feature is declared by its section, or by true when it has no configuration; false turns off a
                 // feature that is not optional (a Required one can't be turned off).
                 var activation = _componentDirectory.Find( driver.FeatureType )!.Activation;
-                if( k.Value == null )
+                // The types drive: a declared feature must be a member of the client's set.
+                if( !_componentDirectory.IsMember( client.Name, driver.FeatureType )
+                    && !string.Equals( k.Value, "false", StringComparison.OrdinalIgnoreCase ) )
+                {
+                    monitor.Error( $"The client feature \"{k.Path}\" is not a member of the type set of the {client}: the types drive, a key doesn't bring its feature in (add its type to the \"Types\" of the client)." );
+                    success = false;
+                }
+                else if( k.Value == null )
                 {
                     declared.Add( (driver, k) );
                 }
@@ -187,7 +194,9 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         // The features that are not optional are there without their key (their configuration is empty).
         foreach( var (name, driver) in _drivers )
         {
-            if( !keys.Contains( name ) && _componentDirectory.Find( driver.FeatureType )!.Activation != TypeActivation.Optional )
+            if( !keys.Contains( name )
+                && _componentDirectory.Find( driver.FeatureType )!.Activation != TypeActivation.Optional
+                && _componentDirectory.IsMember( client.Name, driver.FeatureType ) )
             {
                 declared.Add( (driver, client.Configuration.GetSection( name )) );
             }

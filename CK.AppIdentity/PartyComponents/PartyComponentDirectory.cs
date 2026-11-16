@@ -18,6 +18,7 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
     readonly IReadOnlyList<PartyComponentInfo> _components;
     readonly Dictionary<Type, PartyComponentInfo> _byType;
     readonly IReadOnlySet<Type> _multipleAbstractions;
+    readonly IReadOnlyDictionary<string, IReadOnlySet<Type>> _typeSets;
 
     /// <summary>
     /// Initializes a new directory. Called by the generated code.
@@ -25,11 +26,43 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
     /// <param name="components">The components, in their order.</param>
     /// <param name="multipleAbstractions">The abstractions that can be implemented more than once in a scope.</param>
     protected PartyComponentDirectory( IReadOnlyList<PartyComponentInfo> components, IReadOnlySet<Type> multipleAbstractions )
+        : this( components, multipleAbstractions, new Dictionary<string, IReadOnlySet<Type>>() )
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new directory with the party components that are members of the type sets of the application (a
+    /// local party's set is named after its party name, a client's set after the client's name). Called by the generated code.
+    /// </summary>
+    /// <param name="components">The components, in their order.</param>
+    /// <param name="multipleAbstractions">The abstractions that can be implemented more than once in a scope.</param>
+    /// <param name="typeSets">The components that are members of each type set, by the name of the set (case insensitive).</param>
+    protected PartyComponentDirectory( IReadOnlyList<PartyComponentInfo> components,
+                                       IReadOnlySet<Type> multipleAbstractions,
+                                       IReadOnlyDictionary<string, IReadOnlySet<Type>> typeSets )
     {
         _components = components;
         _byType = components.ToDictionary( c => c.ComponentType );
         _multipleAbstractions = multipleAbstractions;
+        _typeSets = typeSets.ToDictionary( kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase );
     }
+
+    /// <summary>
+    /// Gets whether a party component is a member of a type set: the types drive, a component that is not a member of the
+    /// set of a party (or of a client) doesn't apply to it. True when there is no such set (an application built without
+    /// a "ckonf.json", a test): all the components apply. A set that nothing restricts has all the components.
+    /// </summary>
+    /// <param name="typeSetName">The name of the set: the party name of a local party, the name of a client.</param>
+    /// <param name="componentType">The component type.</param>
+    /// <returns>True when the component applies to the party or the client.</returns>
+    public bool IsMember( string typeSetName, Type componentType ) => !_typeSets.TryGetValue( typeSetName, out var set ) || set.Contains( componentType );
+
+    /// <summary>
+    /// Gets whether this directory knows the members of a type set (see <see cref="IsMember(string, Type)"/>).
+    /// </summary>
+    /// <param name="typeSetName">The name of the set.</param>
+    /// <returns>True when the set is known.</returns>
+    public bool HasTypeSet( string typeSetName ) => _typeSets.ContainsKey( typeSetName );
 
     /// <summary>
     /// Gets the components, in their order.

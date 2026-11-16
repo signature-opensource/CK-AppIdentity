@@ -39,7 +39,9 @@ public class FeatureActivationTests
         public MustFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
     }
 
-    static async Task<(ServiceProvider Services, ApplicationIdentityService Service)> StartAsync( Action<MutableConfigurationSection> configure, CancellationToken cancel )
+    static async Task<(ServiceProvider Services, ApplicationIdentityService Service)> StartAsync( Action<MutableConfigurationSection> configure,
+                                                                                                 CancellationToken cancel,
+                                                                                                 Dictionary<string, IEnumerable<Type>>? typeSets = null )
     {
         var c = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
         {
@@ -56,7 +58,7 @@ public class FeatureActivationTests
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<OptOutFeatureDriver>() );
         services.AddSingleton<MustFeatureDriver>();
         services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<MustFeatureDriver>() );
-        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( OptInFeatureDriver ), typeof( OptOutFeatureDriver ), typeof( MustFeatureDriver ) ) );
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( [typeof( OptInFeatureDriver ), typeof( OptOutFeatureDriver ), typeof( MustFeatureDriver )], typeSets ) );
         var sp = services.BuildServiceProvider();
         var s = sp.GetRequiredService<ApplicationIdentityService>();
         await ((IHostedService)s).StartAsync( cancel );
@@ -127,6 +129,39 @@ public class FeatureActivationTests
             texts.ShouldContain( t => t.StartsWith( "Redundant \"OptIn\": false: the feature is optional" ) );
             texts.ShouldContain( t => t.StartsWith( "Redundant \"OptOut\": true: the feature is allowed by default" ) && !t.Contains( "Activation/$Remote" ) );
             texts.ShouldContain( t => t.StartsWith( "Redundant \"Must\": true: the feature is required" ) );
+        }
+    }
+
+    // The set of "$App" doesn't contain OptOut: the types drive.
+    static readonly Dictionary<string, IEnumerable<Type>> _restricted = new() { { "$App", [typeof( OptInFeatureDriver ), typeof( MustFeatureDriver )] } };
+
+    [Test]
+    [CancelAfter( 5000 )]
+    public async Task a_feature_that_is_not_a_member_of_the_set_of_a_party_does_not_apply_to_it_Async( CancellationToken cancel )
+    {
+        var (sp, s) = await StartAsync( c => c["Local:OptOut"] = "false", cancel, _restricted );
+        await using( sp )
+        {
+            await s.InitializationTask.WaitAsync( cancel );
+            var optOut = sp.GetRequiredService<OptOutFeatureDriver>();
+            optOut.IsMember( s ).ShouldBeFalse();
+            optOut.IsAllowedFeature( s ).ShouldBeFalse( "Allowed by default but not a member." );
+            optOut.IsAllowedFeature( s.Remotes.Single() ).ShouldBeFalse( "A remote uses the set of its local party." );
+            sp.GetRequiredService<MustFeatureDriver>().IsAllowedFeature( s ).ShouldBeTrue();
+        }
+    }
+
+    [Test]
+    [CancelAfter( 5000 )]
+    public async Task declaring_a_feature_that_is_not_a_member_is_an_error_Async( CancellationToken cancel )
+    {
+        using var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 200 );
+        var (sp, s) = await StartAsync( c => c["Parties:0:OptOut:Some"] = "Setting", cancel, _restricted );
+        await using( sp )
+        {
+            await Should.ThrowAsync<CKException>( () => s.InitializationTask.WaitAsync( cancel ) );
+            var texts = await CollectAsync( logs, "The feature 'OptOut' is declared by" );
+            texts.ShouldContain( t => t.StartsWith( "The feature 'OptOut' is declared by '" ) && t.Contains( "Activation/$Remote" ) && t.Contains( "is not a member of the type set of their party" ) );
         }
     }
 }

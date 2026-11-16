@@ -20,8 +20,10 @@ public static class AppIdentityTestHelper
 {
     sealed class TestPartyComponentDirectory : PartyComponentDirectory
     {
-        public TestPartyComponentDirectory( IReadOnlyList<PartyComponentInfo> components, IReadOnlySet<Type> multipleAbstractions )
-            : base( components, multipleAbstractions )
+        public TestPartyComponentDirectory( IReadOnlyList<PartyComponentInfo> components,
+                                            IReadOnlySet<Type> multipleAbstractions,
+                                            IReadOnlyDictionary<string, IReadOnlySet<Type>> typeSets )
+            : base( components, multipleAbstractions, typeSets )
         {
         }
     }
@@ -32,12 +34,24 @@ public static class AppIdentityTestHelper
     /// </summary>
     /// <param name="components">The party component types.</param>
     /// <returns>The directory.</returns>
-    public static PartyComponentDirectory CreateComponentDirectory( IEnumerable<Type> components )
+    public static PartyComponentDirectory CreateComponentDirectory( IEnumerable<Type> components ) => CreateComponentDirectory( components, null );
+
+    /// <summary>
+    /// Creates the <see cref="PartyComponentDirectory"/> of party component types with the members of type sets (a
+    /// local party's set is named after its party name, a client's set after the client's name): the components that
+    /// are not members of the set of a party (or of a client) don't apply to it (see <see cref="PartyComponentDirectory.IsMember"/>).
+    /// </summary>
+    /// <param name="components">The party component types.</param>
+    /// <param name="typeSets">The components that are members of each type set, by the name of the set. Null for none.</param>
+    /// <returns>The directory.</returns>
+    public static PartyComponentDirectory CreateComponentDirectory( IEnumerable<Type> components, IReadOnlyDictionary<string, IEnumerable<Type>>? typeSets )
     {
         var cache = new GlobalTypeCache();
         var result = PartyComponentAnalysis.Analyze( TestHelper.Monitor, components.Distinct().Select( cache.Get ) );
         Throw.CheckState( "Invalid party components (see the logs).", result != null );
-        return new TestPartyComponentDirectory( result.Components, result.MultipleAbstractions );
+        var sets = typeSets?.ToDictionary( kv => kv.Key, kv => (IReadOnlySet<Type>)kv.Value.ToHashSet() )
+                   ?? new Dictionary<string, IReadOnlySet<Type>>();
+        return new TestPartyComponentDirectory( result.Components, result.MultipleAbstractions, sets );
     }
 
     /// <summary>
