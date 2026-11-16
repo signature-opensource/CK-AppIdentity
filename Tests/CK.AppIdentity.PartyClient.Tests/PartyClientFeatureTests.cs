@@ -85,7 +85,9 @@ public class PartyClientFeatureTests
         protected override ToolClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
     }
 
-    static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] drivers )
+    static IHost BuildHost( Action<MutableConfigurationSection> configure, params Type[] drivers ) => BuildHost( configure, null, drivers );
+
+    static IHost BuildHost( Action<MutableConfigurationSection> configure, Dictionary<string, IEnumerable<Type>>? typeSets, params Type[] drivers )
     {
         var ckApp = new MutableConfigurationSection( "CK-AppIdentity" );
         ckApp["FullName"] = "Clients/$App";
@@ -99,12 +101,13 @@ public class PartyClientFeatureTests
         builder.Services.AddSingleton<ServingFeatureDriver>();
         builder.Services.AddSingleton<IApplicationIdentityFeatureDriver>( sp => sp.GetRequiredService<ServingFeatureDriver>() );
         // What the engine generates in a real application.
-        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( ServingFeatureDriver ),
-                                                                                      typeof( PartyClientFeatureDriver ),
-                                                                                      typeof( ServedClientFeature ),
-                                                                                      typeof( ToolClientFeature ),
-                                                                                      typeof( AlwaysClientFeature ),
-                                                                                      typeof( MustClientFeature ) ) );
+        builder.Services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( [typeof( ServingFeatureDriver ),
+                                                                                       typeof( PartyClientFeatureDriver ),
+                                                                                       typeof( ServedClientFeature ),
+                                                                                       typeof( ToolClientFeature ),
+                                                                                       typeof( AlwaysClientFeature ),
+                                                                                       typeof( MustClientFeature )],
+                                                                                      typeSets ) );
         foreach( var d in drivers )
         {
             builder.Services.AddSingleton( d );
@@ -353,6 +356,26 @@ public class PartyClientFeatureTests
         else
         {
             Should.Throw<ArgumentException>( () => new PartyClientFactAttribute( key, value ) );
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_client_feature_that_is_not_a_member_of_the_set_of_the_client_does_not_apply_Async( CancellationToken cancel )
+    {
+        // The set of the client "App" doesn't contain Always: the types drive.
+        var sets = new Dictionary<string, IEnumerable<Type>> { { "App", [typeof( ToolClientFeature ), typeof( MustClientFeature )] } };
+        using( var host = BuildHost( c => c["Local:PartyClient:App:Tool"] = "true", sets, _activationDrivers ) )
+        {
+            await host.StartAsync( cancel );
+            FeatureNames( host ).ShouldBe( ["Must", "Tool"], "Always is there by default but not a member." );
+            await host.StopAsync( cancel );
+        }
+        using( var logs = new AllMonitorsTexts() )
+        using( var host = BuildHost( c => c["Local:PartyClient:App:Always"] = "true", sets, _activationDrivers ) )
+        {
+            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
+            (await logs.WaitForAsync( t => t.StartsWith( "The client feature \"CK-AppIdentity:Local:PartyClient:App:Always\" is not a member of the type set of the client 'App'" ) )).ShouldBeTrue();
         }
     }
 }
