@@ -143,7 +143,7 @@ public class DomainTests
         public readonly TaskCompletionSource Entered = new( TaskCreationOptions.RunContinuationsAsynchronously );
         public readonly TaskCompletionSource Release = new( TaskCreationOptions.RunContinuationsAsynchronously );
 
-        protected override async Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+        protected internal override async Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
         {
             if( party.PartyName == "$Blocked" )
             {

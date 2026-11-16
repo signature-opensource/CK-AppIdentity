@@ -36,9 +36,9 @@ public class RuntimeRobustnessTests
 
         void Add( string s ) { lock( _log ) _log.Add( s ); }
 
-        protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+        protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
 
-        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+        protected internal override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
         {
             Add( $"Setup {party.PartyName}" );
             // The folders are created before the setup: the drivers can use the stores.
@@ -47,13 +47,13 @@ public class RuntimeRobustnessTests
             return Task.FromResult( party.PartyName != FailSetupFor );
         }
 
-        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
+        protected internal override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party )
         {
             Add( $"Teardown {party.PartyName}" );
             return Task.CompletedTask;
         }
 
-        protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+        protected internal override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
     sealed class FastClock : ApplicationIdentityService.ISystemClock

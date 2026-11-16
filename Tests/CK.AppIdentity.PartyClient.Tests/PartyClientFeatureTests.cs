@@ -297,19 +297,18 @@ public class PartyClientFeatureTests
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task a_dynamic_tenant_domain_has_its_clients_Async( CancellationToken cancel )
+    public async Task a_tenant_domain_has_its_clients_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => { }, _drivers );
+        using var host = BuildHost( c =>
+        {
+            c["Parties:0:FullName"] = "D1/$D1";
+            c["Parties:0:Local:PartyClient:Tool:Tool"] = "true";
+        }, _drivers );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.GetRequiredFeature<PartyClientFeature>().Clients.ShouldBeEmpty();
 
-        var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
-        {
-            s["FullName"] = "D1/$D1";
-            s["Local:PartyClient:Tool:Tool"] = "true";
-        } );
-        domain.ShouldNotBeNull();
+        var domain = root.TenantDomains.Single();
         var tool = domain.GetRequiredFeature<PartyClientFeature>().Clients.Single();
         tool.Party.ShouldBe( domain );
         tool.Features.ShouldHaveSingleItem().ShouldBeOfType<ToolClientFeature>();
@@ -320,19 +319,19 @@ public class PartyClientFeatureTests
     [CancelAfter( 10000 )]
     public async Task the_clients_of_a_tenant_domain_are_in_its_description_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( c => c["Local:Serving"] = "true", _drivers );
+        using var host = BuildHost( c =>
+        {
+            c["Local:Serving"] = "true";
+            c["Parties:0:FullName"] = "D1/$D1";
+            c["Parties:0:Local:Serving"] = "true";
+            c["Parties:0:Local:PublicUrl"] = "https://d1.acme.com";
+            c["Parties:0:Local:PartyClient:Admin:Served"] = "true";
+        }, _drivers );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.Description.ClientApplications.ShouldBeEmpty();
 
-        var domain = await root.AddTenantDomainAsync( TestHelper.Monitor, s =>
-        {
-            s["FullName"] = "D1/$D1";
-            s["Local:Serving"] = "true";
-            s["Local:PublicUrl"] = "https://d1.acme.com";
-            s["Local:PartyClient:Admin:Served"] = "true";
-        } );
-        domain.ShouldNotBeNull();
+        var domain = root.TenantDomains.Single();
         domain.Description.ClientApplications.ShouldBe( [new ClientApplicationDescription( "Admin", "/admin" )] );
         domain.Description.GetClientApplicationUrl( "Admin" ).ShouldBe( "https://d1.acme.com/admin" );
         await host.StopAsync( cancel );

@@ -65,15 +65,15 @@ public class DynamicRemoteTests
         logTower.IsDynamic.ShouldBeTrue( "This remote is dynamic." );
 
         // Adding a tenant domain with an initial configured remote.
-        AddedDynamicParties? added = await s.AddPartiesAsync( TestHelper.Monitor, c =>
+        // (The dynamic tenant domains are internal until the tenant templates.)
+        var laToulousaine = await s.AddTenantDomainAsync( TestHelper.Monitor, c =>
         {
             c["DomainName"] = "LaToulousaine";
             c["PartyName"] = "$LaToulousaine";
             c["EnvironmentName"] = "#Debug";
             c["Parties:0:PartyName"] = "SignatureBox";
         } );
-        Throw.DebugAssert( added != null );
-        var laToulousaine = added.Value.Tenants.Single();
+        Throw.DebugAssert( laToulousaine != null );
         laToulousaine.IsDynamic.ShouldBeTrue();
         var signatureBox = laToulousaine.Remotes.Single();
         signatureBox.FullName.ShouldBe( "LaToulousaine/$SignatureBox/#Debug" );

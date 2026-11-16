@@ -174,14 +174,19 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     /// <inheritdoc />
     public Core.ISystemClock SystemClock => _systemClock;
 
-    /// <inheritdoc />
-    public Task<AddedDynamicParties?> AddPartiesAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration )
-    {
-        return AddDynamicPartiesAsync( monitor, configuration, false, false, this );
-    }
-
-    /// <inheritdoc />
-    public async Task<ITenantDomainParty?> AddTenantDomainAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration )
+    /// <summary>
+    /// Tries to create and initialize one tenant domain from a configuration section.
+    /// This tenant domain is <see cref="IOwnedParty.IsDynamic"/> and can be destroyed as well as all its remotes.
+    /// <para>
+    /// Internal: kept for the tenant templates (their instances are dynamic tenants, created from a template rather
+    /// than from a configuration section), with the whole lifecycle of a dynamic tenant (its creation, its
+    /// destruction), tested by CK.AppIdentity.Tests. No public API adds a tenant at run time until then.
+    /// </para>
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="configuration">The configuration to process.</param>
+    /// <returns>The newly created tenant domain or null if an error occurred.</returns>
+    internal async Task<ITenantDomainParty?> AddTenantDomainAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration )
     {
         return (await AddDynamicPartiesAsync( monitor, configuration, false, true, this ).ConfigureAwait( false ))?.Tenants.Single();
     }

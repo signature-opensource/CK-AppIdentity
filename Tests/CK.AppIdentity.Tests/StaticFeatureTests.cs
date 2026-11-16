@@ -41,7 +41,7 @@ public class StaticFeatureTests
         {
         }
 
-        protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
+        protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context )
         {
             Log( $"Setup:{FeatureName}" );
             return Task.FromResult( true );
@@ -59,20 +59,20 @@ public class StaticFeatureTests
             return Task.CompletedTask;
         }
 
-        protected override Task TeardownAsync( FeatureLifetimeContext context )
+        protected internal override Task TeardownAsync( FeatureLifetimeContext context )
         {
             Log( $"Teardown:{FeatureName}" );
             return Task.CompletedTask;
         }
 
-        protected override async Task OnHostStartedAsync( IActivityMonitor monitor, CancellationToken cancel )
+        protected internal override async Task OnHostStartedAsync( IActivityMonitor monitor, CancellationToken cancel )
         {
             if( _onStarted != null ) await _onStarted( ApplicationIdentityService, monitor );
             if( _failingStart == FeatureName ) throw new CKException( $"{FeatureName} failed to start." );
             Log( $"Started:{FeatureName}" );
         }
 
-        protected override Task OnHostStoppingAsync( IActivityMonitor monitor, CancellationToken cancel )
+        protected internal override Task OnHostStoppingAsync( IActivityMonitor monitor, CancellationToken cancel )
         {
             Log( $"Stopping:{FeatureName}" );
             return Task.CompletedTask;

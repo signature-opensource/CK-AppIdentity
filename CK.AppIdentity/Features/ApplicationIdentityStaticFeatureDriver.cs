@@ -12,7 +12,7 @@ namespace CK.AppIdentity;
 /// <para>
 /// Only the parties that ARE the feature are constrained (see <see cref="ApplicationIdentityFeatureDriver.GetFeatureName(IParty)"/>):
 /// the remotes that use an asymmetric feature can be dynamic (a front added at run time is a remote of an AuthCenter). Dynamic
-/// parties (and dynamic tenant domains) are still supported: they just cannot have a static feature. A dynamic party that
+/// remotes are still supported: they just cannot have a static feature. A dynamic party that
 /// explicitly allows it fails its setup; when the feature is allowed by default, the default doesn't apply to them (see
 /// <see cref="ApplicationIdentityFeatureDriver.IsAllowedFeature(IParty)"/>).
 /// </para>

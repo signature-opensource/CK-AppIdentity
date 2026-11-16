@@ -38,13 +38,13 @@ public class PartyDescriptionTests
             return OnDescriptionChangedAsync( TestHelper.Monitor, ApplicationIdentityService );
         }
 
-        protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
+        protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context )
         {
             _isSetup = true;
             return Task.FromResult( true );
         }
 
-        protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+        protected internal override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
         {
             if( party != ApplicationIdentityService || !_isSetup ) return;
             builder.PublicUrl ??= PublicUrl;
@@ -242,14 +242,14 @@ public class PartyDescriptionTests
     {
         public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
-        protected override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
+        protected internal override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
         {
             builder.HostRoute( "Hosted", "Some.Target" );
             builder.HostRoute( "NoTarget" );
             builder.SetData( "Region", "eu-west" );
         }
 
-        protected override void ContributeDerivedDescription( ILocalParty party, PartyDescription.DerivedBuilder builder )
+        protected internal override void ContributeDerivedDescription( ILocalParty party, PartyDescription.DerivedBuilder builder )
         {
             foreach( var (name, target) in builder.HostedRoutes )
             {

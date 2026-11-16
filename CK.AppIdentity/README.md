@@ -64,17 +64,20 @@ guarantees is narrow and worth knowing before reusing it: it always accepts jobs
 
 ## Adding and destroying at runtime.
 
-A configured party is immutable and cannot be destroyed. A dynamic one is added through the same
-configuration shape, as a `MutableConfigurationSection` built in code:
+A configured party is immutable and cannot be destroyed. A dynamic remote is added to a local party (the root
+or a tenant domain) through the same configuration shape, as a `MutableConfigurationSection` built in code:
 
 ```csharp
-Task<AddedDynamicParties?> AddPartiesAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
-Task<ITenantDomainParty?> AddTenantDomainAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
+Task<IReadOnlyCollection<IRemoteParty>?> AddMultipleRemotesAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
+Task<IRemoteParty?> AddRemoteAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
 ```
 
-Both return null on failure rather than throwing - the monitor carries the reason. And both are on the
-service; `ILocalParty.AddRemoteAsync` is the equivalent one level down, which is what makes a tenant
-domain extensible without touching the root.
+Both return null on failure rather than throwing - the monitor carries the reason. Adding several remotes is all or
+nothing: if one fails to be set up, none is added.
+
+The tenant domains are configured (the `Parties` of the root that have a domain): no public API adds one at run
+time. A dynamic tenant domain (one that can be destroyed with its remotes) will be an instance of a tenant template;
+its lifecycle is kept internal until then.
 
 Destruction is `IOwnedParty.DestroyAsync`, and `SetDestroyed` is its two-phase companion: it marks the
 party so that no one else starts working with it, and returns whether this call is the one that won the

@@ -8,4 +8,8 @@
     <PackageReference Include="CK.StObj.Model" Version="37.0.0-0.uc.0.ci.2" />
     <ProjectReference Include="..\CK.AppIdentity.Abstractions\CK.AppIdentity.Abstractions.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The dynamic tenant domains are internal until the tenant templates: their tests use AddTenantDomainAsync. -->
+    <InternalsVisibleTo Include="CK.AppIdentity.Tests" />
+  </ItemGroup>
 </Project>

@@ -94,26 +94,4 @@ public interface IApplicationIdentityService : ILocalParty, ISingletonAutoServic
     /// </para>
     /// </summary>
     PerfectEvent<int> Heartbeat { get; }
-
-    /// <summary>
-    /// Tries to create and initialize one or more new parties that can be tenant domains or simple
-    /// remotes from a configuration section.
-    /// These parties will be <see cref="IOwnedParty.IsDynamic"/> and can be destroyed.
-    /// <para>
-    /// This is all or nothing: if any party fails to be set up, none of them is added.
-    /// </para>
-    /// </summary>
-    /// <param name="monitor">The monitor to use.</param>
-    /// <param name="configuration">The configuration to process.</param>
-    /// <returns>The newly created tenant domains and remotes or null if an error occurred.</returns>
-    Task<AddedDynamicParties?> AddPartiesAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
-
-    /// <summary>
-    /// Tries to create and initialize one tenant domain from a configuration section.
-    /// This tenant domain will be <see cref="IOwnedParty.IsDynamic"/> and can be destroyed as well as all its remotes.
-    /// </summary>
-    /// <param name="monitor">The monitor to use.</param>
-    /// <param name="configuration">The configuration to process.</param>
-    /// <returns>The newly created tenant domain or null if an error occurred.</returns>
-    Task<ITenantDomainParty?> AddTenantDomainAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
 }

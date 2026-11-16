@@ -132,8 +132,8 @@ remotes that are not `IOwnedParty.IsDynamic`. Its lifetime is the host's. Its dr
 
 - **Only the parties that ARE the feature are constrained:** the remotes that use an asymmetric feature can be dynamic
   (a remote is the feature when its local party is not).
-  - **A dynamic party that explicitly allows a static feature fails its setup.** Dynamic parties and dynamic tenant
-    domains are still supported: they just cannot have a static feature.
+  - **A dynamic party that explicitly allows a static feature fails its setup.** Dynamic remotes are still
+    supported: they just cannot have a static feature.
   - **When the feature is allowed by default, the default doesn't apply to the dynamic parties:** `IsAllowedFeature`
     returns false for them.
 - **The dynamic remotes of the feature** go through `SetupDynamicFeatureRemoteAsync` and

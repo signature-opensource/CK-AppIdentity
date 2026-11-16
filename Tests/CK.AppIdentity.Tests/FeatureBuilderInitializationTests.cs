@@ -91,14 +91,14 @@ public class FeatureBuilderInitializationTests
 
         public int SetupOrder { get; private set; }
 
-        protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
+        protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context )
         {
             SetupOrder = _currentSetupOrder++;
             context.Monitor.Trace( $"Setup {GetType().Name} ({SetupOrder})." );
             return Task.FromResult( true );
         }
 
-        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty remote )
+        protected internal override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty remote )
         {
             _dynamicSetupCount++;
             context.Monitor.Trace( $"SetupDynamic {GetType().Name} ({SetupOrder})." );
@@ -107,7 +107,7 @@ public class FeatureBuilderInitializationTests
             return Task.FromResult( true );
         }
 
-        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty remote )
+        protected internal override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty remote )
         {
             _dynamicTeardownCount++;
             context.Monitor.Trace( $"TeardownDynamic {GetType().Name} ({SetupOrder})." );
@@ -118,7 +118,7 @@ public class FeatureBuilderInitializationTests
             return Task.CompletedTask;
         }
 
-        protected override Task TeardownAsync( FeatureLifetimeContext context )
+        protected internal override Task TeardownAsync( FeatureLifetimeContext context )
         {
             _teardownCount++;
             context.Monitor.Trace( $"Teardown {GetType().Name} ({SetupOrder})." );
@@ -357,10 +357,10 @@ public class FeatureBuilderInitializationTests
         {
         }
 
-        protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
-        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
-        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
-        protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+        protected internal override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+        protected internal override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
+        protected internal override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+        protected internal override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
     // The "Asym" asymmetric feature: its two sides.
