@@ -72,6 +72,9 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
             foreach( var (o, requires) in island )
             {
                 var t = o.Type.Type;
+                // An option is a resource group, not a StObj type: its assembly may host no StObj type at all (an
+                // assembly of options only), it must be referenced by the generated code.
+                scope.Workspace.EnsureAssemblyReference( t );
                 scope.Append( "new global::CK.AppIdentity.PartyComponentOptionInfo( " )
                      .AppendSourceString( o.Name ).Append( ", typeof(" ).Append( t.ToGlobalTypeName() ).Append( "), " )
                      .Append( "global::CK.Core.TypeActivation." ).Append( o.Activation.ToString() ).Append( ", new string[] {" );
