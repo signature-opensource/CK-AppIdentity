@@ -46,12 +46,13 @@ static class ProjectionCheck
             if( !File.Exists( file ) ) continue;
             var appSettings = ImmutableConfigurationSection.CreateFromJson( "appsettings", File.ReadAllText( file ) );
             if( appSettings.TryGetSection( AppIdentityAppBuilderContributor.SectionName ) == null ) continue;
-            // A fleet (a template: "InstanceCount" or "Instances"): each instance is checked, its placeholders resolved
-            // (the App name is the host's without ".Host": the qualifier of its placeholders).
+            // A fleet (a template: "InstanceCount", "Instances" or "MaxInstanceCount"): each instance is checked (and the
+            // first dynamic one of an Opened fleet), its placeholders resolved (the App name is the host's without ".Host":
+            // the qualifier of its placeholders).
             var appName = b.ProjectPath.LastPart;
             if( appName.EndsWith( ".Host", StringComparison.OrdinalIgnoreCase ) ) appName = appName[..^5];
             if( !ConfigurationTemplate.TryReadInstances( monitor, appSettings, appName, out var instances ) ) return false;
-            foreach( var i in (IEnumerable<ConfigurationInstance?>?)instances ?? [null] )
+            foreach( var i in (IEnumerable<ConfigurationInstance?>?)AppIdentityAppBuilderContributor.CheckedInstances( instances ) ?? [null] )
             {
                 var s = i == null ? appSettings : ConfigurationTemplate.Instantiate( monitor, appSettings, i );
                 var section = s?.TryGetSection( AppIdentityAppBuilderContributor.SectionName );

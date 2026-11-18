@@ -79,14 +79,23 @@ then the `"Defaults"` above).
 
 An entry of `"Parties"` with `"InstanceCount": n` or `"Instances": [ "Paris", "Lyon" ]` is a template (the
 `ConfigurationTemplate` of CK.Configuration): it is a tenant domain or a remote per instance, its placeholders resolved
-(`{Index}`, 1-based, `{Name}`, `{n+Index}`). The instances are then ordinary parties.
+(`{Index}`, 1-based, `{Name}`, `{n+Index}`). The instances are then ordinary parties, with their template and instance
+(`RemotePartyConfiguration.Template`, `RemotePartyConfiguration.Instance`) for the remotes.
 
 ```jsonc
 "Parties": [
   { "FullName": "Shop-{Name}/$Shop-{Name}", "Instances": [ "Paris", "Lyon" ] },          // two tenant domains
-  { "PartyName": "Trolley-{Name}", "InstanceCount": 3, "Address": "tcp:10.0.0.1:{37300+Index}" }  // three remotes
+  { "PartyName": "Trolley-{Name}", "InstanceCount": 3, "Address": "tcp:10.0.0.1:{37300+Index}" }, // three remotes
+  { "PartyName": "Worker-{Name}", "InstanceCount": 2, "MaxInstanceCount": 4 }             // two remotes, at most four
 ]
 ```
+
+A remote template with `"MaxInstanceCount"` is Opened: its dynamic instances (`$Worker-3`, `$Worker-4`, named by their
+index) are not configured, they are accepted at run time (see CK.AppIdentity). Its party name must use `{Name}` or
+`{Index}`, and only a remote template can be Opened. The configuration keeps it as a `RemotePartyTemplate`
+(`ApplicationIdentityServiceConfiguration.RemoteTemplates`, `TenantDomainPartyConfiguration.RemoteTemplates`):
+`RemotePartyTemplate.MatchDynamic` recognizes the full name of a dynamic instance, `RemotePartyTemplate.CreateInstance`
+creates its configuration.
 
 The configuration is provided by the .NET abstraction
 [IConfigurationSection](https://learn.microsoft.com/fr-fr/dotnet/api/microsoft.extensions.configuration.iconfigurationsection)

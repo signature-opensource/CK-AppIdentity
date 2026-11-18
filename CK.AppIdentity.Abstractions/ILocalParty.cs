@@ -58,6 +58,33 @@ public interface ILocalParty : IParty
     Task<IRemoteParty?> AddRemoteAsync( IActivityMonitor monitor, Action<MutableConfigurationSection> configuration );
 
     /// <summary>
+    /// Gets the Opened remote templates of this local party (see <see cref="RemotePartyTemplate"/>): their dynamic
+    /// instances are remotes of this party.
+    /// </summary>
+    IReadOnlyList<RemotePartyTemplate> RemoteTemplates { get; }
+
+    /// <summary>
+    /// Tries to create the dynamic remote that a full name names: an instance of one of the <see cref="RemoteTemplates"/>,
+    /// within its bound, that is not already a remote. The new remote is <see cref="IOwnedParty.IsDynamic"/>: until its
+    /// identity is pinned (by an approval), it is only a candidate, that the transport destroys when it has no pending
+    /// approval anymore.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="fullName">The full name of the caller.</param>
+    /// <returns>The new remote, or null if the full name is not a dynamic instance of a template (or on error).</returns>
+    Task<IRemoteParty?> TryAddTemplateInstanceAsync( IActivityMonitor monitor, NormalizedPath fullName );
+
+    /// <summary>
+    /// Removes a dynamic instance of one of the <see cref="RemoteTemplates"/>: the remote is destroyed and the files that
+    /// pin its identity in the store (<see cref="IFileStore.TrustFilePattern"/>) are trashed, so that it is not created
+    /// again at the next start. Its folder is kept: in a shared store, it is also the instance's own folder.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="remote">The remote to remove: a dynamic instance owned by this party.</param>
+    /// <returns>True on success, false if the remote is not a dynamic instance of this party.</returns>
+    Task<bool> RemoveTemplateInstanceAsync( IActivityMonitor monitor, IRemoteParty remote );
+
+    /// <summary>
     /// Raised when the <see cref="IParty.Description"/> of this local party changes (the HTTP endpoints, for instance,
     /// know their URL once the host has started): the channels announce it again to the remotes.
     /// </summary>

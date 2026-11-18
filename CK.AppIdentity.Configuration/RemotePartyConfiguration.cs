@@ -14,6 +14,8 @@ namespace CK.AppIdentity;
 public sealed class RemotePartyConfiguration : ApplicationIdentityPartyConfiguration
 {
     readonly string? _address;
+    RemotePartyTemplate? _template;
+    ConfigurationInstance? _instance;
 
     internal RemotePartyConfiguration( ImmutableConfigurationSection configuration,
                                        string domainName,
@@ -39,5 +41,27 @@ public sealed class RemotePartyConfiguration : ApplicationIdentityPartyConfigura
     /// This is null if this application cannot reach the remote: this remote must be a server that accepts the remote as a client).
     /// </summary>
     public string? Address => _address;
+
+    /// <summary>
+    /// Gets the template of this remote when it is the instance of a template, null otherwise.
+    /// </summary>
+    public RemotePartyTemplate? Template => _template;
+
+    /// <summary>
+    /// Gets the instance of the <see cref="Template"/> that this remote is, null when it is not the instance of a template.
+    /// </summary>
+    public ConfigurationInstance? Instance => _instance;
+
+    /// <summary>
+    /// Gets whether this remote is a dynamic instance of an Opened template: it is not configured, it exists because it
+    /// has been approved (its identity is pinned in the store) or because it is a candidate to the approval.
+    /// </summary>
+    public bool IsDynamicInstance => _instance != null && _template!.IsDynamic( _instance );
+
+    internal void SetInstance( RemotePartyTemplate template, ConfigurationInstance instance )
+    {
+        _template = template;
+        _instance = instance;
+    }
 
 }

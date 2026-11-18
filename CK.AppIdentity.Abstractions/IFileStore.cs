@@ -28,6 +28,12 @@ namespace CK.AppIdentity;
 public interface IFileStore
 {
     /// <summary>
+    /// The pattern of the files that pin the identity of a remote in its folder of the shared store: "Identity.*.trust".
+    /// The store is a trust store: the identity of a remote is the one these files pin, for every party that uses the store.
+    /// </summary>
+    const string TrustFilePattern = "Identity.*.trust";
+
+    /// <summary>
     /// Gets the <see cref="IParty"/>' folder that this store handles.
     /// </summary>
     NormalizedPath FolderPath { get; }

@@ -83,6 +83,20 @@ Destruction is `IOwnedParty.DestroyAsync`, and `SetDestroyed` is its two-phase c
 party so that no one else starts working with it, and returns whether this call is the one that won the
 race.
 
+### The dynamic instances of an Opened template
+
+An Opened remote template (`"MaxInstanceCount"`, see CK.AppIdentity.Configuration) accepts dynamic instances, numbered
+after its configured ones up to its bound: `ILocalParty.RemoteTemplates` lists them.
+
+- **A candidate:** `ILocalParty.TryAddTemplateInstanceAsync` creates the dynamic remote that a full name names
+  (`Sample/$Worker-3/#Dev`) when it is an instance of a template within its bound and not already a remote. The
+  transport calls it for an unknown caller: the remote is a candidate until its identity is pinned (by an approval).
+- **Nothing else is stored:** the store is a trust store, a dynamic instance exists because its identity is pinned in its
+  folder (`IFileStore.TrustFilePattern`). At start, the agent creates the dynamic instances whose folder holds a pin; an
+  instance above the bound (the configuration lowered it: the newer decision) has its pins trashed, with a warning.
+- **The removal:** `ILocalParty.RemoveTemplateInstanceAsync` destroys the remote and trashes its pins, never its folder (in
+  a shared store, it is also the instance's own folder, with its `-Local`). The instance can then be approved again.
+
 ## What observers get.
 
 Three `PerfectEvent` are exposed rather than plain events, so a handler can be asynchronous and the

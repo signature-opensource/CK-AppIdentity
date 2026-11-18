@@ -60,7 +60,10 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
     /// </summary>
     /// <param name="Tenants">The list of tenant configurations.</param>
     /// <param name="Remotes">The list of remote configurations.</param>
-    public readonly record struct ProcessedConfiguration( List<TenantDomainPartyConfiguration> Tenants, List<RemotePartyConfiguration> Remotes )
+    /// <param name="RemoteTemplates">The list of the Opened remote templates (see <see cref="RemotePartyTemplate"/>).</param>
+    public readonly record struct ProcessedConfiguration( List<TenantDomainPartyConfiguration> Tenants,
+                                                          List<RemotePartyConfiguration> Remotes,
+                                                          List<RemotePartyTemplate> RemoteTemplates )
     {
         /// <summary>
         /// The total count of parties (remotes and tenants) in the configuration.
@@ -108,7 +111,7 @@ public class ApplicationIdentityPartyConfiguration : ApplicationIdentityConfigur
         // We don't inject any "existing" names here: it is up to the actual add to handle
         // existing remotes.
         var fullNameIndex = new Dictionary<string, ImmutableConfigurationSection>( StringComparer.OrdinalIgnoreCase );
-        var partyCollector = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>() );
+        var partyCollector = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>(), new List<RemotePartyTemplate>() );
         bool success = ApplicationIdentityServiceConfiguration.ReadParties( monitor,
                                                                             finalConfig,
                                                                             _domainName,

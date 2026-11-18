@@ -159,7 +159,7 @@ public class CentralProjectionTests
               "Domain": "Sample",
               "Builders": {
                 "Auth3/Auth3.Builder": { "App": {} },
-                "Worker/Worker.Builder": { "App": { "InstanceCount": 2 } },
+                "Worker/Worker.Builder": { "App": { "InstanceCount": 2, "MaxInstanceCount": 4 } },
                 "Front/Front.Builder": { "App": { "Instances": [ "Red", "Blue" ], "FullName": "Sample/$Front-{Name}-{Index}/#Dev" } }
               },
               "Links": [
@@ -177,6 +177,9 @@ public class CentralProjectionTests
         var auth3 = Project( central, root, "Auth3/Auth3.Builder" );
         auth3["App:Parties:0:PartyName"].ShouldBe( "$Worker-{Name}" );
         auth3["App:Parties:0:InstanceCount"].ShouldBe( "2" );
+        // A link to an Opened fleet is an Opened remote template.
+        auth3["App:Parties:0:MaxInstanceCount"].ShouldBe( "4" );
+        auth3["App:Parties:1:MaxInstanceCount"].ShouldBeNull();
         auth3["App:Parties:0:Address"].ShouldBe( "tcp:127.0.0.1:{38000+Index}" );
         auth3["App:Parties:1:PartyName"].ShouldBe( "$Front-{Name}-{Index}" );
         auth3["App:Parties:1:Instances:1"].ShouldBe( "Blue" );

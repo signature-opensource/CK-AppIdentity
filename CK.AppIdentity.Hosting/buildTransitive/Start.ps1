@@ -10,7 +10,8 @@
     2. Unless -SkipBuild: builds each party (dotnet build). The TypeScript integration of the build installs the
        packages of the client applications ("yarn install") when needed.
     3. Starts each party in its own window, in the Development environment (DOTNET_ENVIRONMENT). A fleet (a host whose
-       "appsettings.json" has "InstanceCount" or "Instances") is started once per instance ("--Instance=<Name>").
+       "appsettings.json" has "InstanceCount", "Instances" or "MaxInstanceCount") is started once per configured
+       instance ("--Instance=<Name>"); the dynamic instances of an Opened fleet are started by hand.
     4. Waits until every party is ready: its "DevRunningStatus.json" (in "#Dev/Store", written by the "DevRunningStatus"
        feature of CK.AppIdentity) says "Ready" (the party is started and its outgoing remotes are connected), then
        until its client applications are served. A client application whose dev server failed (its "Error") stops the
@@ -81,16 +82,25 @@ function Get-Status( [hashtable] $statuses, $party ) {
     return $null
 }
 
-# The instances of a fleet: the "InstanceCount" or the "Instances" of the host's appsettings.json (generated: its only
-# comment is its first line). No instance: the host is not a fleet.
-function Get-Instances( $party ) {
+# The host's appsettings.json (generated: its only comment is its first line), null if there is none.
+function Get-AppSettings( $party ) {
     $file = Join-Path $party.ProjectPath 'appsettings.json'
-    if( -not (Test-Path $file) ) { return @() }
+    if( -not (Test-Path $file) ) { return $null }
     $json = (Get-Content $file | Where-Object { -not $_.TrimStart().StartsWith( '//' ) }) -join "`n"
-    $c = $json | ConvertFrom-Json
-    $names = Get-Property $c 'Instances'
+    return $json | ConvertFrom-Json
+}
+
+# Whether a host is a fleet: its appsettings.json has "InstanceCount", "Instances" or "MaxInstanceCount".
+function Test-Fleet( $settings ) {
+    return [bool]((Get-Property $settings 'Instances') -or ($null -ne (Get-Property $settings 'InstanceCount')) -or (Get-Property $settings 'MaxInstanceCount'))
+}
+
+# The configured instances of a fleet: its "Instances", or 1 to its "InstanceCount" (the dynamic instances of an Opened
+# fleet, after them, are started by hand: "dotnet run -- --Instance=<n>").
+function Get-Instances( $settings ) {
+    $names = Get-Property $settings 'Instances'
     if( $names ) { return @( $names ) }
-    $count = Get-Property $c 'InstanceCount'
+    $count = Get-Property $settings 'InstanceCount'
     if( $count ) { return @( 1..([int]$count) | ForEach-Object { "$_" } ) }
     return @()
 }
@@ -137,9 +147,13 @@ if( $manifests.Count -eq 0 ) { throw "No party in '$devFolder\Parties': build th
 $parties = @( $manifests | ForEach-Object {
     $name = $_.BaseName
     $m = Get-Content $_.FullName -Raw | ConvertFrom-Json
-    $instances = @( Get-Instances $m )
-    if( $instances.Count -eq 0 ) {
+    $settings = Get-AppSettings $m
+    $instances = @( Get-Instances $settings )
+    if( -not (Test-Fleet $settings) ) {
         $m | Add-Member -NotePropertyName Name -NotePropertyValue $name -PassThru
+    }
+    elseif( $instances.Count -eq 0 ) {
+        Write-Host "'$name' is a fleet without configured instance: its dynamic instances are started by hand (dotnet run -- --Instance=<n>)." -ForegroundColor Yellow
     }
     else {
         foreach( $i in $instances ) {

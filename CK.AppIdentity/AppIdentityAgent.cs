@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -151,6 +152,7 @@ public sealed class AppIdentityAgent : MicroAgent
                 {
                     var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
                     error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
+                    if( error == null ) await AddPinnedTemplateInstancesAsync( monitor ).ConfigureAwait( false );
                 }
                 else
                 {
@@ -341,6 +343,59 @@ public sealed class AppIdentityAgent : MicroAgent
                 await _service.OnCreatedAsync( monitor, p ).ConfigureAwait( false );
             }
             return true;
+        }
+    }
+
+    // The dynamic instances of the Opened remote templates that have been approved: their identity is pinned in their
+    // folder of the store (derived, nothing else is stored). An instance above the bound of its template (the bound has
+    // been lowered by the configuration: the newer decision) has its pins trashed. A failing instance is logged: it doesn't
+    // fail the start.
+    async Task AddPinnedTemplateInstancesAsync( IActivityMonitor monitor )
+    {
+        foreach( var local in _service.TenantDomains.Cast<LocalParty>().Prepend<LocalParty>( _service ) )
+        {
+            foreach( var t in local.RemoteTemplates )
+            {
+                var instances = t.Instances;
+                // Any instance gives the folder of the instances: the one of their domain and environment.
+                var probe = t.CreateInstance( monitor, instances.Count < instances.MaxInstanceCount
+                                                        ? instances.CreateDynamic( instances.Count + 1 )
+                                                        : instances[0] );
+                if( probe == null ) continue;
+                var parent = _service.ComputeSharedStorePath( probe.FullName ).RemoveLastPart();
+                if( !Directory.Exists( parent ) ) continue;
+                foreach( var d in Directory.GetDirectories( parent ) )
+                {
+                    NormalizedPath folder = d;
+                    if( !ConfigurationTemplate.TryMatchIndex( t.PartyNamePattern, folder.LastPart, out var index )
+                        || index <= instances.Count
+                        || !Directory.EnumerateFiles( folder, IFileStore.TrustFilePattern ).Any() )
+                    {
+                        continue;
+                    }
+                    if( !instances.IsDynamicIndex( index ) )
+                    {
+                        monitor.Warn( $"'{folder}' pins the identity of the instance {index} of the template {t}, above its \"{ConfigurationTemplate.MaxInstanceCountKey}\" ({instances.MaxInstanceCount}): the pins are trashed." );
+                        LocalParty.TrashTrustFiles( monitor, new FileStore( _service.Configuration.StoreFileSystem, folder, createFolder: false ) );
+                        continue;
+                    }
+                    var c = t.CreateInstance( monitor, instances.CreateDynamic( index ) );
+                    if( c == null
+                        || _service.ComputeSharedStorePath( c.FullName ) != folder
+                        || local.Remotes.Any( r => r.FullName.Path.Equals( c.FullName.Path, StringComparison.OrdinalIgnoreCase ) ) )
+                    {
+                        continue;
+                    }
+                    using( monitor.OpenInfo( $"Creating the approved dynamic instance '{c.FullName}' of the template {t}." ) )
+                    {
+                        var r = new RemoteParty( c, local, true );
+                        if( !await DoInitializeDynamicPartiesAsync( monitor, new AddedDynamicParties( new[] { r }, Array.Empty<TenantDomainParty>() ) ).ConfigureAwait( false ) )
+                        {
+                            monitor.CloseGroup( "Failed." );
+                        }
+                    }
+                }
+            }
         }
     }
 

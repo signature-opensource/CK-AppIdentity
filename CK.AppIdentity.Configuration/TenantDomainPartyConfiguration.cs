@@ -16,12 +16,14 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
 
     readonly List<RemotePartyConfiguration> _remotes;
+    readonly List<RemotePartyTemplate> _remoteTemplates;
 
     internal TenantDomainPartyConfiguration( ImmutableConfigurationSection configuration,
                                              string domainName,
                                              NormalizedPath fullName,
                                              ApplicationIdentityLocalConfiguration local,
                                              List<RemotePartyConfiguration> remotes,
+                                             List<RemotePartyTemplate> remoteTemplates,
                                              ref ResolvedConfigurationProps props )
         : base( configuration, domainName, fullName, ref props )
     {
@@ -30,6 +32,7 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
                       && p[0] == '$' && p.AsSpan( 1 ).Equals( fullName.Parts[^3], StringComparison.OrdinalIgnoreCase ) );
         _localConfiguration = local;
         _remotes = remotes;
+        _remoteTemplates = remoteTemplates;
     }
 
     /// <summary>
@@ -37,6 +40,11 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
     /// This can be empty.
     /// </summary>
     public IReadOnlyCollection<RemotePartyConfiguration> Remotes => _remotes;
+
+    /// <summary>
+    /// Gets the Opened remote templates: their dynamic instances are remotes of this tenant domain.
+    /// </summary>
+    public IReadOnlyList<RemotePartyTemplate> RemoteTemplates => _remoteTemplates;
 
     /// <summary>
     /// Gets the "Local" condfiguration.

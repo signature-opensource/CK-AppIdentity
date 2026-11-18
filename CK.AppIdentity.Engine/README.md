@@ -135,17 +135,18 @@ CK.Engine.Configuration), the same contributor projects the parties in the `ckon
   only). The keys of a remote entry are not checked here: the builder of `From` validates its party as above.
 - **The remotes outside the solution stay in the `Parties` of their App;** a remote both linked and explicit is an
   error.
-- **A fleet** (an App with `"InstanceCount"` or `"Instances"`) is named by its pattern: its derived `FullName` is
-  `{Domain}/${Name}-{Name}/{Environment}` (`$Worker-{Name}`), an explicit one uses the placeholders. A link from it is a
-  remote of every instance; a link to it is a remote template in `From` (the fleet's `"InstanceCount"` or
-  `"Instances"` copied in the entry): one remote per instance at run time, its values can use the placeholders
-  (`"Address": "tcp:10.0.0.1:{37300+Index}"`).
+- **A fleet** (an App with `"InstanceCount"`, `"Instances"` or `"MaxInstanceCount"`) is named by its pattern: its
+  derived `FullName` is `{Domain}/${Name}-{Name}/{Environment}` (`$Worker-{Name}`), an explicit one uses the
+  placeholders. A link from it is a remote of every instance; a link to it is a remote template in `From` (the fleet's
+  `"InstanceCount"` or `"Instances"`, and its `"MaxInstanceCount"`, copied in the entry): one remote per instance at
+  run time, its values can use the placeholders (`"Address": "tcp:10.0.0.1:{37300+Index}"`).
 
 ## The fleets and the templates of parties
 
-An App with `"InstanceCount"` or `"Instances"` is a fleet: one build, one process per instance (CK.AppHost chooses it at
-start). Its party name must use `{Name}` or `{Index}` (`"FullName": "Sample/$Trolley-{Name}/#Dev"`): the contributor
-validates the party of each instance, its placeholders resolved. The instances share the type sets: the set of a fleet,
+An App with `"InstanceCount"`, `"Instances"` or `"MaxInstanceCount"` is a fleet: one build, one process per instance
+(CK.AppHost chooses it at start). Its party name must use `{Name}` or `{Index}` (`"FullName": "Sample/$Trolley-{Name}/#Dev"`):
+the contributor validates the party of each configured instance and, for an Opened fleet, of its first dynamic one,
+their placeholders resolved. The instances share the type sets: the set of a fleet,
 or of a tenant template (an entry of `Parties` with instances), is named by its unresolved party name
 (`$Trolley-{Name}`); at run time, `PartyComponentDirectory` finds the set of an instance (`$Trolley-Red`) through it.
 

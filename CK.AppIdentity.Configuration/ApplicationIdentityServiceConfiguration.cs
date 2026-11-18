@@ -22,6 +22,7 @@ namespace CK.AppIdentity;
 public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentityPartyConfiguration
 {
     readonly List<RemotePartyConfiguration> _remotes;
+    readonly List<RemotePartyTemplate> _remoteTemplates;
     readonly List<TenantDomainPartyConfiguration> _tenants;
     readonly StoreFileSystem _storeFileSystem;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
@@ -57,6 +58,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         Throw.DebugAssert( parties.HasValue );
         _storeFileSystem = store;
         _remotes = parties.Value.Remotes;
+        _remoteTemplates = parties.Value.RemoteTemplates;
         _tenants = parties.Value.Tenants;
         _localConfiguration = localConfiguration;
         _strictMode = strictMode;
@@ -72,6 +74,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     {
         _storeFileSystem = new StoreFileSystem( storeRootPath ?? DefaultStoreRootPath, isPrivate: !storeRootPath.HasValue );
         _remotes = new List<RemotePartyConfiguration>();
+        _remoteTemplates = new List<RemotePartyTemplate>();
         _tenants = new List<TenantDomainPartyConfiguration>();
         _strictMode = EnvironmentName != CoreApplicationIdentity.DefaultEnvironmentName;
         var local = configuration.GetSection( "Local" );
@@ -82,6 +85,11 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// Gets the remote parties if any.
     /// </summary>
     public IReadOnlyCollection<RemotePartyConfiguration> Remotes => _remotes;
+
+    /// <summary>
+    /// Gets the Opened remote templates: their dynamic instances are remotes of this party.
+    /// </summary>
+    public IReadOnlyList<RemotePartyTemplate> RemoteTemplates => _remoteTemplates;
 
     /// <summary>
     /// Gets the tenant domains if any.
@@ -555,7 +563,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     {
         Throw.DebugAssert( configuration.Key == "Parties" );
         bool success = true;
-        var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>() );
+        var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>(), new List<RemotePartyTemplate>() );
         foreach( var c in configuration.GetChildren() )
         {
             success &= ReadTemplateOrParties( monitor, configuration, c, domainName, environmentName, ref parties, fullNameIndex );
@@ -563,8 +571,9 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         return success ? parties : null;
     }
 
-    // An entry of "Parties" with "InstanceCount" or "Instances" is a template: a tenant domain or a remote per instance
-    // (ConfigurationTemplate), each one with the placeholders ("{Index}", "{Name}") of its instance resolved.
+    // An entry of "Parties" with "InstanceCount", "Instances" or "MaxInstanceCount" is a template: a tenant domain or a
+    // remote per instance (ConfigurationTemplate), each one with the placeholders ("{Index}", "{Name}") of its instance
+    // resolved (see RemotePartyTemplate).
     static bool ReadTemplateOrParties( IActivityMonitor monitor,
                                        ImmutableConfigurationSection partiesSection,
                                        ImmutableConfigurationSection configuration,
@@ -578,15 +587,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         {
             return ReadParties( monitor, configuration, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
         }
-        using var gLog = monitor.OpenInfo( $"Party template '{configuration.Path}': {instances.Count} instance(s)." );
-        bool success = true;
-        foreach( var i in instances )
-        {
-            var instance = ConfigurationTemplate.Instantiate( monitor, configuration, i, partiesSection );
-            success &= instance != null
-                       && ReadParties( monitor, instance, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
-        }
-        return success;
+        return RemotePartyTemplate.Read( monitor, partiesSection, configuration, instances, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
     }
 
     internal static bool ReadParties( IActivityMonitor monitor,
@@ -667,7 +668,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                 {
                     // Success may become false if something fails in the local configuration.
                     var localConfig = CreateLocalConfiguration( monitor, configuration, ref success );
-                    partyCollector.Tenants.Add( new TenantDomainPartyConfiguration( configuration, domainName, fullName, localConfig, parties.Value.Remotes, ref props ) );
+                    partyCollector.Tenants.Add( new TenantDomainPartyConfiguration( configuration, domainName, fullName, localConfig, parties.Value.Remotes, parties.Value.RemoteTemplates, ref props ) );
                 }
             }
             else

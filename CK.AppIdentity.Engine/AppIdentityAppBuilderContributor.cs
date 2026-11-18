@@ -213,6 +213,11 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 {
                     entry[ConfigurationTemplate.InstancesKey] = new JsonArray( names.GetChildren().Select( n => (JsonNode?)JsonValue.Create( n.Value ) ).ToArray() );
                 }
+                // A link to an Opened fleet is an Opened remote template: its dynamic instances are accepted (by approval).
+                if( target[ConfigurationTemplate.MaxInstanceCountKey] is string max )
+                {
+                    entry[ConfigurationTemplate.MaxInstanceCountKey] = int.Parse( max, System.Globalization.CultureInfo.InvariantCulture );
+                }
                 if( l.Link != null )
                 {
                     foreach( var (key, value) in l.Link ) entry[key] = value?.DeepClone();
@@ -343,18 +348,22 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 Copy( party, k.Key, k );
             }
             var section = new ImmutableConfigurationSection( party );
-            // A fleet App ("InstanceCount" or "Instances"): its party is validated for each instance, its placeholders
-            // resolved; the instances share the type sets, named after the templates ("$Trolley-{Name}").
+            // A fleet App ("InstanceCount", "Instances" or "MaxInstanceCount"): its party is validated for each instance
+            // (and the first dynamic one of an Opened fleet), its placeholders resolved; the instances share the type sets,
+            // named after the templates ("$Trolley-{Name}").
             if( !ConfigurationTemplate.TryReadInstances( monitor, a.Configuration, a.Name, out var instances ) )
             {
                 success = false;
                 continue;
             }
             string? rootSetName = null;
-            if( instances != null )
+            var checkedInstances = CheckedInstances( instances );
+            if( checkedInstances != null )
             {
                 rootSetName = RawPartyName( section ) ?? $"${a.Name}-{{Name}}";
-                if( !ConfigurationTemplate.TryResolve( monitor, rootSetName, section.Path, instances[0], [], out var r ) || r == rootSetName )
+                if( checkedInstances.Count == 0
+                    || !ConfigurationTemplate.TryResolve( monitor, rootSetName, section.Path, checkedInstances[0], [], out var r )
+                    || r == rootSetName )
                 {
                     monitor.Error( $"The party name '{rootSetName}' of the fleet {a} must use the \"{{Name}}\" or \"{{Index}}\" placeholder: its instances are different parties." );
                     success = false;
@@ -362,9 +371,9 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 }
             }
             ApplicationIdentityServiceConfiguration? configuration = null;
-            using( monitor.OpenInfo( instances == null ? $"Checking the party of {a}." : $"Checking the {instances.Count} instances of the party of {a}." ) )
+            using( monitor.OpenInfo( checkedInstances == null ? $"Checking the party of {a}." : $"Checking the {checkedInstances.Count} instances of the party of {a}." ) )
             {
-                foreach( var i in (IEnumerable<ConfigurationInstance?>?)instances ?? [null] )
+                foreach( var i in (IEnumerable<ConfigurationInstance?>?)checkedInstances ?? [null] )
                 {
                     var s = section;
                     var defaultPartyName = a.Name;
@@ -423,6 +432,15 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             if( template == null || !ConfigurationTemplate.IsTemplate( template ) ) return null;
             return RawPartyName( template );
         }
+    }
+
+    // The instances of a fleet that are checked: the configured ones and, for an Opened fleet, its first dynamic one (the
+    // dynamic instances differ only by their index). Null when the App is not a fleet.
+    internal static IReadOnlyList<ConfigurationInstance>? CheckedInstances( ConfigurationTemplateInstances? instances )
+    {
+        if( instances == null ) return null;
+        if( !instances.IsOpened || instances.MaxInstanceCount == instances.Count ) return instances;
+        return instances.Append( instances.CreateDynamic( instances.Count + 1 ) ).ToList();
     }
 
     // The party name written by a party section: its "PartyName", or the party of its "FullName" (a template's name

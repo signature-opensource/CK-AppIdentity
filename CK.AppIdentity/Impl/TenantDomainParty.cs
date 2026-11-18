@@ -24,6 +24,7 @@ sealed class TenantDomainParty : LocalParty, ITenantDomainParty, IOwnedPartyInte
     internal TenantDomainParty( TenantDomainPartyConfiguration configuration, bool isDynamic, ApplicationIdentityService root )
         : base( configuration,
                 configuration.Remotes,
+                configuration.RemoteTemplates,
                 configuration.LocalConfiguration,
                 isDynamic,
                 root )
