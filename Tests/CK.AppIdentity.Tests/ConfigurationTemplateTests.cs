@@ -83,4 +83,14 @@ public class ConfigurationTemplateTests
         d.HasTypeSet( "$Trolley" ).ShouldBeFalse();
         d.IsMember( "$Other", typeof( string ) ).ShouldBeTrue();
     }
+
+    [Test]
+    public void FindTypeSetName_finds_the_set_of_an_instance()
+    {
+        string[] names = ["$Center", "$Trolley-{Name}", "App"];
+        PartyComponentDirectory.FindTypeSetName( names, "$center" ).ShouldBe( "$Center" );
+        PartyComponentDirectory.FindTypeSetName( names, "$Trolley-2" ).ShouldBe( "$Trolley-{Name}" );
+        PartyComponentDirectory.FindTypeSetName( names, "$Trolley-" ).ShouldBeNull();
+        PartyComponentDirectory.FindTypeSetName( names, "Other" ).ShouldBeNull();
+    }
 }

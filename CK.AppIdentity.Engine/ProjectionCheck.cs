@@ -44,13 +44,24 @@ static class ProjectionCheck
             if( b.ProjectPath.IsEmptyPath ) continue;
             var file = b.ProjectPath.AppendPart( "appsettings.json" );
             if( !File.Exists( file ) ) continue;
-            var section = ImmutableConfigurationSection.CreateFromJson( "appsettings", File.ReadAllText( file ) ).TryGetSection( AppIdentityAppBuilderContributor.SectionName );
-            if( section == null ) continue;
-            using( monitor.OpenTrace( $"Checking the type sets of the party projected in '{file}'." ) )
+            var appSettings = ImmutableConfigurationSection.CreateFromJson( "appsettings", File.ReadAllText( file ) );
+            if( appSettings.TryGetSection( AppIdentityAppBuilderContributor.SectionName ) == null ) continue;
+            // A fleet (a template: "InstanceCount" or "Instances"): each instance is checked, its placeholders resolved
+            // (the App name is the host's without ".Host": the qualifier of its placeholders).
+            var appName = b.ProjectPath.LastPart;
+            if( appName.EndsWith( ".Host", StringComparison.OrdinalIgnoreCase ) ) appName = appName[..^5];
+            if( !ConfigurationTemplate.TryReadInstances( monitor, appSettings, appName, out var instances ) ) return false;
+            foreach( var i in (IEnumerable<ConfigurationInstance?>?)instances ?? [null] )
             {
-                var c = ApplicationIdentityServiceConfiguration.Create( monitor, section );
-                if( c == null ) return false;
-                success &= Check( monitor, group, result, c );
+                var s = i == null ? appSettings : ConfigurationTemplate.Instantiate( monitor, appSettings, i );
+                var section = s?.TryGetSection( AppIdentityAppBuilderContributor.SectionName );
+                if( section == null ) return false;
+                using( monitor.OpenTrace( $"Checking the type sets of the party projected in '{file}'{(i != null ? $" for its {i}" : "")}." ) )
+                {
+                    var c = ApplicationIdentityServiceConfiguration.Create( monitor, section );
+                    if( c == null ) return false;
+                    success &= Check( monitor, group, result, c );
+                }
             }
         }
         return success;
@@ -136,7 +147,8 @@ static class ProjectionCheck
             }
         }
 
-        bool IsMember( string setName, Type t ) => !sets.TryGetValue( setName, out var set ) || set.Contains( t );
+        // The set of an instance of a template is the set of the template (see PartyComponentDirectory.FindTypeSetName).
+        bool IsMember( string setName, Type t ) => PartyComponentDirectory.FindTypeSetName( sets.Keys, setName ) is not string n || sets[n].Contains( t );
 
         void Error( string path, string text )
         {

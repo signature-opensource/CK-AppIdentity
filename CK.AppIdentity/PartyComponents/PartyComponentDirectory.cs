@@ -59,13 +59,31 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
                                  .Select( kv => (ToPattern( kv.Key ), kv.Value) )
                                  .ToArray();
         _instanceSets = new ConcurrentDictionary<string, IReadOnlySet<Type>?>( StringComparer.OrdinalIgnoreCase );
+    }
 
-        // "$Trolley-{Name}" matches "$Trolley-Red": a placeholder matches any non empty part of a name.
-        static Regex ToPattern( string name )
+    // "$Trolley-{Name}" matches "$Trolley-Red": a placeholder matches any non empty part of a name.
+    static Regex ToPattern( string name )
+    {
+        var parts = _placeholder.Split( name ).Select( Regex.Escape );
+        return new Regex( "^" + string.Join( "[^/]+", parts ) + "$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase );
+    }
+
+    /// <summary>
+    /// Finds the name of the type set of a party or a client among the names of the sets: the name itself, or the name
+    /// of the template whose instance it is (the set of "$Trolley-Red" is "$Trolley-{Name}").
+    /// </summary>
+    /// <param name="setNames">The names of the sets.</param>
+    /// <param name="name">The name of the party or the client.</param>
+    /// <returns>The name of its set, or null if it has no set.</returns>
+    public static string? FindTypeSetName( IEnumerable<string> setNames, string name )
+    {
+        string? template = null;
+        foreach( var n in setNames.OrderBy( n => n, StringComparer.Ordinal ) )
         {
-            var parts = _placeholder.Split( name ).Select( Regex.Escape );
-            return new Regex( "^" + string.Join( "[^/]+", parts ) + "$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase );
+            if( n.Equals( name, StringComparison.OrdinalIgnoreCase ) ) return n;
+            if( template == null && _placeholder.IsMatch( n ) && ToPattern( n ).IsMatch( name ) ) template = n;
         }
+        return template;
     }
 
     // The set of a name, or the set of the template (the set named with placeholders) whose instance it is.
