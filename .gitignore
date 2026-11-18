@@ -257,6 +257,8 @@ CodeCakeBuilder/MemoryKey.*.txt
 CodeCakeBuilder/UnitTestsDone.*.txt
 $StObjGen/
 Tests/**/TestStore/
+Tests/**/OptionsStore/
+Tests/**/PartyClientStore/
 
 CodeCakeBuilder/[Rr]elease/
 CodeCakeBuilder/[Rr]eleases/
