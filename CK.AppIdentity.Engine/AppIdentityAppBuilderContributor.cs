@@ -315,6 +315,61 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         }
     }
 
+    /// <inheritdoc />
+    public bool Contribute( IActivityMonitor monitor, AppBuilderContext context )
+    {
+        bool success = true;
+        foreach( var a in context.Apps )
+        {
+            // The keys of the party are the ones of the root of an AppIdentity configuration: an App without any of them
+            // is not a party.
+            var keys = a.Configuration.GetChildren().Where( c => ApplicationIdentityServiceConfiguration.RootKeys.Contains( c.Key ) ).ToList();
+            if( keys.Count == 0 ) continue;
+            // The configuration of the party alone (the other keys of the App are not its own), with the paths of the
+            // "ckonf.json" (for the errors).
+            var party = new MutableConfigurationSection( a.Configuration.Path );
+            foreach( var k in keys )
+            {
+                a.ProjectInSection( k.Key, SectionName );
+                Copy( party, k.Key, k );
+            }
+            var section = new ImmutableConfigurationSection( party );
+            ApplicationIdentityServiceConfiguration? configuration;
+            using( monitor.OpenInfo( $"Checking the party of {a}." ) )
+            {
+                // The relative paths (StoreRootPath) are the host's: its content root is its project folder.
+                configuration = ApplicationIdentityServiceConfiguration.Create( monitor, section, defaultPartyName: a.Name, basePath: a.HostProjectPath );
+                if( configuration == null )
+                {
+                    monitor.Error( $"Invalid party in {a}." );
+                    success = false;
+                    continue;
+                }
+            }
+            // The type sets of the local parties.
+            var root = CreateTypeSet( monitor, a, configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
+            foreach( var t in configuration.TenantDomains )
+            {
+                CreateTypeSet( monitor, a, t.PartyName, t.LocalConfiguration.Configuration, null, ref success );
+            }
+            var clients = section.TryGetSection( "Local" )?.TryGetSection( PartyClientSectionName );
+            if( clients == null || root == null ) continue;
+            foreach( var c in clients.GetChildren() )
+            {
+                var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
+                if( set != null ) _clients.Add( new DeclaredClient( a, c.Key, c, set ) );
+            }
+        }
+        return success;
+
+        // In the order of the configuration (the order of the declared clients is the one of the file).
+        static void Copy( MutableConfigurationSection target, string path, ImmutableConfigurationSection s )
+        {
+            if( s.Value != null ) target[path] = s.Value;
+            foreach( var c in s.GetChildren() ) Copy( target, $"{path}:{c.Key}", c );
+        }
+    }
+
     // The type set of a local party (its "Local" section) or of a client (its section, the set of its party as parent):
     // added to the BinPath of the App; its keys are compile time keys.
     static TypeSetConfiguration? CreateTypeSet( IActivityMonitor monitor,
