@@ -171,6 +171,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             }
         }
         var links = ReadLinks( monitor, context.Central, parties, ref success );
+        success &= CheckTenantTemplates( monitor, context.Central, domain );
         if( !success ) return false;
         foreach( var a in context.Apps )
         {
@@ -226,6 +227,93 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             }
         }
         return success;
+
+        // The tenant templates of the System (the central configuration sees all its Apps):
+        //  - In a fleet App, each process has its own tenants: the names of a tenant template use the placeholder of the
+        //    App ("{Trolley.Name}" or "{Trolley.Index}"), otherwise the processes of the fleet would create the same tenants.
+        //  - An Opened tenant template owns its domain prefix: its run-time tenants are named by their creator, so no other
+        //    party of the System has its domain directly under it, and no other tenant template has the same prefix.
+        static bool CheckTenantTemplates( IActivityMonitor monitor, CentralConfiguration central, string? domain )
+        {
+            bool success = true;
+            var file = central.File;
+            var prefixes = new List<(string Prefix, string Path)>();
+            var domains = new List<(string Domain, string Path)>();
+            if( domain != null ) domains.Add( (domain, "Domain") );
+            foreach( var a in central.AllApps )
+            {
+                if( DomainOf( a.Configuration["FullName"] ) is string d ) domains.Add( (d, $"{a.Configuration.Path}:FullName") );
+                Collect( monitor, file, a, ConfigurationTemplate.IsTemplate( a.Configuration ), a.Configuration.GetSection( "Parties" ), prefixes, domains, ref success );
+            }
+            for( int i = 0; i < prefixes.Count; ++i )
+            {
+                var (prefix, path) = prefixes[i];
+                for( int j = i + 1; j < prefixes.Count; ++j )
+                {
+                    if( prefixes[j].Prefix.Equals( prefix, StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        monitor.Error( $"The Opened tenant templates '{path}' and '{prefixes[j].Path}' of '{file}' have the same domain prefix '{prefix}': a tenant template owns its prefix." );
+                        success = false;
+                    }
+                }
+                foreach( var (d, dPath) in domains )
+                {
+                    if( d.Length > prefix.Length + 1
+                        && d.StartsWith( prefix, StringComparison.OrdinalIgnoreCase )
+                        && d[prefix.Length] == '/'
+                        && d.IndexOf( '/', prefix.Length + 1 ) < 0 )
+                    {
+                        monitor.Error( $"The domain '{d}' of '{dPath}' is under the domain prefix '{prefix}' of the Opened tenant template '{path}' in '{file}': a tenant template owns its prefix (its run-time tenants are named by their creator)." );
+                        success = false;
+                    }
+                }
+            }
+            return success;
+
+            static void Collect( IActivityMonitor monitor,
+                                 string file,
+                                 CentralApp app,
+                                 bool isFleet,
+                                 Microsoft.Extensions.Configuration.IConfigurationSection parties,
+                                 List<(string Prefix, string Path)> prefixes,
+                                 List<(string Domain, string Path)> domains,
+                                 ref bool success )
+            {
+                foreach( var p in parties.GetChildren() )
+                {
+                    if( ConfigurationTemplate.IsTemplate( p ) && TenantDomainTemplate.IsTenantTemplate( p ) )
+                    {
+                        var names = $"{p["FullName"]} {p["DomainName"]}";
+                        if( isFleet
+                            && names.IndexOf( $"{app.Name}.Name}}", StringComparison.OrdinalIgnoreCase ) < 0
+                            && names.IndexOf( $"{app.Name}.Index}}", StringComparison.OrdinalIgnoreCase ) < 0 )
+                        {
+                            monitor.Error( $"The tenant template '{p.Path}' of the fleet {app} in '{file}' must use the placeholder of its App in its names (\"{{{app.Name}.Name}}\" or \"{{{app.Name}.Index}}\"): each process of the fleet has its own tenants." );
+                            success = false;
+                        }
+                        var raw = p["DomainName"];
+                        if( p[ConfigurationTemplate.MaxInstanceCountKey] != null
+                            && raw != null
+                            && raw.EndsWith( "/{Name}", StringComparison.OrdinalIgnoreCase ) )
+                        {
+                            prefixes.Add( (raw.Substring( 0, raw.Length - 7 ), p.Path) );
+                        }
+                        continue;
+                    }
+                    if( (p["DomainName"] ?? DomainOf( p["FullName"] )) is string d ) domains.Add( (d, p.Path) );
+                    Collect( monitor, file, app, isFleet, p.GetSection( "Parties" ), prefixes, domains, ref success );
+                }
+            }
+        }
+
+        // The domain of a full name, written with or without its environment (null when there is no "$Party" part).
+        static string? DomainOf( string? fullName )
+        {
+            if( fullName == null ) return null;
+            var parts = fullName.Split( '/' );
+            int iParty = Array.FindIndex( parts, p => p.StartsWith( '$' ) );
+            return iParty > 0 ? string.Join( '/', parts, 0, iParty ) : null;
+        }
 
         static List<(string From, string To, JsonObject? Link)> ReadLinks( IActivityMonitor monitor,
                                                                            CentralConfiguration central,

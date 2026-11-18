@@ -17,6 +17,8 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
 
     readonly List<RemotePartyConfiguration> _remotes;
     readonly List<RemotePartyTemplate> _remoteTemplates;
+    TenantDomainTemplate? _template;
+    ConfigurationInstance? _instance;
 
     internal TenantDomainPartyConfiguration( ImmutableConfigurationSection configuration,
                                              string domainName,
@@ -50,4 +52,28 @@ public class TenantDomainPartyConfiguration : ApplicationIdentityPartyConfigurat
     /// Gets the "Local" condfiguration.
     /// </summary>
     public ApplicationIdentityLocalConfiguration LocalConfiguration => _localConfiguration;
+
+    /// <summary>
+    /// Gets the Opened template of this tenant domain when it is one of its instances, null otherwise (a Closed template
+    /// is expanded: its instances are configured tenant domains).
+    /// </summary>
+    public TenantDomainTemplate? Template => _template;
+
+    /// <summary>
+    /// Gets the instance of the <see cref="Template"/> that this tenant domain is, null when it is not the instance of an
+    /// Opened template.
+    /// </summary>
+    public ConfigurationInstance? Instance => _instance;
+
+    /// <summary>
+    /// Gets whether this tenant domain is a run-time instance of an Opened template: it is not configured, it has been
+    /// created at run time (its index is kept in its store: see <see cref="TenantDomainTemplate"/>).
+    /// </summary>
+    public bool IsDynamicInstance => _instance != null && _template!.Instances.IsDynamicIndex( _instance.Index );
+
+    internal void SetInstance( TenantDomainTemplate template, ConfigurationInstance instance )
+    {
+        _template = template;
+        _instance = instance;
+    }
 }

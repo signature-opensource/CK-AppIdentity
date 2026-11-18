@@ -75,9 +75,8 @@ Task<IRemoteParty?> AddRemoteAsync( IActivityMonitor monitor, Action<MutableConf
 Both return null on failure rather than throwing - the monitor carries the reason. Adding several remotes is all or
 nothing: if one fails to be set up, none is added.
 
-The tenant domains are configured (the `Parties` of the root that have a domain): no public API adds one at run
-time. A dynamic tenant domain (one that can be destroyed with its remotes) will be an instance of a tenant template;
-its lifecycle is kept internal until then.
+The tenant domains are configured (the `Parties` of the root that have a domain), or they are the run-time instances of
+an Opened tenant template (see below): no public API adds a tenant domain from a free configuration.
 
 Destruction is `IOwnedParty.DestroyAsync`, and `SetDestroyed` is its two-phase companion: it marks the
 party so that no one else starts working with it, and returns whether this call is the one that won the
@@ -109,6 +108,38 @@ after its configured ones up to its bound: `ILocalParty.RemoteTemplates` lists t
   instance above the bound (the configuration lowered it: the newer decision) has its pins trashed, with a warning.
 - **The removal:** `ILocalParty.RemoveTemplateInstanceAsync` destroys the remote and trashes its pins, never its folder (in
   a shared store, it is also the instance's own folder, with its `-Local`). The instance can then be approved again.
+
+### The run-time tenant domains
+
+An Opened tenant template (`IApplicationIdentityService.TenantTemplates`, see CK.AppIdentity.Configuration) holds tenant
+domains created by the application: an operator, or the application itself (a sign-up that creates a customer tenant).
+
+- **The creation:** `AddTenantInstanceAsync( monitor, template, "Acme" )` creates the tenant domain
+  `{DomainPrefix}/Acme/$Acme`: its index is the first free one (no configured instance, no loaded tenant has it, up to
+  the `"MaxInstanceCount"`), computed in the agent's loop (two creations never take the same index). The tenant domain is
+  set up (its features, its keys, its remotes, its listeners), then its record is written, last: a failure leaves no
+  record.
+- **The record:** the index can't be derived from a free name, so it is stored in the private store of the tenant:
+  `-Local/Instance.json` (`{ "Index": 3 }`). A run-time tenant is a folder under the domain of its template that holds
+  this file; nothing else is stored. At start, the agent creates them again (before the pinned remote instances: the
+  Opened remote templates of a tenant find theirs).
+- **The unloaded tenants:** a record that the configuration contradicts (its index taken by a configured instance, or
+  above a lowered bound), or a tenant that can't be created (it runs in another process...), is not loaded. It is kept,
+  never trashed (its private store holds its keys), and listed with its reason (`UnloadedTenants`). A record whose name
+  is now a configured instance is dropped (the configured tenant domain is the same party).
+- **The move:** `SetTenantIndexAsync( monitor, fullName, index )` moves a run-time tenant (a loaded or an unloaded one) to
+  a free index: its identity doesn't change (its full name, its keys), its record does, and the values that use its index
+  (`{Tenant.Index}`): a loaded tenant domain is destroyed and created again. It also makes room for a configured
+  instance.
+- **The removal:** `RemoveTenantInstanceAsync( monitor, fullName )` destroys it, trashes the pins of its run-time remote
+  instances (their folders are under its domain: a new tenant of the same name would bring them back), lets the feature
+  drivers delete what must not survive in a trash bin (`ApplicationIdentityFeatureDriver.ForgetLocalPartyAsync`: the
+  private keys) and trashes the rest of its private store, its record with it. Its identity is gone: a new tenant of the
+  same name is a new identity.
+
+The tenants of an application share its listeners (a peer reaches a tenant at the address of the application: the
+transport selects the tenant by the caller). One peer can't be a remote of two local parties of the same application
+(a known limit: a remote is found by the full name of the caller).
 
 ## What observers get.
 

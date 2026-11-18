@@ -151,6 +151,55 @@ public class CentralProjectionTests
         }
     }
 
+    // An Opened tenant template owns its domain prefix (its run-time tenants are named by their creator); in a fleet App, a
+    // tenant template uses the placeholder of its App (each process of the fleet has its own tenants).
+    const string _openedTenants = """{ "DomainName": "Sample/Customers/{Name}", "PartyName": "${Name}", "MaxInstanceCount": 3 }""";
+
+    [TestCase( $$"""
+                 "Auth3/Auth3.Builder": { "App": { "Parties": [ {{_openedTenants}} ] } },
+                 "Front/Front.Builder": { "App": { "Parties": [ {{_openedTenants}} ] } }
+                 """, "have the same domain prefix 'Sample/Customers'" )]
+    [TestCase( $$"""
+                 "Auth3/Auth3.Builder": { "App": { "Parties": [ {{_openedTenants}} ] } },
+                 "Front/Front.Builder": { "App": { "Parties": [ { "FullName": "Sample/Customers/Acme/$Acme" } ] } }
+                 """, "The domain 'Sample/Customers/Acme' of 'ckonf:Builders:Front/Front.Builder:App:Parties:0' is under the domain prefix 'Sample/Customers'" )]
+    [TestCase( $$"""
+                 "Auth3/Auth3.Builder": { "App": { "Parties": [ {{_openedTenants}} ] } },
+                 "Other.Builder": { "App": { "FullName": "Sample/Customers/X/$Other" } }
+                 """, "The domain 'Sample/Customers/X'" )]
+    [TestCase( $$"""
+                 "Worker/Worker.Builder": { "App": { "InstanceCount": 2, "Parties": [ {{_openedTenants}} ] } }
+                 """, "must use the placeholder of its App in its names (\"{Worker.Name}\" or \"{Worker.Index}\")" )]
+    public void invalid_tenant_templates_are_errors( string builders, string expected )
+    {
+        var (central, root) = Create( $$"""{ "Domain": "Sample", "Builders": { {{builders}} } }""" );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
+        }
+    }
+
+    [Test]
+    public void a_tenant_template_of_a_fleet_uses_the_placeholder_of_its_App()
+    {
+        var (central, root) = Create( """
+            {
+              "Domain": "Sample",
+              "Builders": {
+                "Worker/Worker.Builder": {
+                  "App": {
+                    "InstanceCount": 2,
+                    "Parties": [ { "DomainName": "Sample/Customers-{Worker.Name}/{Name}", "PartyName": "${Name}", "MaxInstanceCount": 3 } ]
+                  }
+                }
+              }
+            }
+            """ );
+        var worker = Project( central, root, "Worker/Worker.Builder" );
+        worker["App:Parties:0:DomainName"].ShouldBe( "Sample/Customers-{Worker.Name}/{Name}" );
+    }
+
     [Test]
     public void a_fleet_is_named_by_its_pattern_and_a_link_to_it_is_a_remote_template()
     {

@@ -384,6 +384,24 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     internal protected abstract Task TeardownAsync( FeatureLifetimeContext context );
 
     /// <summary>
+    /// Called when a run-time tenant domain is removed (<see cref="IApplicationIdentityService.RemoveTenantInstanceAsync"/>):
+    /// its identity is gone, the driver deletes what it kept for it in its private store that must not survive in a trash
+    /// bin (the private keys of the party, for instance), or outside of it. The rest of the private store is then trashed.
+    /// Does nothing by default.
+    /// <para>
+    /// The tenant domain is destroyed (or has never been loaded): it is designated by its full name and its private store,
+    /// not by a party object. This is called in reverse order (from most dependent feature drivers to basic ones), in the
+    /// agent's loop. An exception is logged: it doesn't prevent the other drivers to be called, the private store is not
+    /// trashed then.
+    /// </para>
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="fullName">The full name of the removed tenant domain.</param>
+    /// <param name="localStore">Its private store (its "-Local").</param>
+    /// <returns>The awaitable.</returns>
+    protected internal virtual Task ForgetLocalPartyAsync( IActivityMonitor monitor, NormalizedPath fullName, IFileStore localStore ) => Task.CompletedTask;
+
+    /// <summary>
     /// Contributes to the <see cref="IParty.Description"/> of a local party (the root or a tenant domain): what this
     /// feature states about the party (its client applications, its public URL...). Does nothing by default.
     /// <para>

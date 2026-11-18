@@ -24,6 +24,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     readonly List<RemotePartyConfiguration> _remotes;
     readonly List<RemotePartyTemplate> _remoteTemplates;
     readonly List<TenantDomainPartyConfiguration> _tenants;
+    readonly List<TenantDomainTemplate> _tenantTemplates;
     readonly StoreFileSystem _storeFileSystem;
     readonly ApplicationIdentityLocalConfiguration _localConfiguration;
     readonly bool _strictMode;
@@ -60,6 +61,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         _remotes = parties.Value.Remotes;
         _remoteTemplates = parties.Value.RemoteTemplates;
         _tenants = parties.Value.Tenants;
+        _tenantTemplates = parties.Value.TenantTemplates;
         _localConfiguration = localConfiguration;
         _strictMode = strictMode;
     }
@@ -76,6 +78,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         _remotes = new List<RemotePartyConfiguration>();
         _remoteTemplates = new List<RemotePartyTemplate>();
         _tenants = new List<TenantDomainPartyConfiguration>();
+        _tenantTemplates = new List<TenantDomainTemplate>();
         _strictMode = EnvironmentName != CoreApplicationIdentity.DefaultEnvironmentName;
         var local = configuration.GetSection( "Local" );
         _localConfiguration = new ApplicationIdentityLocalConfiguration( local, ref inhProps );
@@ -95,6 +98,12 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     /// Gets the tenant domains if any.
     /// </summary>
     public IReadOnlyCollection<TenantDomainPartyConfiguration> TenantDomains => _tenants;
+
+    /// <summary>
+    /// Gets the Opened tenant templates: their run-time instances are tenant domains of this application, created by
+    /// <c>IApplicationIdentityService.AddTenantInstanceAsync</c> (see <see cref="TenantDomainTemplate"/>).
+    /// </summary>
+    public IReadOnlyList<TenantDomainTemplate> TenantTemplates => _tenantTemplates;
 
     /// <summary>
     /// Gets whether this configuration must be strictly checked: warnings are considered errors.
@@ -563,7 +572,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
     {
         Throw.DebugAssert( configuration.Key == "Parties" );
         bool success = true;
-        var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>(), new List<RemotePartyTemplate>() );
+        var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>(), new List<RemotePartyTemplate>(), new List<TenantDomainTemplate>() );
         foreach( var c in configuration.GetChildren() )
         {
             success &= ReadTemplateOrParties( monitor, configuration, c, domainName, environmentName, ref parties, fullNameIndex );
@@ -573,7 +582,8 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
 
     // An entry of "Parties" with "InstanceCount", "Instances" or "MaxInstanceCount" is a template: a tenant domain or a
     // remote per instance (ConfigurationTemplate), each one with the placeholders ("{Index}", "{Name}") of its instance
-    // resolved (see RemotePartyTemplate).
+    // resolved (see TenantDomainTemplate and RemotePartyTemplate). A tenant template is recognized by its names (its party
+    // is the last part of its domain): the qualifier of its placeholders is "Tenant".
     static bool ReadTemplateOrParties( IActivityMonitor monitor,
                                        ImmutableConfigurationSection partiesSection,
                                        ImmutableConfigurationSection configuration,
@@ -582,12 +592,21 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
                                        ref ProcessedConfiguration partyCollector,
                                        Dictionary<string, ImmutableConfigurationSection> fullNameIndex )
     {
-        if( !ConfigurationTemplate.TryReadInstances( monitor, configuration, null, out var instances ) ) return false;
+        bool isTenant = ConfigurationTemplate.IsTemplate( configuration ) && TenantDomainTemplate.IsTenantTemplate( configuration );
+        if( !ConfigurationTemplate.TryReadInstances( monitor,
+                                                     configuration,
+                                                     isTenant ? TenantDomainTemplate.QualifierName : null,
+                                                     out var instances ) )
+        {
+            return false;
+        }
         if( instances == null )
         {
             return ReadParties( monitor, configuration, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
         }
-        return RemotePartyTemplate.Read( monitor, partiesSection, configuration, instances, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
+        return isTenant
+                ? TenantDomainTemplate.Read( monitor, partiesSection, configuration, instances, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex )
+                : RemotePartyTemplate.Read( monitor, partiesSection, configuration, instances, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
     }
 
     internal static bool ReadParties( IActivityMonitor monitor,
@@ -661,8 +680,9 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             var parties = CreateParties( monitor, partiesSection, domainName, environmentName, fullNameIndex );
             if( parties.HasValue )
             {
-                // Lifts the tenants found below.
+                // Lifts the tenants and the tenant templates found below.
                 partyCollector.Tenants.AddRange( parties.Value.Tenants );
+                partyCollector.TenantTemplates.AddRange( parties.Value.TenantTemplates );
                 // Adds the found tenant if there's no issue with its names.
                 if( nameSuccess )
                 {

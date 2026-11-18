@@ -88,7 +88,8 @@ public sealed class RemotePartyTemplate
         Throw.CheckNotNullArgument( instance );
         var collector = new ApplicationIdentityPartyConfiguration.ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(),
                                                                                           new List<RemotePartyConfiguration>(),
-                                                                                          new List<RemotePartyTemplate>() );
+                                                                                          new List<RemotePartyTemplate>(),
+                                                                                          new List<TenantDomainTemplate>() );
         var fullNameIndex = new Dictionary<string, ImmutableConfigurationSection>( StringComparer.OrdinalIgnoreCase );
         if( !ReadInstance( monitor, instance, ref collector, fullNameIndex ) ) return null;
         if( collector.Tenants.Count > 0 || collector.Remotes.Count != 1 )
@@ -148,7 +149,7 @@ public sealed class RemotePartyTemplate
         if( !instances.IsOpened ) return success;
         if( collector.Tenants.Count > tenantCount )
         {
-            monitor.Error( $"The template '{configuration.Path}' is an Opened tenant template (\"{ConfigurationTemplate.MaxInstanceCountKey}\"): only a remote template can be Opened." );
+            monitor.Error( $"The instances of the Opened template '{configuration.Path}' are tenant domains: a tenant template is recognized by its names (its \"PartyName\" is the last part of its \"DomainName\", with their placeholders)." );
             return false;
         }
         // The dynamic instances differ only by their index: the first one is checked.

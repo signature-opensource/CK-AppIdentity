@@ -57,7 +57,8 @@ public class OpenedTemplateTests
     }
 
     [TestCase( "\"PartyName\": \"Worker\"", "must use the \"{Name}\" or \"{Index}\" placeholder" )]
-    [TestCase( "\"FullName\": \"Shop-{Name}/$Shop-{Name}\"", "only a remote template can be Opened" )]
+    // An Opened tenant template is written with a "DomainName" and the "PartyName" "${Name}" (UC 4.3), not a "FullName".
+    [TestCase( "\"FullName\": \"Shop-{Name}/$Shop-{Name}\"", "must have a \"DomainName\" that ends with \"/{Name}\"" )]
     public void invalid_Opened_templates_are_errors( string party, string expected )
     {
         using( TestHelper.Monitor.CollectTexts( out var texts ) )

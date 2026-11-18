@@ -178,9 +178,9 @@ public sealed partial class ApplicationIdentityService : LocalParty, IApplicatio
     /// Tries to create and initialize one tenant domain from a configuration section.
     /// This tenant domain is <see cref="IOwnedParty.IsDynamic"/> and can be destroyed as well as all its remotes.
     /// <para>
-    /// Internal: kept for the tenant templates (their instances are dynamic tenants, created from a template rather
-    /// than from a configuration section), with the whole lifecycle of a dynamic tenant (its creation, its
-    /// destruction), tested by CK.AppIdentity.Tests. No public API adds a tenant at run time until then.
+    /// Internal: a tenant domain from a free configuration section has nothing to create it again at start. The run-time
+    /// tenant domains are the instances of the Opened tenant templates (<see cref="AddTenantInstanceAsync"/>); this one is
+    /// kept for the tests of the lifecycle of a dynamic tenant domain.
     /// </para>
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>

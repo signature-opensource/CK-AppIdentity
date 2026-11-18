@@ -15,7 +15,7 @@ namespace CK.AppIdentity;
 /// <summary>
 /// Application identity micro agent.
 /// </summary>
-public sealed class AppIdentityAgent : MicroAgent
+public sealed partial class AppIdentityAgent : MicroAgent
 {
     readonly ApplicationIdentityService _service;
     readonly IServiceProvider _serviceProvider;
@@ -82,6 +82,10 @@ public sealed class AppIdentityAgent : MicroAgent
             case InitializeDynamicPartiesJob init:
                 logger.Error( $"Unable to add parties '{init.Added.Parties.Select( p => p.ToString() ).Concatenate( "', '" )}': {ToString()} is stopped." );
                 init.Result.TrySetResult( false );
+                break;
+            case LoopJob loop:
+                logger.Error( $"Unable to execute an operation on the parties: {ToString()} is stopped." );
+                loop.Result.TrySetResult( false );
                 break;
         }
     }
@@ -156,7 +160,12 @@ public sealed class AppIdentityAgent : MicroAgent
                 {
                     var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
                     error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
-                    if( error == null ) await AddPinnedTemplateInstancesAsync( monitor ).ConfigureAwait( false );
+                    if( error == null )
+                    {
+                        // The run-time tenants first: the Opened remote templates of a tenant find their pinned instances.
+                        await AddCreatedTenantsAsync( monitor ).ConfigureAwait( false );
+                        await AddPinnedTemplateInstancesAsync( monitor, _service.TenantDomains.Cast<LocalParty>().Prepend( _service ) ).ConfigureAwait( false );
+                    }
                 }
                 else
                 {
@@ -275,8 +284,46 @@ public sealed class AppIdentityAgent : MicroAgent
                 // The agent is stopping: the parties won't be set up.
                 OnRejectedTypedJob( monitor, init );
                 return default;
+            case LoopJob loop:
+                if( Status == RunningStatus.Running )
+                {
+                    return HandleLoopJobAsync( monitor, loop );
+                }
+                OnRejectedTypedJob( monitor, loop );
+                return default;
         }
         return base.ExecuteTypedJobAsync( monitor, job );
+    }
+
+    // An operation on the parties executed in the agent's loop: serialized with the creations and the destructions.
+    record class LoopJob( Func<IActivityMonitor, Task<bool>> Action, TaskCompletionSource<bool> Result );
+
+    /// <summary>
+    /// Executes an operation in the agent's loop (see the tenant instances). An exception is logged: the result is false.
+    /// The operation must not await a job of the agent (a <see cref="IOwnedParty.DestroyAsync"/> would never complete).
+    /// </summary>
+    internal Task<bool> RunInLoopAsync( Func<IActivityMonitor, Task<bool>> action )
+    {
+        var tcs = new TaskCompletionSource<bool>( TaskCreationOptions.RunContinuationsAsynchronously );
+        PushTypedJob( new LoopJob( action, tcs ) );
+        return tcs.Task;
+    }
+
+    static async ValueTask HandleLoopJobAsync( IActivityMonitor monitor, LoopJob job )
+    {
+        bool success = false;
+        try
+        {
+            success = await job.Action( monitor ).ConfigureAwait( false );
+        }
+        catch( Exception ex )
+        {
+            monitor.Error( ex );
+        }
+        finally
+        {
+            job.Result.TrySetResult( success );
+        }
     }
 
     async ValueTask HandleInitializeDynamicPartiesAsync( IActivityMonitor monitor, InitializeDynamicPartiesJob init )
@@ -292,8 +339,11 @@ public sealed class AppIdentityAgent : MicroAgent
         }
     }
 
-    // All or nothing: the parties are published only once all of them have been successfully set up.
-    async Task<bool> DoInitializeDynamicPartiesAsync( IActivityMonitor monitor, AddedDynamicParties added )
+    // All or nothing: the parties are published only once all of them have been successfully set up. The optional
+    // beforePublish is called once they are set up (a run-time tenant writes its record): false fails them.
+    async Task<bool> DoInitializeDynamicPartiesAsync( IActivityMonitor monitor,
+                                                      AddedDynamicParties added,
+                                                      Func<IActivityMonitor, bool>? beforePublish = null )
     {
         using( monitor.OpenInfo( $"Initializing {added.Count} parties ({_service._builders.Count} feature builders)." ) )
         {
@@ -351,7 +401,8 @@ public sealed class AppIdentityAgent : MicroAgent
             // A tenant domain can be destroyed while its new remotes are set up (its destruction is handled after this job):
             // a remote is never published in a destroyed domain.
             bool domainDestroyed = setup.Count == added.Count && !CheckLiveDomains( monitor, added );
-            if( setup.Count < added.Count || domainDestroyed )
+            bool notPublishable = setup.Count == added.Count && !domainDestroyed && beforePublish != null && !beforePublish( monitor );
+            if( setup.Count < added.Count || domainDestroyed || notPublishable )
             {
                 // The parties that have been fully set up have never been published: they are torn down.
                 for( int i = setup.Count - 1; i >= 0; --i )
@@ -359,7 +410,9 @@ public sealed class AppIdentityAgent : MicroAgent
                     var p = setup[i];
                     using( monitor.OpenInfo( domainDestroyed
                                                 ? $"Tearing down dynamic party '{p}' that has been set up: a tenant domain of the batch is destroyed."
-                                                : $"Tearing down dynamic party '{p}' that has been set up: another party of the same batch failed." ) )
+                                                : notPublishable
+                                                    ? $"Tearing down dynamic party '{p}' that has been set up: it can't be published (see above)."
+                                                    : $"Tearing down dynamic party '{p}' that has been set up: another party of the same batch failed." ) )
                     {
                         var context = new FeatureLifetimeContext( monitor, this, _service._builders );
                         await context.ExecuteTeardownDynamicRemoteAsync( p ).ConfigureAwait( false );
@@ -379,33 +432,44 @@ public sealed class AppIdentityAgent : MicroAgent
         }
     }
 
+    // The folders of the dynamic instances of an Opened remote template whose identity is pinned: the folders of its domain
+    // and environment whose name is the template's pattern resolved by a dynamic index (above the configured instances,
+    // maybe above the bound), that hold a pin.
+    IEnumerable<(NormalizedPath Folder, int Index)> FindPinnedInstanceFolders( IActivityMonitor monitor, RemotePartyTemplate t )
+    {
+        var instances = t.Instances;
+        // Any instance gives the folder of the instances: the one of their domain and environment.
+        var probe = t.CreateInstance( monitor, instances.Count < instances.MaxInstanceCount
+                                                ? instances.CreateDynamic( instances.Count + 1 )
+                                                : instances[0] );
+        if( probe == null ) yield break;
+        var parent = _service.ComputeSharedStorePath( probe.FullName ).RemoveLastPart();
+        if( !Directory.Exists( parent ) ) yield break;
+        foreach( var d in Directory.GetDirectories( parent ) )
+        {
+            NormalizedPath folder = d;
+            if( ConfigurationTemplate.TryMatchIndex( t.PartyNamePattern, folder.LastPart, out var index )
+                && index > instances.Count
+                && Directory.EnumerateFiles( folder, IFileStore.TrustFilePattern ).Any() )
+            {
+                yield return (folder, index);
+            }
+        }
+    }
+
     // The dynamic instances of the Opened remote templates that have been approved: their identity is pinned in their
     // folder of the store (derived, nothing else is stored). An instance above the bound of its template (the bound has
     // been lowered by the configuration: the newer decision) has its pins trashed. A failing instance is logged: it doesn't
     // fail the start.
-    async Task AddPinnedTemplateInstancesAsync( IActivityMonitor monitor )
+    async Task AddPinnedTemplateInstancesAsync( IActivityMonitor monitor, IEnumerable<LocalParty> locals )
     {
-        foreach( var local in _service.TenantDomains.Cast<LocalParty>().Prepend<LocalParty>( _service ) )
+        foreach( var local in locals )
         {
             foreach( var t in local.RemoteTemplates )
             {
                 var instances = t.Instances;
-                // Any instance gives the folder of the instances: the one of their domain and environment.
-                var probe = t.CreateInstance( monitor, instances.Count < instances.MaxInstanceCount
-                                                        ? instances.CreateDynamic( instances.Count + 1 )
-                                                        : instances[0] );
-                if( probe == null ) continue;
-                var parent = _service.ComputeSharedStorePath( probe.FullName ).RemoveLastPart();
-                if( !Directory.Exists( parent ) ) continue;
-                foreach( var d in Directory.GetDirectories( parent ) )
+                foreach( var (folder, index) in FindPinnedInstanceFolders( monitor, t ).ToList() )
                 {
-                    NormalizedPath folder = d;
-                    if( !ConfigurationTemplate.TryMatchIndex( t.PartyNamePattern, folder.LastPart, out var index )
-                        || index <= instances.Count
-                        || !Directory.EnumerateFiles( folder, IFileStore.TrustFilePattern ).Any() )
-                    {
-                        continue;
-                    }
                     if( !instances.IsDynamicIndex( index ) )
                     {
                         monitor.Warn( $"'{folder}' pins the identity of the instance {index} of the template {t}, above its \"{ConfigurationTemplate.MaxInstanceCountKey}\" ({instances.MaxInstanceCount}): the pins are trashed." );

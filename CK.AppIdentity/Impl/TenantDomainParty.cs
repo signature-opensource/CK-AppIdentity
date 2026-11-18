@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// A tenant domain. The configured ones are static. The dynamic ones (their creation and their destroy path) are
-/// kept for the tenant templates: an instance of a template will be a dynamic tenant, that can be removed. Until then,
-/// only the internal <see cref="ApplicationIdentityService.AddTenantDomainAsync"/> creates them (for the tests).
+/// A tenant domain. The configured ones are static. The dynamic ones are the run-time instances of the Opened tenant
+/// templates (<see cref="ApplicationIdentityService.AddTenantInstanceAsync"/>), or created by the internal
+/// <see cref="ApplicationIdentityService.AddTenantDomainAsync"/> (for the tests): they can be destroyed.
 /// </summary>
 sealed class TenantDomainParty : LocalParty, ITenantDomainParty, IOwnedPartyInternal
 {
