@@ -1,0 +1,153 @@
+using CK.Core;
+using CK.Setup;
+using NUnit.Framework;
+using Shouldly;
+using System;
+using System.IO;
+using System.Linq;
+using static CK.Testing.MonitorTestHelper;
+
+namespace CK.AppIdentity.Engine.Tests;
+
+[TestFixture]
+public class CentralProjectionTests
+{
+    const string _graph = """
+        {
+          "Domain": "Sample/Auth3",
+          "Builders": {
+            "Auth3/Auth3.Builder": {
+              "App": {
+                "Defaults": { "Transport": { "ListeningAddress": [ "tcp:127.0.0.1:37300" ] } },
+                "Local": { "AuthCenter": {} }
+              }
+            },
+            "Front/Front.Builder": { "App": { "Local": { "HttpEndpoint": { "Urls": "http://localhost:5300" } } } },
+            "Worker/Worker.Builder": {
+              "App": {
+                "Parties": [ { "PartyName": "$Outside", "Address": "tcp:10.0.0.1:1234" } ]
+              }
+            },
+            "Other.Builder": { "App": { "FullName": "Elsewhere/$Other/#Prod" } }
+          },
+          "Links": [
+            { "From": "$Front", "To": "$Auth3", "Link": { "AuthCenterRemote": true, "Address": "tcp:127.0.0.1:37300", "KeyManagement": { "AutoTrustKey": "Once" } } },
+            { "From": "$Auth3", "To": "$Front", "Link": { "AuthCenterRemote": true, "KeyManagement": { "AutoTrustKey": "Once" } } },
+            { "From": "$Worker", "To": "$Auth3", "Link": { "Address": "tcp:127.0.0.1:37300", "Retry": 3 } },
+            { "From": "$Auth3", "To": "$Worker" }
+          ]
+        }
+        """;
+
+    static (CentralConfiguration Central, NormalizedPath Root) Create( string json )
+    {
+        NormalizedPath root = Path.Combine( Path.GetTempPath(), "CK.AppIdentity.Engine.Tests", Guid.NewGuid().ToString( "N" ) );
+        foreach( var b in new[] { "Auth3/Auth3.Builder", "Front/Front.Builder", "Worker/Worker.Builder", "Other.Builder" } )
+        {
+            Directory.CreateDirectory( root.Combine( b ) );
+        }
+        var central = CentralConfiguration.Parse( TestHelper.Monitor, root.AppendPart( "ckonf.json" ), json ).ShouldNotBeNull();
+        return (central, root);
+    }
+
+    static ImmutableConfigurationSection Project( CentralConfiguration central, NormalizedPath root, string builder )
+    {
+        var b = central.FindBuilder( root.Combine( builder ) ).ShouldNotBeNull();
+        central.WriteProjection( TestHelper.Monitor, b, [new AppIdentityAppBuilderContributor()] ).ShouldBeTrue();
+        return ImmutableConfigurationSection.CreateFromJson( "ckonf", File.ReadAllText( root.Combine( builder ).AppendPart( "ckonf.json" ) ) );
+    }
+
+    [Test]
+    public void the_FullName_is_derived_and_the_links_are_the_remote_entries()
+    {
+        var (central, root) = Create( _graph );
+
+        var front = Project( central, root, "Front/Front.Builder" );
+        front.GetRequiredSection( "App" ).GetChildren().Select( c => c.Key ).ShouldBe( ["FullName", "Local", "Parties"] );
+        front["App:FullName"].ShouldBe( "Sample/Auth3/$Front/#Dev" );
+        front["App:Parties:0:PartyName"].ShouldBe( "$Auth3" );
+        front["App:Parties:0:AuthCenterRemote"].ShouldBe( "True" );
+        front["App:Parties:0:Address"].ShouldBe( "tcp:127.0.0.1:37300" );
+        front["App:Parties:0:KeyManagement:AutoTrustKey"].ShouldBe( "Once" );
+        front["App:Parties:1"].ShouldBeNull();
+
+        // The links in their order; a link without content is a remote without configuration.
+        var auth3 = Project( central, root, "Auth3/Auth3.Builder" );
+        auth3["App:Parties:0:PartyName"].ShouldBe( "$Front" );
+        auth3["App:Parties:0:Address"].ShouldBeNull( "Auth3 doesn't initiate: no address." );
+        auth3["App:Parties:1:PartyName"].ShouldBe( "$Worker" );
+        auth3.GetRequiredSection( "App:Parties:1" ).GetChildren().Select( c => c.Key ).ShouldBe( ["PartyName"] );
+
+        // The explicit remotes stay, the links follow; the JSON kinds are kept.
+        var worker = Project( central, root, "Worker/Worker.Builder" );
+        worker["App:Parties:0:PartyName"].ShouldBe( "$Outside" );
+        worker["App:Parties:1:PartyName"].ShouldBe( "$Auth3" );
+        File.ReadAllText( root.Combine( "Worker/Worker.Builder/ckonf.json" ) ).ShouldContain( "\"Retry\": 3" );
+
+        // An explicit FullName is kept.
+        Project( central, root, "Other.Builder" )["App:FullName"].ShouldBe( "Elsewhere/$Other/#Prod" );
+    }
+
+    [Test]
+    public void the_Environment_applies_to_the_derived_FullName()
+    {
+        var (central, root) = Create( """
+            { "Domain": "Sample", "Environment": "#Staging", "Builders": { "Front/Front.Builder": { "App": {} } } }
+            """ );
+        Project( central, root, "Front/Front.Builder" )["App:FullName"].ShouldBe( "Sample/$Front/#Staging" );
+    }
+
+    [TestCase( """{ "From": "$Front", "To": "$Nobody" }""", "is not a party of the central configuration" )]
+    [TestCase( """{ "From": "Front", "To": "$Auth3" }""", "a party name (\"$Name\") is expected" )]
+    [TestCase( """{ "From": "$Front", "To": "$Front" }""", "to itself" )]
+    [TestCase( """{ "From": "$Front", "To": "$Auth3", "Link": { "PartyName": "$X" } }""", "can't have a \"PartyName\"" )]
+    [TestCase( """{ "From": "$Front", "To": "$Auth3", "Link": true }""", "must be an object" )]
+    [TestCase( """{ "From": "$Front", "To": "$Auth3", "Other": 1 }""", "Unknown key \"Links:0:Other\"" )]
+    [TestCase( """{ "From": "$Front", "To": "$Auth3" }, { "From": "$front", "To": "$auth3" }""", "is defined twice" )]
+    public void invalid_links_are_errors( string links, string expected )
+    {
+        var (central, root) = Create( $$"""
+            {
+              "Domain": "Sample",
+              "Builders": { "Front/Front.Builder": { "App": {} }, "Auth3/Auth3.Builder": { "App": {} } },
+              "Links": [ {{links}} ]
+            }
+            """ );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
+        }
+    }
+
+    [Test]
+    public void a_remote_both_linked_and_explicit_is_an_error()
+    {
+        var (central, root) = Create( """
+            {
+              "Builders": {
+                "Front/Front.Builder": { "App": { "Parties": [ { "PartyName": "$Auth3" } ] } },
+                "Auth3/Auth3.Builder": { "App": {} }
+              },
+              "Links": [ { "From": "$Front", "To": "$Auth3" } ]
+            }
+            """ );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( "is linked" ) && t.Contains( "it must be one or the other" ) );
+        }
+    }
+
+    [TestCase( """ "Domain": "Not a domain", """, "Invalid \"Domain\"" )]
+    [TestCase( """ "Environment": "Prod", """, "Invalid \"Environment\"" )]
+    public void invalid_identity_keys_are_errors( string keys, string expected )
+    {
+        var (central, root) = Create( $$"""{ {{keys}} "Builders": { "Front/Front.Builder": { "App": {} } } }""" );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
+        }
+    }
+}

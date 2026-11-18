@@ -110,6 +110,32 @@ engine runs:
   `DeclaredClient.SetHandled( "NgApp" )`, a client has one build feature. A declared client that no contributor builds
   is an error: "No package builds the client...".
 
+## The parties of the central configuration
+
+When the repository has a central configuration (a `ckonf.json` at its root, see the App builder model of
+CK.Engine.Configuration), the same contributor projects the parties in the `ckonf.json` of each builder
+(`AppIdentityAppBuilderContributor.ProjectFromCentral`). It handles three root keys:
+
+```jsonc
+{
+  "Domain": "Sample/Auth3",
+  // "Environment": "#Dev" is the default.
+  "Builders": { ... },
+  "Links": [
+    { "From": "$Front", "To": "$Auth3", "Link": { "AuthCenterRemote": true, "Address": "tcp:127.0.0.1:37300" } },
+    { "From": "$Auth3", "To": "$Front", "Link": { "AuthCenterRemote": true } }
+  ]
+}
+```
+
+- **The party of an App is `$Name`** (or the party of its explicit `FullName`). The `FullName` of an App that doesn't
+  write it is `{Domain}/${Name}/{Environment}`.
+- **A link is directed:** its `Link` is the remote entry that `From` has for `To` (its `PartyName` is `To`), appended
+  to the `Parties` of `From` in the order of the links. A link without its reverse is valid (a party known on one side
+  only). The keys of a remote entry are not checked here: the builder of `From` validates its party as above.
+- **The remotes outside the solution stay in the `Parties` of their App;** a remote both linked and explicit is an
+  error.
+
 ## Requires
 
 - `CK.AppIdentity` (the runtime directory), `CK.StObj.Engine`, `CK.Engine` (the App builder contract) and

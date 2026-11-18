@@ -3,6 +3,7 @@ using CK.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 [assembly: CK.Setup.AppBuilderContributor( typeof( CK.Setup.AppIdentityAppBuilderContributor ) )]
 
@@ -122,58 +123,195 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     /// </summary>
     public IReadOnlyList<DeclaredClient> Clients => _clients;
 
-    /// <inheritdoc />
-    public bool Contribute( IActivityMonitor monitor, AppBuilderContext context )
+    /// <summary>
+    /// Projects the parties of the central configuration in the Apps of the builder. It handles three root keys:
+    /// <list type="bullet">
+    ///   <item>"Domain" and "Environment" (defaults to "#Dev"): the "FullName" of an App that doesn't write it is
+    ///   "{Domain}/${Name}/{Environment}".</item>
+    ///   <item>"Links": the directed links between the parties, <c>{ "From": "$X", "To": "$Y", "Link": { ... } }</c>:
+    ///   "Link" is the remote entry of X for Y (its "PartyName" is Y), appended to the "Parties" of X. A link without its
+    ///   reverse is valid; a remote both linked and in the "Parties" of the App is an error.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <param name="context">The projection context.</param>
+    /// <returns>True on success, false on error.</returns>
+    public bool ProjectFromCentral( IActivityMonitor monitor, CentralProjectionContext context )
     {
+        context.ClaimKey( "Domain" );
+        context.ClaimKey( "Environment" );
+        context.ClaimKey( "Links" );
+        var file = context.Central.File;
+        var central = context.Central.Configuration;
         bool success = true;
+        var domain = central["Domain"];
+        if( domain != null && !CoreApplicationIdentity.IsValidDomainName( domain ) )
+        {
+            monitor.Error( $"Invalid \"Domain\" '{domain}' in '{file}'." );
+            success = false;
+        }
+        var environment = central["Environment"] ?? CoreApplicationIdentity.DefaultEnvironmentName;
+        if( !CoreApplicationIdentity.IsValidEnvironmentName( environment ) )
+        {
+            monitor.Error( $"Invalid \"Environment\" '{environment}' in '{file}' (\"#Dev\" by default: it starts with a '#')." );
+            success = false;
+        }
+        // The party of each App: "$Name", or the party of its explicit FullName.
+        var parties = new Dictionary<string, CentralApp>( StringComparer.OrdinalIgnoreCase );
+        foreach( var a in context.Central.AllApps )
+        {
+            var partyName = '$' + a.Name;
+            var fullName = a.Configuration["FullName"];
+            if( fullName != null && CoreApplicationIdentity.TryParseFullName( fullName, out _, out var p, out _ ) && p != null )
+            {
+                partyName = p;
+            }
+            if( !parties.TryAdd( partyName, a ) )
+            {
+                monitor.Error( $"The party '{partyName}' of {a} is also the party of {parties[partyName]} in '{file}'." );
+                success = false;
+            }
+        }
+        var links = ReadLinks( monitor, context.Central, parties, ref success );
+        if( !success ) return false;
         foreach( var a in context.Apps )
         {
-            // The keys of the party are the ones of the root of an AppIdentity configuration: an App without any of them
-            // is not a party.
-            var keys = a.Configuration.GetChildren().Where( c => ApplicationIdentityServiceConfiguration.RootKeys.Contains( c.Key ) ).ToList();
-            if( keys.Count == 0 ) continue;
-            // The configuration of the party alone (the other keys of the App are not its own), with the paths of the
-            // "ckonf.json" (for the errors).
-            var party = new MutableConfigurationSection( a.Configuration.Path );
-            foreach( var k in keys )
+            var partyName = parties.First( kv => kv.Value == a.App ).Key;
+            if( domain != null && !a.Node.ContainsKey( "FullName" ) )
             {
-                a.ProjectInSection( k.Key, SectionName );
-                Copy( party, k.Key, k );
+                a.Node.Insert( 0, "FullName", $"{domain}/{partyName}/{environment}" );
             }
-            var section = new ImmutableConfigurationSection( party );
-            ApplicationIdentityServiceConfiguration? configuration;
-            using( monitor.OpenInfo( $"Checking the party of {a}." ) )
+            var outgoing = links.Where( l => l.From.Equals( partyName, StringComparison.OrdinalIgnoreCase ) ).ToList();
+            if( outgoing.Count == 0 ) continue;
+            if( a.Node["Parties"] is not JsonArray remotes )
             {
-                // The relative paths (StoreRootPath) are the host's: its content root is its project folder.
-                configuration = ApplicationIdentityServiceConfiguration.Create( monitor, section, defaultPartyName: a.Name, basePath: a.HostProjectPath );
-                if( configuration == null )
+                if( a.Node.ContainsKey( "Parties" ) )
                 {
-                    monitor.Error( $"Invalid party in {a}." );
+                    monitor.Error( $"\"Parties\" of {a.App} in '{file}' must be an array." );
                     success = false;
                     continue;
                 }
+                remotes = new JsonArray();
+                a.Node["Parties"] = remotes;
             }
-            // The type sets of the local parties.
-            var root = CreateTypeSet( monitor, a, configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
-            foreach( var t in configuration.TenantDomains )
+            foreach( var l in outgoing )
             {
-                CreateTypeSet( monitor, a, t.PartyName, t.LocalConfiguration.Configuration, null, ref success );
-            }
-            var clients = section.TryGetSection( "Local" )?.TryGetSection( PartyClientSectionName );
-            if( clients == null || root == null ) continue;
-            foreach( var c in clients.GetChildren() )
-            {
-                var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
-                if( set != null ) _clients.Add( new DeclaredClient( a, c.Key, c, set ) );
+                if( remotes.OfType<JsonObject>().Any( r => r["PartyName"] is JsonValue v
+                                                           && v.TryGetValue<string>( out var n )
+                                                           && n.Equals( l.To, StringComparison.OrdinalIgnoreCase ) ) )
+                {
+                    monitor.Error( $"The remote '{l.To}' of {a.App} is linked (\"Links\" from '{l.From}' to '{l.To}') and in its \"Parties\": in '{file}', it must be one or the other." );
+                    success = false;
+                    continue;
+                }
+                var entry = new JsonObject { ["PartyName"] = l.To };
+                if( l.Link != null )
+                {
+                    foreach( var (key, value) in l.Link ) entry[key] = value?.DeepClone();
+                }
+                remotes.Add( entry );
             }
         }
         return success;
 
-        // In the order of the configuration (the order of the declared clients is the one of the file).
-        static void Copy( MutableConfigurationSection target, string path, ImmutableConfigurationSection s )
+        static List<(string From, string To, JsonObject? Link)> ReadLinks( IActivityMonitor monitor,
+                                                                           CentralConfiguration central,
+                                                                           Dictionary<string, CentralApp> parties,
+                                                                           ref bool success )
         {
-            if( s.Value != null ) target[path] = s.Value;
-            foreach( var c in s.GetChildren() ) Copy( target, $"{path}:{c.Key}", c );
+            var result = new List<(string From, string To, JsonObject? Link)>();
+            var file = central.File;
+            var json = central.GetJson( "Links" );
+            if( json == null ) return result;
+            if( json is not JsonArray links )
+            {
+                monitor.Error( $"\"Links\" in '{file}' must be an array of {{ \"From\": \"$X\", \"To\": \"$Y\", \"Link\": {{ ... }} }}." );
+                success = false;
+                return result;
+            }
+            for( int i = 0; i < links.Count; ++i )
+            {
+                var path = $"Links:{i}";
+                if( links[i] is not JsonObject l )
+                {
+                    monitor.Error( $"\"{path}\" in '{file}' must be an object: {{ \"From\": \"$X\", \"To\": \"$Y\", \"Link\": {{ ... }} }}." );
+                    success = false;
+                    continue;
+                }
+                bool ok = true;
+                foreach( var (key, _) in l )
+                {
+                    if( !(key.Equals( "From", StringComparison.OrdinalIgnoreCase )
+                          || key.Equals( "To", StringComparison.OrdinalIgnoreCase )
+                          || key.Equals( "Link", StringComparison.OrdinalIgnoreCase )) )
+                    {
+                        monitor.Error( $"Unknown key \"{path}:{key}\" in '{file}': a link has \"From\", \"To\" and \"Link\" (the remote entry of From for To)." );
+                        ok = false;
+                    }
+                }
+                var from = ReadParty( monitor, file, path, l, "From", parties, ref ok );
+                var to = ReadParty( monitor, file, path, l, "To", parties, ref ok );
+                JsonObject? link = null;
+                var linkNode = l["Link"];
+                if( linkNode != null )
+                {
+                    link = linkNode as JsonObject;
+                    if( link == null )
+                    {
+                        monitor.Error( $"\"{path}:Link\" in '{file}' must be an object: the remote entry of From for To." );
+                        ok = false;
+                    }
+                    else if( link.ContainsKey( "PartyName" ) )
+                    {
+                        monitor.Error( $"\"{path}:Link\" in '{file}' can't have a \"PartyName\": it is the party \"To\"." );
+                        ok = false;
+                    }
+                }
+                if( !ok )
+                {
+                    success = false;
+                    continue;
+                }
+                if( from!.Equals( to, StringComparison.OrdinalIgnoreCase ) )
+                {
+                    monitor.Error( $"The link \"{path}\" in '{file}' links '{from}' to itself." );
+                    success = false;
+                    continue;
+                }
+                if( result.Any( r => r.From.Equals( from, StringComparison.OrdinalIgnoreCase ) && r.To.Equals( to, StringComparison.OrdinalIgnoreCase ) ) )
+                {
+                    monitor.Error( $"The link from '{from}' to '{to}' is defined twice in '{file}'." );
+                    success = false;
+                    continue;
+                }
+                result.Add( (from, to!, link) );
+            }
+            return result;
+        }
+
+        static string? ReadParty( IActivityMonitor monitor,
+                                  NormalizedPath file,
+                                  string path,
+                                  JsonObject link,
+                                  string key,
+                                  Dictionary<string, CentralApp> parties,
+                                  ref bool ok )
+        {
+            var name = link[key] is JsonValue v && v.TryGetValue<string>( out var s ) ? s : null;
+            if( name == null || !name.StartsWith( '$' ) || !CoreApplicationIdentity.IsValidPartyName( name ) )
+            {
+                monitor.Error( $"Invalid \"{path}:{key}\" in '{file}': a party name (\"$Name\") is expected." );
+                ok = false;
+                return null;
+            }
+            if( !parties.ContainsKey( name ) )
+            {
+                monitor.Error( $"The party '{name}' of \"{path}:{key}\" in '{file}' is not a party of the central configuration (its parties are: '{parties.Keys.Order().Concatenate( "', '" )}')." );
+                ok = false;
+                return null;
+            }
+            // The name as the party is named.
+            return parties.Keys.First( k => k.Equals( name, StringComparison.OrdinalIgnoreCase ) );
         }
     }
 
