@@ -95,7 +95,9 @@ TestStore/
             └── -Local/
 ```
 
-The presence of "-Local" in the 2 Party directories indicates that they both run on the same machine. The ".trust" file is
+The presence of "-Local" in the 2 Party directories indicates that they both run on the same machine. While a local party
+runs, its process holds the lock file "-Local/$Lock.Party": a local party runs in one process at a time (see
+[CK.AppIdentity](../CK.AppIdentity/README.md#one-process-per-local-party)). The ".trust" file is
 what a key management feature stores in the SharedFileStore of the remote "$Listener": the pinned identity of that remote.
 For an example of such a feature, see
 [CK.AppIdentity.KeyManagement](https://github.com/signature-opensource/CK-AppIdentity-Transport/tree/stable/CK.AppIdentity.KeyManagement)

@@ -172,7 +172,29 @@ public class TrashBinTests
 
         await r.DestroyAsync().WaitAsync( _timeout );
 
-        Directory.GetFiles( r.SharedFileStore.TrashBinPath ).ShouldBeEmpty();
-        Directory.Exists( r.SharedFileStore.FolderPath ).ShouldBeTrue( "The folder is shared by the applications: it is kept." );
+        Directory.Exists( r.SharedFileStore.TrashBinPath ).ShouldBeFalse( "The trash bin has been purged." );
+        Directory.Exists( r.SharedFileStore.FolderPath ).ShouldBeFalse( "The folder holds nothing: it is deleted." );
+        // Another application that shares the store may still have a party of this name: a write at the root of its
+        // store creates the folder again.
+        r.SharedFileStore.WriteAllBytes( file, new byte[] { 2 } );
+        File.Exists( file ).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task destroying_a_party_keeps_its_folder_when_it_holds_a_file_Async()
+    {
+        var s = CreateService( "TrashDestroyKept" );
+        await using var _s = s;
+        await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        var r = await s.AddRemoteAsync( TestHelper.Monitor, c => c["PartyName"] = "KeptRemote" ).WaitAsync( _timeout );
+        Throw.DebugAssert( r != null );
+        // A pin, a description, the private store of a party that runs in another application: any file keeps it.
+        r.SharedFileStore.WriteAllBytes( r.SharedFileStore.FolderPath.AppendPart( "Identity.0.trust" ), new byte[] { 1 } );
+
+        await r.DestroyAsync().WaitAsync( _timeout );
+
+        Directory.Exists( r.SharedFileStore.FolderPath ).ShouldBeTrue();
+        // Cleanup: the folder of the remote is in the test store.
+        File.Delete( r.SharedFileStore.FolderPath.AppendPart( "Identity.0.trust" ) );
     }
 }

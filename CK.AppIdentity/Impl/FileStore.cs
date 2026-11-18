@@ -143,7 +143,20 @@ sealed class FileStore : IFileStore
                                    FileOptions options = FileOptions.None )
     {
         CheckPath( fullPath, allowFolderPath: false );
+        EnsureFolderFor( fullPath );
         return _fileSystem.OpenWrite( fullPath, mode, share, options );
+    }
+
+    // The folder of a party is deleted when it is empty and its party is destroyed (see AppIdentityAgent): another
+    // application that shares the store may still have a party of the same name (a candidate of the same template), whose
+    // next write (a pin) must not fail. A file written at the root of this store creates its folder again. The sub folders
+    // are the caller's (CreateDirectory).
+    void EnsureFolderFor( in NormalizedPath fullPath )
+    {
+        if( fullPath.Parts.Count == _folderPath.Parts.Count + 1 && !Directory.Exists( _folderPath ) )
+        {
+            _fileSystem.CreateDirectory( _folderPath );
+        }
     }
 
     public Stream OpenReadStream( in NormalizedPath fullPath,
@@ -158,6 +171,7 @@ sealed class FileStore : IFileStore
     {
         Throw.CheckNotNullArgument( write );
         CheckPath( fullPath, allowFolderPath: false );
+        EnsureFolderFor( fullPath );
         _fileSystem.WriteAtomically( fullPath, write );
     }
 
@@ -165,6 +179,7 @@ sealed class FileStore : IFileStore
     {
         Throw.CheckNotNullArgument( write );
         CheckPath( fullPath, allowFolderPath: false );
+        EnsureFolderFor( fullPath );
         return _fileSystem.WriteAtomicallyAsync( fullPath, write, cancel );
     }
 

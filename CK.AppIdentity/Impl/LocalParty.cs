@@ -28,6 +28,13 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
     readonly IReadOnlyList<RemotePartyTemplate> _remoteTemplates;
     // Changes in contained remotes are propagated to the root AllPartyChanged event.
     private protected readonly IBridge _remotesChangedBridge;
+    // Held while this party runs (see TryAcquirePartyLock).
+    FileLock? _partyLock;
+
+    /// <summary>
+    /// The name of the lock that a local party holds in its private store while it runs: "$Lock.Party" in its "-Local".
+    /// </summary>
+    internal const string PartyLockName = "Party";
 
     internal LocalParty( ApplicationIdentityPartyConfiguration configuration,
                          IEnumerable<RemotePartyConfiguration> remotes,
@@ -235,6 +242,41 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
         }
     }
 
+    /// <summary>
+    /// Takes the lock that makes this process the only one that runs this local party: an exclusive lock on its private
+    /// store (<see cref="PartyLockName"/>), held until it is shut down or destroyed. A second process of the same party
+    /// (the same "--Instance" started twice, the same application started twice on the same store) fails to take it: two
+    /// processes of the same party would share its keys and its records. Its folder must exist.
+    /// </summary>
+    /// <param name="monitor">The monitor to use.</param>
+    /// <returns>True on success, false (an error is logged) when another process runs this party.</returns>
+    internal bool TryAcquirePartyLock( IActivityMonitor monitor )
+    {
+        Throw.DebugAssert( _partyLock == null );
+        FileLock? l;
+        try
+        {
+            l = _privateStore.TryAcquireLock( PartyLockName );
+        }
+        catch( Exception ex )
+        {
+            monitor.Error( $"Unable to lock '{FullName}' in '{_privateStore.FolderPath}'.", ex );
+            return false;
+        }
+        if( l == null )
+        {
+            monitor.Error( $"'{FullName}' is already running in another process: its store '{_privateStore.FolderPath}' is locked. A local party runs in one process at a time." );
+            return false;
+        }
+        _partyLock = l;
+        return true;
+    }
+
+    /// <summary>
+    /// Releases the lock taken by <see cref="TryAcquirePartyLock"/>, if any.
+    /// </summary>
+    internal void ReleasePartyLock() => Interlocked.Exchange( ref _partyLock, null )?.Dispose();
+
     internal override int PurgeTrashBins( IActivityLineEmitter logger, DateTime olderThanUtc )
     {
         return base.PurgeTrashBins( logger, olderThanUtc ) + _privateStore.PurgeTrashBin( logger, olderThanUtc );
@@ -275,6 +317,8 @@ public abstract class LocalParty : ApplicationIdentityParty, ILocalParty
                 monitor.Error( $"While shutting down '{r}'.", ex );
             }
         }
+        // Last: another process may now run this party.
+        ReleasePartyLock();
     }
 
 

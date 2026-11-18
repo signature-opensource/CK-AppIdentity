@@ -147,8 +147,12 @@ public sealed class AppIdentityAgent : MicroAgent
             Exception? error;
             try
             {
-                if( CheckFeatureKeys( monitor, _service.AllParties.Prepend<IParty>( _service ) )
-                    && CheckPartyScopes( monitor, _service.TenantDomains.Prepend<ILocalParty>( _service ) ) )
+                if( !TryAcquirePartyLocks( monitor, _service.TenantDomains.Cast<LocalParty>().Prepend( _service ) ) )
+                {
+                    error = new CKException( "A local party of this application is already running in another process (see the logs)." );
+                }
+                else if( CheckFeatureKeys( monitor, _service.AllParties.Prepend<IParty>( _service ) )
+                         && CheckPartyScopes( monitor, _service.TenantDomains.Prepend<ILocalParty>( _service ) ) )
                 {
                     var initContext = new FeatureLifetimeContext( monitor, this, _service._builders );
                     error = await initContext.ExecuteSetupAsync().ConfigureAwait( false );
@@ -168,10 +172,30 @@ public sealed class AppIdentityAgent : MicroAgent
             if( error == null ) _service._initialization.TrySetResult();
             else
             {
+                // A failed start runs nothing (the drivers undo their setup on error): its parties can be run by another
+                // process (or by a new start of this one) without waiting for this service to be stopped.
+                foreach( var l in _service.TenantDomains.Cast<LocalParty>().Prepend( _service ) ) l.ReleasePartyLock();
                 _service._initialization.TrySetException( error );
                 monitor.CloseGroup( "Failed." );
             }
         }
+    }
+
+    // Before any setup (the drivers use the stores: the keys, the pins): a local party runs in one process at a time (see
+    // LocalParty.TryAcquirePartyLock). All or nothing: on failure, the locks taken are released.
+    static bool TryAcquirePartyLocks( IActivityMonitor monitor, IEnumerable<LocalParty> locals )
+    {
+        var locked = new List<LocalParty>();
+        foreach( var l in locals )
+        {
+            if( !l.TryAcquirePartyLock( monitor ) )
+            {
+                foreach( var r in locked ) r.ReleasePartyLock();
+                return false;
+            }
+            locked.Add( l );
+        }
+        return true;
     }
 
     void PurgeTrashBins( IActivityMonitor monitor )
@@ -299,6 +323,14 @@ public sealed class AppIdentityAgent : MicroAgent
                 monitor.CloseGroup( "Failed." );
                 return false;
             }
+            // A new tenant domain is locked before its setup, as the configured ones at start. Its lock file stays in its
+            // "-Local" (a lock file is never deleted): on failure, its created folder is kept, with only this file.
+            if( !TryAcquirePartyLocks( monitor, added.Tenants.Cast<LocalParty>() ) )
+            {
+                DeleteCreatedFolders( monitor, createdFolders );
+                monitor.CloseGroup( "Failed." );
+                return false;
+            }
             var setup = new List<IOwnedParty>( added.Count );
             foreach( var p in added.Parties )
             {
@@ -333,6 +365,7 @@ public sealed class AppIdentityAgent : MicroAgent
                         await context.ExecuteTeardownDynamicRemoteAsync( p ).ConfigureAwait( false );
                     }
                 }
+                foreach( var t in added.Tenants.Cast<LocalParty>() ) t.ReleasePartyLock();
                 DeleteCreatedFolders( monitor, createdFolders );
                 monitor.CloseGroup( "Failed." );
                 return false;
@@ -576,6 +609,12 @@ public sealed class AppIdentityAgent : MicroAgent
             }
             using( monitor.OpenInfo( $"Destroying '{destroyed}'." ) )
             {
+                // The folders of the destroyed parties (a domain's remotes are destroyed with it): captured before the
+                // destruction clears the remotes of a domain.
+                List<NormalizedPath> folders = destroyed is TenantDomainParty d
+                                ? d.Remotes.Select( r => r.SharedFileStore.FolderPath ).Append( d.SharedFileStore.FolderPath ).ToList()
+                                : [Unsafe.As<ApplicationIdentityParty>( destroyed ).SharedFileStore.FolderPath];
+
                 // Enables the feature drivers to tear down any existing features, including the
                 // subordinates remotes if this is a domain.
                 var context = new FeatureLifetimeContext( monitor, this, _service._builders );
@@ -584,6 +623,14 @@ public sealed class AppIdentityAgent : MicroAgent
                 // The service routes the call to the LocalService (for a remote) or
                 // its domains.
                 await _service.OnDestroyedAsync( monitor, destroyed ).ConfigureAwait( false );
+
+                // A folder that holds nothing is deleted: the one of a candidate that has never been approved leaves no
+                // debris. A folder with a file is kept: a pin, a description, the "-Local" of a party that runs here
+                // or in another application that shares the store (a write there creates the folder again: see FileStore).
+                foreach( var f in folders )
+                {
+                    FileStore.DeleteFolderIfEmpty( monitor, f );
+                }
             }
         }
         finally

@@ -81,7 +81,20 @@ its lifecycle is kept internal until then.
 
 Destruction is `IOwnedParty.DestroyAsync`, and `SetDestroyed` is its two-phase companion: it marks the
 party so that no one else starts working with it, and returns whether this call is the one that won the
-race.
+race. The folder of a destroyed party (and of the remotes of a destroyed tenant domain) is deleted when it holds no file:
+a candidate that has never been approved leaves no debris. A folder with a file is kept (a pin, a description, the
+`-Local` of a party that runs here or in another application that shares the store), and a file written at the root of
+a party's store creates its folder again: another application of the store may still have a party of this name.
+
+### One process per local party
+
+A local party (the root, a tenant domain) holds a lock on its private store (`-Local/$Lock.Party`) while it runs: two
+processes of the same party would share its keys and its records. The root and the configured tenant domains are locked
+at start, before the setup of the features: a party that runs in another process fails the start (the same `--Instance`
+of a fleet started twice, the same application started twice on the same store). A dynamic tenant domain is locked
+before its setup: one that runs in another process is not created. The lock is released when the party is shut down or
+destroyed, and when the start fails (a failed start runs nothing). Several processes of the same party on the same store
+(the scaling out) are therefore refused; separate stores are not concerned.
 
 ### The dynamic instances of an Opened template
 

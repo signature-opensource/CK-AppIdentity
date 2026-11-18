@@ -273,13 +273,16 @@ public class FeatureBuilderInitializationTests
         services.AddSingleton( typeof( F1FeatureDriver ) );
         services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( F1FeatureDriver ) ) );
         services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( typeof( F1FeatureDriver ) ) );
-        await Should.NotThrowAsync( () =>
+        // The started service is disposed: it holds the lock of its party (a party runs in one process at a time).
+        await using( var sp = services.BuildServiceProvider() )
         {
-            var sp = services.BuildServiceProvider();
-            var s = sp.GetRequiredService<ApplicationIdentityService>();
-            _ = ((IHostedService)s).StartAsync( cancellation );
-            return s.InitializationTask.WaitAsync( cancellation );
-        } );
+            await Should.NotThrowAsync( () =>
+            {
+                var s = sp.GetRequiredService<ApplicationIdentityService>();
+                _ = ((IHostedService)s).StartAsync( cancellation );
+                return s.InitializationTask.WaitAsync( cancellation );
+            } );
+        }
 
         services.AddSingleton( typeof( F1FeatureDriver ) );
         services.AddSingleton( sp => (IApplicationIdentityFeatureDriver)sp.GetRequiredService( typeof( F1FeatureDriver ) ) );
