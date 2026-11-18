@@ -2,7 +2,9 @@ using CK.Core;
 using CK.Setup;
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace CK.AppIdentity;
 
@@ -19,6 +21,13 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
     readonly Dictionary<Type, PartyComponentInfo> _byType;
     readonly IReadOnlySet<Type> _multipleAbstractions;
     readonly IReadOnlyDictionary<string, IReadOnlySet<Type>> _typeSets;
+    // The sets of the templates ("$Trolley-{Name}"), and the resolved names found by them.
+    readonly (Regex Pattern, IReadOnlySet<Type> Set)[] _templateSets;
+    readonly ConcurrentDictionary<string, IReadOnlySet<Type>?> _instanceSets;
+
+    // A placeholder of ConfigurationTemplate (CK.Configuration): "{Index}", "{Name}", "{n+Index}", "{Trolley.Name}"...
+    static readonly Regex _placeholder = new Regex( @"\{(?:-?\d+\+)?(?:[A-Za-z_][\w.\-]*\.)?(?:Index|Name)\}",
+                                                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase );
 
     /// <summary>
     /// Initializes a new directory. Called by the generated code.
@@ -45,6 +54,26 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
         _byType = components.ToDictionary( c => c.ComponentType );
         _multipleAbstractions = multipleAbstractions;
         _typeSets = typeSets.ToDictionary( kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase );
+        _templateSets = _typeSets.Where( kv => _placeholder.IsMatch( kv.Key ) )
+                                 .OrderBy( kv => kv.Key, StringComparer.Ordinal )
+                                 .Select( kv => (ToPattern( kv.Key ), kv.Value) )
+                                 .ToArray();
+        _instanceSets = new ConcurrentDictionary<string, IReadOnlySet<Type>?>( StringComparer.OrdinalIgnoreCase );
+
+        // "$Trolley-{Name}" matches "$Trolley-Red": a placeholder matches any non empty part of a name.
+        static Regex ToPattern( string name )
+        {
+            var parts = _placeholder.Split( name ).Select( Regex.Escape );
+            return new Regex( "^" + string.Join( "[^/]+", parts ) + "$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase );
+        }
+    }
+
+    // The set of a name, or the set of the template (the set named with placeholders) whose instance it is.
+    IReadOnlySet<Type>? FindSet( string typeSetName )
+    {
+        if( _typeSets.TryGetValue( typeSetName, out var set ) ) return set;
+        if( _templateSets.Length == 0 ) return null;
+        return _instanceSets.GetOrAdd( typeSetName, n => _templateSets.FirstOrDefault( t => t.Pattern.IsMatch( n ) ).Set );
     }
 
     /// <summary>
@@ -52,17 +81,25 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
     /// set of a party (or of a client) doesn't apply to it. True when there is no such set (an application built without
     /// a "ckonf.json", a test): all the components apply. A set that nothing restricts has all the components.
     /// </summary>
+    /// <para>
+    /// The set of a template (a fleet, a tenant template) is named with its placeholders ("$Trolley-{Name}"): the set of an
+    /// instance ("$Trolley-Red") is the set of its template.
+    /// </para>
     /// <param name="typeSetName">The name of the set: the party name of a local party, the name of a client.</param>
     /// <param name="componentType">The component type.</param>
     /// <returns>True when the component applies to the party or the client.</returns>
-    public bool IsMember( string typeSetName, Type componentType ) => !_typeSets.TryGetValue( typeSetName, out var set ) || set.Contains( componentType );
+    public bool IsMember( string typeSetName, Type componentType )
+    {
+        var set = FindSet( typeSetName );
+        return set == null || set.Contains( componentType );
+    }
 
     /// <summary>
     /// Gets whether this directory knows the members of a type set (see <see cref="IsMember(string, Type)"/>).
     /// </summary>
     /// <param name="typeSetName">The name of the set.</param>
     /// <returns>True when the set is known.</returns>
-    public bool HasTypeSet( string typeSetName ) => _typeSets.ContainsKey( typeSetName );
+    public bool HasTypeSet( string typeSetName ) => FindSet( typeSetName ) != null;
 
     /// <summary>
     /// Gets the components, in their order.

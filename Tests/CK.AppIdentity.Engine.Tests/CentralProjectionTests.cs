@@ -150,4 +150,36 @@ public class CentralProjectionTests
             texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
         }
     }
+
+    [Test]
+    public void a_fleet_is_named_by_its_pattern_and_a_link_to_it_is_a_remote_template()
+    {
+        var (central, root) = Create( """
+            {
+              "Domain": "Sample",
+              "Builders": {
+                "Auth3/Auth3.Builder": { "App": {} },
+                "Worker/Worker.Builder": { "App": { "InstanceCount": 2 } },
+                "Front/Front.Builder": { "App": { "Instances": [ "Red", "Blue" ], "FullName": "Sample/$Front-{Name}-{Index}/#Dev" } }
+              },
+              "Links": [
+                { "From": "$Worker-{Name}", "To": "$Auth3", "Link": { "Address": "tcp:127.0.0.1:37300" } },
+                { "From": "$Auth3", "To": "$Worker-{Name}", "Link": { "Address": "tcp:127.0.0.1:{38000+Index}" } },
+                { "From": "$Auth3", "To": "$Front-{Name}-{Index}" }
+              ]
+            }
+            """ );
+        var worker = Project( central, root, "Worker/Worker.Builder" );
+        worker["App:FullName"].ShouldBe( "Sample/$Worker-{Name}/#Dev" );
+        worker["App:InstanceCount"].ShouldBe( "2" );
+        worker["App:Parties:0:PartyName"].ShouldBe( "$Auth3" );
+
+        var auth3 = Project( central, root, "Auth3/Auth3.Builder" );
+        auth3["App:Parties:0:PartyName"].ShouldBe( "$Worker-{Name}" );
+        auth3["App:Parties:0:InstanceCount"].ShouldBe( "2" );
+        auth3["App:Parties:0:Address"].ShouldBe( "tcp:127.0.0.1:{38000+Index}" );
+        auth3["App:Parties:1:PartyName"].ShouldBe( "$Front-{Name}-{Index}" );
+        auth3["App:Parties:1:Instances:1"].ShouldBe( "Blue" );
+        File.ReadAllText( root.Combine( "Auth3/Auth3.Builder/ckonf.json" ) ).ShouldContain( "\"InstanceCount\": 2" );
+    }
 }

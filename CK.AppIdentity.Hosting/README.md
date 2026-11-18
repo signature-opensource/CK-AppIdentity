@@ -132,6 +132,9 @@ use CK.AppHost sets `<CKAppIdentityParty>true</CKAppIdentityParty>` itself.
   doesn't exit in time is killed with its process tree.
 - **Unless `-SkipBuild`,** it builds the parties first (the TypeScript integration of the build installs the packages of
   the client applications when needed).
+- **A fleet is started once per instance:** a host whose `appsettings.json` has `"InstanceCount"` or `"Instances"` is
+  started with `--Instance=<Name>` for each of them (CK.AppHost chooses the instance from it); a started party is
+  followed by its process (the instances share their content root).
 - **`-NoBrowser`** doesn't open the browser; **`-Timeout`** sets the seconds to wait (180 by default).
 
 The parties' status files require the `#Dev` environment and the `#Dev/Store` (no configured `StoreRootPath`).

@@ -75,6 +75,19 @@ drivers read a local party in its `LocalConfiguration` and a remote in its confi
 is resolved with the `TryResolveValue` / `TryResolveSection` extension methods of CK.Configuration (the party's own key,
 then the `"Defaults"` above).
 
+### The templates of parties
+
+An entry of `"Parties"` with `"InstanceCount": n` or `"Instances": [ "Paris", "Lyon" ]` is a template (the
+`ConfigurationTemplate` of CK.Configuration): it is a tenant domain or a remote per instance, its placeholders resolved
+(`{Index}`, 1-based, `{Name}`, `{n+Index}`). The instances are then ordinary parties.
+
+```jsonc
+"Parties": [
+  { "FullName": "Shop-{Name}/$Shop-{Name}", "Instances": [ "Paris", "Lyon" ] },          // two tenant domains
+  { "PartyName": "Trolley-{Name}", "InstanceCount": 3, "Address": "tcp:10.0.0.1:{37300+Index}" }  // three remotes
+]
+```
+
 The configuration is provided by the .NET abstraction
 [IConfigurationSection](https://learn.microsoft.com/fr-fr/dotnet/api/microsoft.extensions.configuration.iconfigurationsection)
 that can originate from multiple configuration providers (the samples are in JSON).

@@ -558,9 +558,35 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
         var parties = new ProcessedConfiguration( new List<TenantDomainPartyConfiguration>(), new List<RemotePartyConfiguration>() );
         foreach( var c in configuration.GetChildren() )
         {
-            success &= ReadParties( monitor, c, domainName, environmentName, ref parties, fullNameIndex );
+            success &= ReadTemplateOrParties( monitor, configuration, c, domainName, environmentName, ref parties, fullNameIndex );
         }
         return success ? parties : null;
+    }
+
+    // An entry of "Parties" with "InstanceCount" or "Instances" is a template: a tenant domain or a remote per instance
+    // (ConfigurationTemplate), each one with the placeholders ("{Index}", "{Name}") of its instance resolved.
+    static bool ReadTemplateOrParties( IActivityMonitor monitor,
+                                       ImmutableConfigurationSection partiesSection,
+                                       ImmutableConfigurationSection configuration,
+                                       string inhDomainName,
+                                       string inhEnvironmentName,
+                                       ref ProcessedConfiguration partyCollector,
+                                       Dictionary<string, ImmutableConfigurationSection> fullNameIndex )
+    {
+        if( !ConfigurationTemplate.TryReadInstances( monitor, configuration, null, out var instances ) ) return false;
+        if( instances == null )
+        {
+            return ReadParties( monitor, configuration, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
+        }
+        using var gLog = monitor.OpenInfo( $"Party template '{configuration.Path}': {instances.Count} instance(s)." );
+        bool success = true;
+        foreach( var i in instances )
+        {
+            var instance = ConfigurationTemplate.Instantiate( monitor, configuration, i, partiesSection );
+            success &= instance != null
+                       && ReadParties( monitor, instance, inhDomainName, inhEnvironmentName, ref partyCollector, fullNameIndex );
+        }
+        return success;
     }
 
     internal static bool ReadParties( IActivityMonitor monitor,
@@ -588,7 +614,7 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             foreach( var c in partiesSection.GetChildren() )
             {
                 hasParties = true;
-                success &= ReadParties( monitor, c, domainName, environmentName, ref partyCollector, fullNameIndex );
+                success &= ReadTemplateOrParties( monitor, partiesSection, c, domainName, environmentName, ref partyCollector, fullNameIndex );
             }
             if( !hasParties )
             {

@@ -102,4 +102,32 @@ public class AppIdentityAppBuilderContributorTests
         c.Clients.ShouldBeEmpty();
         context.Apps[0].ProjectedSections.ShouldBeEmpty();
     }
+
+    [Test]
+    public void a_fleet_App_is_checked_for_each_instance_and_its_instances_share_the_type_sets()
+    {
+        var context = CreateContext( """
+            {
+              "Instances": [ "Red", "Blue" ],
+              "FullName": "Sample/$Trolley-{Name}/#Dev",
+              "Local": { "HttpEndpoint": { "Urls": "http://localhost:{5400+Index}" } },
+              "Parties": [ { "FullName": "Shop-{Name}/$Shop-{Name}", "InstanceCount": 2 } ]
+            }
+            """ );
+        new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
+        // The sets are named after the templates: an instance finds its set at run time ("$Trolley-Red").
+        context.Apps[0].BinPathConfiguration.TypeSets.Select( s => s.Name ).ShouldBe( ["$Trolley-{Name}", "$Shop-{Name}"], ignoreOrder: true );
+    }
+
+    [TestCase( """{ "InstanceCount": 2, "FullName": "Sample/$Trolley/#Dev" }""", "must use the \"{Name}\" or \"{Index}\" placeholder" )]
+    [TestCase( """{ "InstanceCount": 0, "FullName": "Sample/$Trolley-{Name}/#Dev" }""", "A positive integer is expected" )]
+    public void invalid_fleets_are_build_errors( string json, string expected )
+    {
+        var context = CreateContext( json );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
+        }
+    }
 }

@@ -9,7 +9,8 @@
     1. Reads the manifests of the parties ("#Dev/Parties/*.json", written by their build).
     2. Unless -SkipBuild: builds each party (dotnet build). The TypeScript integration of the build installs the
        packages of the client applications ("yarn install") when needed.
-    3. Starts each party in its own window, in the Development environment (DOTNET_ENVIRONMENT).
+    3. Starts each party in its own window, in the Development environment (DOTNET_ENVIRONMENT). A fleet (a host whose
+       "appsettings.json" has "InstanceCount" or "Instances") is started once per instance ("--Instance=<Name>").
     4. Waits until every party is ready: its "DevRunningStatus.json" (in "#Dev/Store", written by the "DevRunningStatus"
        feature of CK.AppIdentity) says "Ready" (the party is started and its outgoing remotes are connected), then
        until its client applications are served. A client application whose dev server failed (its "Error") stops the
@@ -67,10 +68,31 @@ function Get-RunningStatuses {
     return $result
 }
 
+# A started party is found by its process (the instances of a fleet share their content root), before it starts by its
+# content root.
 function Get-Status( [hashtable] $statuses, $party ) {
+    $p = Get-Property $party 'Process'
+    if( $p ) {
+        foreach( $s in $statuses.Values ) { if( $s.ProcessId -eq $p.Id ) { return $s } }
+        return $null
+    }
     $key = (Get-NormalizedPath $party.ProjectPath).ToLowerInvariant()
     if( $statuses.ContainsKey( $key ) ) { return $statuses[$key] }
     return $null
+}
+
+# The instances of a fleet: the "InstanceCount" or the "Instances" of the host's appsettings.json (generated: its only
+# comment is its first line). No instance: the host is not a fleet.
+function Get-Instances( $party ) {
+    $file = Join-Path $party.ProjectPath 'appsettings.json'
+    if( -not (Test-Path $file) ) { return @() }
+    $json = (Get-Content $file | Where-Object { -not $_.TrimStart().StartsWith( '//' ) }) -join "`n"
+    $c = $json | ConvertFrom-Json
+    $names = Get-Property $c 'Instances'
+    if( $names ) { return @( $names ) }
+    $count = Get-Property $c 'InstanceCount'
+    if( $count ) { return @( 1..([int]$count) | ForEach-Object { "$_" } ) }
+    return @()
 }
 
 function Get-Property( $o, [string] $name ) {
@@ -113,8 +135,19 @@ function Stop-Party( [System.Diagnostics.Process] $p ) {
 $manifests = @( Get-ChildItem (Join-Path $devFolder 'Parties') -Filter '*.json' -ErrorAction SilentlyContinue )
 if( $manifests.Count -eq 0 ) { throw "No party in '$devFolder\Parties': build the solution first." }
 $parties = @( $manifests | ForEach-Object {
+    $name = $_.BaseName
     $m = Get-Content $_.FullName -Raw | ConvertFrom-Json
-    $m | Add-Member -NotePropertyName Name -NotePropertyValue $_.BaseName -PassThru
+    $instances = @( Get-Instances $m )
+    if( $instances.Count -eq 0 ) {
+        $m | Add-Member -NotePropertyName Name -NotePropertyValue $name -PassThru
+    }
+    else {
+        foreach( $i in $instances ) {
+            $copy = $m.PSObject.Copy()
+            $copy | Add-Member -NotePropertyName Name -NotePropertyValue "$name[$i]"
+            $copy | Add-Member -NotePropertyName Instance -NotePropertyValue $i -PassThru
+        }
+    }
 } )
 Write-Host "Parties: $(($parties | ForEach-Object Name) -join ', ')"
 
@@ -123,9 +156,9 @@ $already = @( $parties | Where-Object { Get-Status $running $_ } )
 if( $already.Count -gt 0 ) { throw "Already running: $(($already | ForEach-Object Name) -join ', ')." }
 
 if( -not $SkipBuild ) {
-    foreach( $party in $parties ) {
-        Write-Step "Building $($party.Name)"
-        Invoke-Native "The build of $($party.Name)" { dotnet build $party.ProjectPath -v q -nologo }
+    foreach( $party in @( $parties | Sort-Object ProjectPath -Unique ) ) {
+        Write-Step "Building $($party.ProjectPath)"
+        Invoke-Native "The build of $($party.ProjectPath)" { dotnet build $party.ProjectPath -v q -nologo }
     }
 }
 
@@ -137,11 +170,18 @@ try {
     Write-Step 'Starting the parties'
     foreach( $party in $parties ) {
         # Each party runs in its own console window (its logs), from its project folder (its appsettings.json).
+        $instance = Get-Property $party 'Instance'
+        $instanceArgs = if( $instance ) { @( "--Instance=$instance" ) } else { @() }
         if( $party.Executable -and (Test-Path $party.Executable) ) {
-            $p = Start-Process -FilePath $party.Executable -WorkingDirectory $party.ProjectPath -PassThru
+            if( $instanceArgs.Count -gt 0 ) {
+                $p = Start-Process -FilePath $party.Executable -ArgumentList $instanceArgs -WorkingDirectory $party.ProjectPath -PassThru
+            }
+            else {
+                $p = Start-Process -FilePath $party.Executable -WorkingDirectory $party.ProjectPath -PassThru
+            }
         }
         elseif( Test-Path $party.Dll ) {
-            $p = Start-Process -FilePath 'dotnet' -ArgumentList "`"$($party.Dll)`"" -WorkingDirectory $party.ProjectPath -PassThru
+            $p = Start-Process -FilePath 'dotnet' -ArgumentList (@( "`"$($party.Dll)`"" ) + $instanceArgs) -WorkingDirectory $party.ProjectPath -PassThru
         }
         else { throw "'$($party.Dll)' is missing: run this script without -SkipBuild." }
         $party | Add-Member -NotePropertyName Process -NotePropertyValue $p -Force

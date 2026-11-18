@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Configuration;
 
 [assembly: CK.Setup.AppBuilderContributor( typeof( CK.Setup.AppIdentityAppBuilderContributor ) )]
 
@@ -160,12 +161,9 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         var parties = new Dictionary<string, CentralApp>( StringComparer.OrdinalIgnoreCase );
         foreach( var a in context.Central.AllApps )
         {
-            var partyName = '$' + a.Name;
-            var fullName = a.Configuration["FullName"];
-            if( fullName != null && CoreApplicationIdentity.TryParseFullName( fullName, out _, out var p, out _ ) && p != null )
-            {
-                partyName = p;
-            }
+            // A fleet App (a template: "InstanceCount" or "Instances") names its party with a placeholder: "$Trolley-{Name}".
+            var partyName = RawPartyName( a.Configuration )
+                            ?? (ConfigurationTemplate.IsTemplate( a.Configuration ) ? $"${a.Name}-{{Name}}" : '$' + a.Name);
             if( !parties.TryAdd( partyName, a ) )
             {
                 monitor.Error( $"The party '{partyName}' of {a} is also the party of {parties[partyName]} in '{file}'." );
@@ -205,6 +203,16 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                     continue;
                 }
                 var entry = new JsonObject { ["PartyName"] = l.To };
+                // A link to a fleet is a remote template: one remote per instance of the fleet.
+                var target = parties[l.To].Configuration;
+                if( target[ConfigurationTemplate.InstanceCountKey] is string count )
+                {
+                    entry[ConfigurationTemplate.InstanceCountKey] = int.Parse( count, System.Globalization.CultureInfo.InvariantCulture );
+                }
+                else if( target.TryGetSection( ConfigurationTemplate.InstancesKey ) is { } names )
+                {
+                    entry[ConfigurationTemplate.InstancesKey] = new JsonArray( names.GetChildren().Select( n => (JsonNode?)JsonValue.Create( n.Value ) ).ToArray() );
+                }
                 if( l.Link != null )
                 {
                     foreach( var (key, value) in l.Link ) entry[key] = value?.DeepClone();
@@ -298,7 +306,8 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                                   ref bool ok )
         {
             var name = link[key] is JsonValue v && v.TryGetValue<string>( out var s ) ? s : null;
-            if( name == null || !name.StartsWith( '$' ) || !CoreApplicationIdentity.IsValidPartyName( name ) )
+            // The party of a fleet is its pattern ("$Trolley-{Name}").
+            if( name == null || !name.StartsWith( '$' ) || !(CoreApplicationIdentity.IsValidPartyName( name ) || parties.ContainsKey( name )) )
             {
                 monitor.Error( $"Invalid \"{path}:{key}\" in '{file}': a party name (\"$Name\") is expected." );
                 ok = false;
@@ -334,23 +343,58 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 Copy( party, k.Key, k );
             }
             var section = new ImmutableConfigurationSection( party );
-            ApplicationIdentityServiceConfiguration? configuration;
-            using( monitor.OpenInfo( $"Checking the party of {a}." ) )
+            // A fleet App ("InstanceCount" or "Instances"): its party is validated for each instance, its placeholders
+            // resolved; the instances share the type sets, named after the templates ("$Trolley-{Name}").
+            if( !ConfigurationTemplate.TryReadInstances( monitor, a.Configuration, a.Name, out var instances ) )
             {
-                // The relative paths (StoreRootPath) are the host's: its content root is its project folder.
-                configuration = ApplicationIdentityServiceConfiguration.Create( monitor, section, defaultPartyName: a.Name, basePath: a.HostProjectPath );
-                if( configuration == null )
+                success = false;
+                continue;
+            }
+            string? rootSetName = null;
+            if( instances != null )
+            {
+                rootSetName = RawPartyName( section ) ?? $"${a.Name}-{{Name}}";
+                if( !ConfigurationTemplate.TryResolve( monitor, rootSetName, section.Path, instances[0], [], out var r ) || r == rootSetName )
                 {
-                    monitor.Error( $"Invalid party in {a}." );
+                    monitor.Error( $"The party name '{rootSetName}' of the fleet {a} must use the \"{{Name}}\" or \"{{Index}}\" placeholder: its instances are different parties." );
                     success = false;
                     continue;
                 }
             }
-            // The type sets of the local parties.
-            var root = CreateTypeSet( monitor, a, configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
+            ApplicationIdentityServiceConfiguration? configuration = null;
+            using( monitor.OpenInfo( instances == null ? $"Checking the party of {a}." : $"Checking the {instances.Count} instances of the party of {a}." ) )
+            {
+                foreach( var i in (IEnumerable<ConfigurationInstance?>?)instances ?? [null] )
+                {
+                    var s = section;
+                    var defaultPartyName = a.Name;
+                    if( i != null )
+                    {
+                        s = ConfigurationTemplate.Instantiate( monitor, section, i );
+                        ConfigurationTemplate.TryResolve( monitor, rootSetName!, section.Path, i, [], out defaultPartyName );
+                        defaultPartyName = defaultPartyName.TrimStart( '$' );
+                    }
+                    // The relative paths (StoreRootPath) are the host's: its content root is its project folder.
+                    var c = s != null
+                            ? ApplicationIdentityServiceConfiguration.Create( monitor, s, defaultPartyName: defaultPartyName, basePath: a.HostProjectPath )
+                            : null;
+                    if( c == null )
+                    {
+                        monitor.Error( i == null ? $"Invalid party in {a}." : $"Invalid party in {a} for its {i}." );
+                        success = false;
+                    }
+                    configuration ??= c;
+                }
+            }
+            if( configuration == null ) continue;
+            // The type sets of the local parties (the ones of the first instance: the instances share them).
+            var root = CreateTypeSet( monitor, a, rootSetName ?? configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
+            var tenantSets = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
             foreach( var t in configuration.TenantDomains )
             {
-                CreateTypeSet( monitor, a, t.PartyName, t.LocalConfiguration.Configuration, null, ref success );
+                // The instances of a tenant template share the set of the template, named by its unresolved party name.
+                var name = TemplateSetName( section, t.Configuration ) ?? t.PartyName;
+                if( tenantSets.Add( name ) ) CreateTypeSet( monitor, a, name, t.LocalConfiguration.Configuration, null, ref success );
             }
             var clients = section.TryGetSection( "Local" )?.TryGetSection( PartyClientSectionName );
             if( clients == null || root == null ) continue;
@@ -368,6 +412,26 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             if( s.Value != null ) target[path] = s.Value;
             foreach( var c in s.GetChildren() ) Copy( target, $"{path}:{c.Key}", c );
         }
+
+        // The unresolved party name of the template of a party (its section has the path of the template's), or null when
+        // it is not the instance of a template.
+        static string? TemplateSetName( ImmutableConfigurationSection unresolved, ImmutableConfigurationSection party )
+        {
+            var prefix = unresolved.Path + ":";
+            if( !party.Path.StartsWith( prefix, StringComparison.OrdinalIgnoreCase ) ) return null;
+            var template = unresolved.TryGetSection( party.Path[prefix.Length..] );
+            if( template == null || !ConfigurationTemplate.IsTemplate( template ) ) return null;
+            return RawPartyName( template );
+        }
+    }
+
+    // The party name written by a party section: its "PartyName", or the party of its "FullName" (a template's name
+    // has placeholders: it is not parsed as a full name).
+    static string? RawPartyName( IConfiguration s )
+    {
+        var p = s["PartyName"];
+        if( !string.IsNullOrWhiteSpace( p ) ) return p[0] == '$' ? p : '$' + p;
+        return s["FullName"]?.Split( '/' ).FirstOrDefault( part => part.StartsWith( '$' ) );
     }
 
     // The type set of a local party (its "Local" section) or of a client (its section, the set of its party as parent):
