@@ -504,6 +504,8 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             {
                 var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
                 if( set != null ) _clients.Add( new DeclaredClient( a, c.Key, c, set ) );
+                // A client is the anchor of the restrictions of the client features and their options.
+                a.DeclareAnchor( $"Local:{PartyClientSectionName}:{c.Key}", ["Client"] );
             }
         }
         return success;
@@ -673,6 +675,33 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             var prefix = a.Configuration.Path + ":";
             return s.Path.StartsWith( prefix, StringComparison.OrdinalIgnoreCase ) ? s.Path[prefix.Length..] : s.Path;
         }
+    }
+
+    /// <summary>
+    /// Resolves the sections of an option (<see cref="IPartyComponentOption{TOwner}"/>): the section of the option in the
+    /// one of each concrete owner of the App ("HttpEndpoint:ForwardedHeaders"), relative to a party for the options of
+    /// a feature, to a client for the options of a client feature. The features and the client features are their
+    /// configurable name (null: the default).
+    /// </summary>
+    /// <param name="configurableType">The configurable type.</param>
+    /// <param name="appTypes">The configurable types of the App.</param>
+    /// <returns>The sections of an option, null for another type.</returns>
+    public IEnumerable<string>? ResolveSections( Type configurableType, IReadOnlyCollection<Type> appTypes )
+    {
+        var owner = configurableType.GetInterfaces()
+                                    .Where( i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> ) )
+                                    .Select( i => i.GetGenericArguments()[0] )
+                                    .FirstOrDefault();
+        if( owner == null ) return null;
+        var name = configurableType.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().FirstOrDefault()?.Name;
+        if( name == null ) return null;
+        // An option of a base owner applies to every concrete owner.
+        return appTypes.Where( t => t.IsClass && !t.IsAbstract && owner.IsAssignableFrom( t ) )
+                       .Select( t => t.GetCustomAttributes( inherit: false ).OfType<IConfigurableTypeAttribute>().FirstOrDefault()?.Name )
+                       .Where( n => n != null )
+                       .Select( n => $"{n}:{name}" )
+                       .Distinct( StringComparer.OrdinalIgnoreCase )
+                       .ToList();
     }
 
     /// <inheritdoc />

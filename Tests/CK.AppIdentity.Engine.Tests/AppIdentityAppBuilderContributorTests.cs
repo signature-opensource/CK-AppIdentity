@@ -2,6 +2,7 @@ using CK.Core;
 using CK.Setup;
 using NUnit.Framework;
 using Shouldly;
+using System;
 using System.Linq;
 using static CK.Testing.MonitorTestHelper;
 
@@ -48,6 +49,8 @@ public class AppIdentityAppBuilderContributorTests
         binPath.FindTypeSet( "App" ).ShouldNotBeNull().Types.ShouldBe( [typeof( Fake.FakeClientFeature )] );
         binPath.FindTypeSet( "App" )!.ExcludedTypes.ShouldBe( [typeof( Fake.FakeService )] );
         binPath.FindTypeSet( "$Tenant" ).ShouldNotBeNull().Types.ShouldBe( [typeof( Fake.FakeService )] );
+        // The clients are the anchors of the restrictions of the client features.
+        context.Apps[0].Anchors.Where( a => a.Kinds.Contains( "Client" ) ).Select( a => a.Path ).ShouldBe( ["Local:PartyClient:App", "Local:PartyClient:Tool"], ignoreOrder: true );
         context.Apps[0].CompileKeys.ShouldBe( ["Local:ExcludedTypes", "Local:PartyClient:App:Types", "Local:PartyClient:Tool:Types", "Parties:0:Local:Types"], ignoreOrder: true );
 
         // A client that no contributor builds is an error, and a client has one build feature.
@@ -90,12 +93,26 @@ public class AppIdentityAppBuilderContributorTests
 
         // What KeyManagement declares: the Opened template gets "Never" (the "Defaults" say "Once").
         var restriction = new PackageConfigurationLock( "KeyManagementFeatureDriver",
-                                                        "KeyManagement",
+                                                        ["KeyManagement"],
                                                         new ConfigurationLockAttribute( "OpenedRemoteTemplate:AutoTrustKey", ConfigurationLevel.Compile ) { Value = "Never" } );
         AppBuilderConfiguration.ApplyLocks( TestHelper.Monitor, app, [], [restriction] ).ShouldBeTrue();
         app.BinPathConfiguration.CompiledValues.Count.ShouldBe( 1 );
         app.BinPathConfiguration.CompiledValues["CK-AppIdentity:Parties:1:KeyManagement:AutoTrustKey"].ShouldBe( "Never" );
         app.BurntKeys.ShouldBe( ["Parties:1:KeyManagement:AutoTrustKey"] );
+    }
+
+    [Test]
+    public void the_sections_of_an_option_are_in_each_of_its_concrete_owners()
+    {
+        var c = new AppIdentityAppBuilderContributor();
+        Type[] appTypes = [typeof( Fake.FakePartyFeatureDriver ), typeof( Fake.MainOption ),
+                           typeof( Fake.FakeClientFeature ), typeof( Fake.FakeDerivedClientFeature ), typeof( Fake.CachingOption ), typeof( Fake.DerivedOnlyOption )];
+        c.ResolveSections( typeof( Fake.MainOption ), appTypes ).ShouldBe( ["FakeParty:Main"] );
+        // An option of a base owner applies to the derived owners.
+        c.ResolveSections( typeof( Fake.CachingOption ), appTypes ).ShouldBe( ["Fake:Caching", "FakeDerived:Caching"], ignoreOrder: true );
+        c.ResolveSections( typeof( Fake.DerivedOnlyOption ), appTypes ).ShouldBe( ["FakeDerived:DerivedOnly"] );
+        // A feature is its configurable name (the default).
+        c.ResolveSections( typeof( Fake.FakePartyFeatureDriver ), appTypes ).ShouldBeNull();
     }
 
     [Test]
