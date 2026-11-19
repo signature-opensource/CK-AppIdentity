@@ -38,6 +38,7 @@ public sealed class TenantDomainTemplate
     readonly ImmutableConfigurationSection _partiesSection;
     readonly ConfigurationTemplateInstances _instances;
     readonly string _domainPrefix;
+    readonly string _partyNamePattern;
     readonly string _inheritedDomainName;
     readonly string _environmentName;
 
@@ -45,6 +46,7 @@ public sealed class TenantDomainTemplate
                           ImmutableConfigurationSection partiesSection,
                           ConfigurationTemplateInstances instances,
                           string domainPrefix,
+                          string partyNamePattern,
                           string inheritedDomainName,
                           string environmentName )
     {
@@ -52,6 +54,7 @@ public sealed class TenantDomainTemplate
         _partiesSection = partiesSection;
         _instances = instances;
         _domainPrefix = domainPrefix;
+        _partyNamePattern = partyNamePattern;
         _inheritedDomainName = inheritedDomainName;
         _environmentName = environmentName;
     }
@@ -72,6 +75,12 @@ public sealed class TenantDomainTemplate
     /// <see cref="TenantDomainTemplate"/>).
     /// </summary>
     public string DomainPrefix => _domainPrefix;
+
+    /// <summary>
+    /// Gets the party name of the template, with its placeholders: "${Name}". It names the type set of its tenant domains
+    /// (one set per template): a tenant domain of this template uses it, never a set found by its own name.
+    /// </summary>
+    public string PartyNamePattern => _partyNamePattern;
 
     /// <summary>
     /// Gets the environment of the tenant domains of this template.
@@ -203,7 +212,7 @@ public sealed class TenantDomainTemplate
                 return false;
             }
         }
-        var template = new TenantDomainTemplate( configuration, partiesSection, instances, domainPrefix, domainName, environmentName );
+        var template = new TenantDomainTemplate( configuration, partiesSection, instances, domainPrefix, rawParty, domainName, environmentName );
         foreach( var i in instances )
         {
             success &= template.ReadInstance( monitor, i, ref collector, fullNameIndex );

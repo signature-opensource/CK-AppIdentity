@@ -54,8 +54,10 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
         _byType = components.ToDictionary( c => c.ComponentType );
         _multipleAbstractions = multipleAbstractions;
         _typeSets = typeSets.ToDictionary( kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase );
+        // The most specific template first (see FindTypeSetName).
         _templateSets = _typeSets.Where( kv => _placeholder.IsMatch( kv.Key ) )
-                                 .OrderBy( kv => kv.Key, StringComparer.Ordinal )
+                                 .OrderByDescending( kv => LiteralLength( kv.Key ) )
+                                 .ThenBy( kv => kv.Key, StringComparer.Ordinal )
                                  .Select( kv => (ToPattern( kv.Key ), kv.Value) )
                                  .ToArray();
         _instanceSets = new ConcurrentDictionary<string, IReadOnlySet<Type>?>( StringComparer.OrdinalIgnoreCase );
@@ -68,9 +70,14 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
         return new Regex( "^" + string.Join( "[^/]+", parts ) + "$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase );
     }
 
+    // The number of characters of a set name that are not placeholders: the most specific template has the most.
+    static int LiteralLength( string name ) => _placeholder.Replace( name, string.Empty ).Length;
+
     /// <summary>
     /// Finds the name of the type set of a party or a client among the names of the sets: the name itself, or the name
-    /// of the template whose instance it is (the set of "$Trolley-Red" is "$Trolley-{Name}").
+    /// of the template whose instance it is (the set of "$Trolley-Red" is "$Trolley-{Name}"). When several templates match,
+    /// the most specific one wins (the most characters that are not placeholders: "$Worker-{Name}" before "${Name}"), then
+    /// the ordinal order. A tenant domain of a template doesn't come here: it uses the set of its template.
     /// </summary>
     /// <param name="setNames">The names of the sets.</param>
     /// <param name="name">The name of the party or the client.</param>
@@ -78,7 +85,7 @@ public abstract class PartyComponentDirectory : ISingletonAutoService
     public static string? FindTypeSetName( IEnumerable<string> setNames, string name )
     {
         string? template = null;
-        foreach( var n in setNames.OrderBy( n => n, StringComparer.Ordinal ) )
+        foreach( var n in setNames.OrderByDescending( LiteralLength ).ThenBy( n => n, StringComparer.Ordinal ) )
         {
             if( n.Equals( name, StringComparison.OrdinalIgnoreCase ) ) return n;
             if( template == null && _placeholder.IsMatch( n ) && ToPattern( n ).IsMatch( name ) ) template = n;

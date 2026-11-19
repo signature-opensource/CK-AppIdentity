@@ -288,4 +288,33 @@ public class TenantTemplateTests
             File.Exists( workerFolder.AppendPart( "Identity.0.trust" ) ).ShouldBeFalse( "A new Acme must not bring it back." );
         }
     }
+
+    [Test]
+    public async Task a_tenant_of_a_template_uses_the_type_set_of_its_template_whatever_its_name_Async()
+    {
+        Clear( "TTSets" );
+        var c = Configure( "TTSets", c => c["FullName"] = "TTSets/$Worker-1" ).ShouldNotBeNull();
+        var services = new ServiceCollection();
+        services.AddApplicationIdentityForTests( c, [typeof( ForgetfulFeatureDriver )] );
+        // The sets: the root is an instance of a fleet ("$Worker-{Name}": the feature is a member), the tenants are not ("${Name}").
+        services.AddSingleton( AppIdentityTestHelper.CreateComponentDirectory( [typeof( ForgetfulFeatureDriver )],
+                                                                                new Dictionary<string, IEnumerable<Type>>
+                                                                                {
+                                                                                    ["$Worker-{Name}"] = [typeof( ForgetfulFeatureDriver )],
+                                                                                    ["${Name}"] = []
+                                                                                } ) );
+        var sp = services.BuildServiceProvider();
+        var s = sp.GetRequiredService<ApplicationIdentityService>();
+        await s.StartAndInitializeAsync().WaitAsync( _timeout );
+        await using( s )
+        {
+            var forgetful = sp.GetRequiredService<ForgetfulFeatureDriver>();
+            forgetful.IsMember( s ).ShouldBeTrue( "The root is an instance of the fleet." );
+            // A tenant named like an instance of the fleet: its set is its template's, not the fleet's.
+            var tenant = (await s.AddTenantInstanceAsync( TestHelper.Monitor, s.TenantTemplates[0], "Worker-9" )).ShouldNotBeNull();
+            forgetful.IsMember( tenant ).ShouldBeFalse( "A tenant of the template uses the set of its template." );
+            s.TenantDomains.Single( t => t.Configuration.Instance?.Name == "Configured" ).ShouldSatisfyAllConditions(
+                t => forgetful.IsMember( t ).ShouldBeFalse( "A configured instance of the template too." ) );
+        }
+    }
 }

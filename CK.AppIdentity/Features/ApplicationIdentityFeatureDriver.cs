@@ -138,8 +138,15 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     // The party component that this driver is (a generated specialization is described by its base type).
     internal System.Type ComponentType => _componentType;
 
-    // The type set of a local party is named after its party name; a remote uses the one of its local party.
-    internal static string TypeSetName( IParty p ) => p is ILocalParty || p is not IOwnedParty o ? p.PartyName : o.Owner.PartyName;
+    // The type set of a local party is named after its party name; a remote uses the one of its local party. A tenant domain
+    // of a template uses the set of its template ("${Name}"): never a set found by its own name, that could match the pattern
+    // of another template of the application (a tenant "$Worker-9" next to a fleet "$Worker-{Name}").
+    internal static string TypeSetName( IParty p )
+    {
+        var local = p as ILocalParty ?? (p as IOwnedParty)?.Owner;
+        if( local is ITenantDomainParty { Configuration.Template: { } template } ) return template.PartyNamePattern;
+        return (local ?? p).PartyName;
+    }
 
     // A Required feature is always allowed ("false" is a start error, see AppIdentityAgent.CheckFeatureKeys).
     bool IsAllowed( ApplicationIdentityConfiguration c, string name ) => _activation == TypeActivation.Required

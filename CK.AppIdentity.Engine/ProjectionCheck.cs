@@ -78,7 +78,8 @@ static class ProjectionCheck
         bool success = true;
 
         CheckParty( c.PartyName, c.LocalConfiguration, c.Remotes );
-        foreach( var t in c.TenantDomains ) CheckParty( t.PartyName, t.LocalConfiguration, t.Remotes );
+        // A tenant domain of a template uses the set of its template (as at run time: see ApplicationIdentityFeatureDriver).
+        foreach( var t in c.TenantDomains ) CheckParty( t.Template?.PartyNamePattern ?? t.PartyName, t.LocalConfiguration, t.Remotes );
         // The clients are declared by the root party only.
         if( c.LocalConfiguration.Configuration.TryGetSection( PartyClientSectionName ) is { } clients )
         {

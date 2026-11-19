@@ -93,4 +93,15 @@ public class ConfigurationTemplateTests
         PartyComponentDirectory.FindTypeSetName( names, "$Trolley-" ).ShouldBeNull();
         PartyComponentDirectory.FindTypeSetName( names, "Other" ).ShouldBeNull();
     }
+
+    [Test]
+    public void FindTypeSetName_prefers_the_most_specific_template()
+    {
+        // A tenant template "${Name}" matches any party name: a fleet instance keeps the set of its fleet, whatever the
+        // ordinal order of the names (a tenant of a template uses the set of its template, it never comes here).
+        string[] names = ["${Name}", "$Holder", "$Z-{Name}"];
+        PartyComponentDirectory.FindTypeSetName( names, "$Z-3" ).ShouldBe( "$Z-{Name}" );
+        PartyComponentDirectory.FindTypeSetName( names, "$Acme" ).ShouldBe( "${Name}" );
+        PartyComponentDirectory.FindTypeSetName( names, "$holder" ).ShouldBe( "$Holder" );
+    }
 }
