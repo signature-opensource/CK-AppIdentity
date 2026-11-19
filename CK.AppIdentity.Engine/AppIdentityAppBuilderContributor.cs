@@ -484,6 +484,11 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 }
             }
             if( configuration == null ) continue;
+            // The configuration levels: the keys of the party are read at start (Init), a "$LOCK" can restrict them; the
+            // parties are the anchors of the "$LOCK" and of the packages' restrictions (their values may come from the
+            // "Defaults" above them).
+            foreach( var k in keys ) a.DeclareInitSection( k.Key );
+            DeclareAnchors( a, configuration );
             // The type sets of the local parties (the ones of the first instance: the instances share them).
             var root = CreateTypeSet( monitor, a, rootSetName ?? configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
             var tenantSets = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
@@ -519,6 +524,67 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             var template = unresolved.TryGetSection( party.Path[prefix.Length..] );
             if( template == null || !ConfigurationTemplate.IsTemplate( template ) ) return null;
             return RawPartyName( template );
+        }
+    }
+
+    // The parties of the App, by their kinds: "Party" and "Local" (a local party: the root's or a tenant's), "TenantDomain",
+    // "TenantTemplate", "Remote", "RemoteTemplate", "OpenedRemoteTemplate". The instances of a template are configured by
+    // the template: the template is the anchor.
+    static void DeclareAnchors( AppConfiguration a, ApplicationIdentityServiceConfiguration c )
+    {
+        Declare( a, c.LocalConfiguration.Configuration.Path, "Party", "Local" );
+        DeclareRemotes( a, c.Remotes, c.RemoteTemplates );
+        foreach( var t in c.TenantDomains )
+        {
+            if( t.Template != null )
+            {
+                Declare( a, $"{t.Template.Configuration.Path}:Local", "Party", "Local", "TenantDomain", "TenantTemplate" );
+            }
+            else
+            {
+                Declare( a, t.LocalConfiguration.Configuration.Path, "Party", "Local", "TenantDomain" );
+            }
+            DeclareRemotes( a, t.Remotes, t.RemoteTemplates );
+        }
+        foreach( var t in c.TenantTemplates )
+        {
+            Declare( a, $"{t.Configuration.Path}:Local", "Party", "Local", "TenantDomain", "TenantTemplate" );
+        }
+
+        static void DeclareRemotes( AppConfiguration a, IEnumerable<RemotePartyConfiguration> remotes, IEnumerable<RemotePartyTemplate> opened )
+        {
+            foreach( var r in remotes )
+            {
+                if( r.Template == null ) Declare( a, r.Configuration.Path, "Party", "Remote" );
+                else if( r.Template.Instances.IsOpened ) Declare( a, r.Template.Configuration.Path, "Party", "Remote", "RemoteTemplate", "OpenedRemoteTemplate" );
+                else Declare( a, r.Template.Configuration.Path, "Party", "Remote", "RemoteTemplate" );
+            }
+            foreach( var t in opened )
+            {
+                Declare( a, t.Configuration.Path, "Party", "Remote", "RemoteTemplate", "OpenedRemoteTemplate" );
+            }
+        }
+
+        static void Declare( AppConfiguration a, string path, params string[] kinds )
+        {
+            var prefix = a.Configuration.Path + ":";
+            if( !path.StartsWith( prefix, StringComparison.OrdinalIgnoreCase ) ) return;
+            var relative = path[prefix.Length..];
+            a.DeclareAnchor( relative, kinds, Fallbacks( a, relative ) );
+        }
+
+        // The "Defaults" of the levels above the party, the nearest first.
+        static IEnumerable<string> Fallbacks( AppConfiguration a, string relative )
+        {
+            var parts = relative.Split( ':' );
+            var result = new List<string>();
+            for( int n = parts.Length - 1; n >= 0; --n )
+            {
+                var level = string.Join( ':', parts, 0, n );
+                var defaults = level.Length == 0 ? "Defaults" : $"{level}:Defaults";
+                if( a.Configuration.TryGetSection( defaults ) != null ) result.Add( defaults );
+            }
+            return result;
         }
     }
 

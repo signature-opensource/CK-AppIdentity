@@ -62,6 +62,43 @@ public class AppIdentityAppBuilderContributorTests
         c.OnContributed( TestHelper.Monitor, context ).ShouldBeTrue();
     }
     [Test]
+    public void the_parties_are_the_anchors_of_the_restrictions()
+    {
+        var context = CreateContext( """
+            {
+              "FullName": "Sample/$Front",
+              "Defaults": { "KeyManagement": { "AutoTrustKey": "Once" } },
+              "Local": { "HttpEndpoint": true },
+              "Parties": [
+                { "PartyName": "$Back", "Address": "tcp:127.0.0.1:3712" },
+                { "PartyName": "$Worker-{Name}", "MaxInstanceCount": 5 },
+                { "PartyName": "$Cart-{Index}", "InstanceCount": 2 }
+              ]
+            }
+            """ );
+        new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
+        var app = context.Apps[0];
+        app.InitSections.ShouldBe( ["FullName", "Defaults", "Local", "Parties"], ignoreOrder: true );
+        var anchors = app.Anchors.ToDictionary( a => a.Path );
+        anchors.Keys.ShouldBe( ["Local", "Parties:0", "Parties:1", "Parties:2"], ignoreOrder: true );
+        anchors["Local"].Kinds.ShouldBe( ["Party", "Local"], ignoreOrder: true );
+        anchors["Parties:0"].Kinds.ShouldBe( ["Party", "Remote"], ignoreOrder: true );
+        anchors["Parties:1"].Kinds.ShouldContain( "OpenedRemoteTemplate" );
+        anchors["Parties:2"].Kinds.ShouldContain( "RemoteTemplate" );
+        anchors["Parties:2"].Kinds.ShouldNotContain( "OpenedRemoteTemplate" );
+        anchors["Parties:1"].Fallbacks.ShouldBe( ["Defaults"] );
+
+        // What KeyManagement declares: the Opened template gets "Never" (the "Defaults" say "Once").
+        var restriction = new PackageConfigurationLock( "KeyManagementFeatureDriver",
+                                                        "KeyManagement",
+                                                        new ConfigurationLockAttribute( "OpenedRemoteTemplate:AutoTrustKey", ConfigurationLevel.Compile ) { Value = "Never" } );
+        AppBuilderConfiguration.ApplyLocks( TestHelper.Monitor, app, [], [restriction] ).ShouldBeTrue();
+        app.BinPathConfiguration.CompiledValues.Count.ShouldBe( 1 );
+        app.BinPathConfiguration.CompiledValues["CK-AppIdentity:Parties:1:KeyManagement:AutoTrustKey"].ShouldBe( "Never" );
+        app.BurntKeys.ShouldBe( ["Parties:1:KeyManagement:AutoTrustKey"] );
+    }
+
+    [Test]
     public void the_keys_of_the_party_are_projected_in_CK_AppIdentity()
     {
         var context = CreateContext( """
