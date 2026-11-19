@@ -131,7 +131,8 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     ///   "{Domain}/${Name}/{Environment}".</item>
     ///   <item>"Links": the directed links between the parties, <c>{ "From": "$X", "To": "$Y", "Link": { ... } }</c>:
     ///   "Link" is the remote entry of X for Y (its "PartyName" is Y), appended to the "Parties" of X. A link without its
-    ///   reverse is valid; a remote both linked and in the "Parties" of the App is an error.</item>
+    ///   reverse is valid; a remote both linked and in the "Parties" of the App is an error. The "Address" of a link is a
+    ///   value per deployment (see <see cref="CentralDeployment"/>).</item>
     /// </list>
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
@@ -142,6 +143,8 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         context.ClaimKey( "Domain" );
         context.ClaimKey( "Environment" );
         context.ClaimKey( "Links" );
+        // An address is the one of a deployment: each one writes its own.
+        context.AddPerDeploymentKey( "Links:[*]:Link:Address" );
         var file = context.Central.File;
         var central = context.Central.Configuration;
         bool success = true;
