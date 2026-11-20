@@ -35,6 +35,41 @@ static class ProjectionCheck
 
     sealed record Option( string Name, Type Owner, Type Type );
 
+    // The projected JSON with the burnt values (their configuration paths) set in it.
+    static string WithCompiledValues( string json, IReadOnlyDictionary<string, string?> compiled )
+    {
+        if( compiled.Count == 0 ) return json;
+        var options = new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true };
+        if( System.Text.Json.Nodes.JsonNode.Parse( json, documentOptions: options ) is not System.Text.Json.Nodes.JsonObject root ) return json;
+        foreach( var (path, value) in compiled )
+        {
+            System.Text.Json.Nodes.JsonNode current = root;
+            var segments = path.Split( ':' );
+            for( int i = 0; i < segments.Length; ++i )
+            {
+                bool last = i == segments.Length - 1;
+                var key = segments[i];
+                if( current is System.Text.Json.Nodes.JsonArray a && int.TryParse( key, out var index ) && index >= 0 && index < a.Count )
+                {
+                    if( last ) a[index] = value;
+                    else current = a[index] ??= new System.Text.Json.Nodes.JsonObject();
+                }
+                else if( current is System.Text.Json.Nodes.JsonObject o )
+                {
+                    if( last ) o[key] = value;
+                    else
+                    {
+                        var next = o[key];
+                        if( next is not (System.Text.Json.Nodes.JsonObject or System.Text.Json.Nodes.JsonArray) ) o[key] = next = new System.Text.Json.Nodes.JsonObject();
+                        current = next!;
+                    }
+                }
+                else break;
+            }
+        }
+        return root.ToJsonString();
+    }
+
     public static bool Run( IActivityMonitor monitor, IRunningBinPathGroup group, PartyComponentAnalysis.Result result )
     {
         if( group.TypeSets.Count == 0 ) return true;
@@ -44,7 +79,9 @@ static class ProjectionCheck
             if( b.ProjectPath.IsEmptyPath ) continue;
             var file = b.ProjectPath.AppendPart( "appsettings.json" );
             if( !File.Exists( file ) ) continue;
-            var appSettings = ImmutableConfigurationSection.CreateFromJson( "appsettings", File.ReadAllText( file ) );
+            // The burnt values (the Compile level: a "$LOCK", the full name of a party built for a deployment) are not in
+            // the projection: they are part of the configuration of the host at run time.
+            var appSettings = ImmutableConfigurationSection.CreateFromJson( "appsettings", WithCompiledValues( File.ReadAllText( file ), b.CompiledValues ) );
             if( appSettings.TryGetSection( AppIdentityAppBuilderContributor.SectionName ) == null ) continue;
             // A fleet (a template: "InstanceCount", "Instances" or "MaxInstanceCount"): each instance is checked (and the
             // first dynamic one of an Opened fleet), its placeholders resolved (the App name is the host's without ".Host":
