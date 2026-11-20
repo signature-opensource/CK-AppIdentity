@@ -175,6 +175,8 @@ public class AppIdentityAppBuilderContributorTests
         new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
         // The sets are named after the templates: an instance finds its set at run time ("$Trolley-Red").
         context.Apps[0].BinPathConfiguration.TypeSets.Select( s => s.Name ).ShouldBe( ["$Trolley-{Name}", "$Shop-{Name}"], ignoreOrder: true );
+        // The size of a fleet is the one of a deployment.
+        context.Apps[0].PerDeploymentKeys.ShouldBe( ["InstanceCount", "Instances", "MaxInstanceCount"], ignoreOrder: true );
     }
 
     [TestCase( """{ "InstanceCount": 2, "FullName": "Sample/$Trolley/#Dev" }""", "must use the \"{Name}\" or \"{Index}\" placeholder" )]

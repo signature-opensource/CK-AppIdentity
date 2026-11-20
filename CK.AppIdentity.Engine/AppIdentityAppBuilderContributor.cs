@@ -519,6 +519,14 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             // "Defaults" above them).
             foreach( var k in keys ) a.DeclareInitSection( k.Key );
             DeclareAnchors( a, configuration );
+            // The size of a fleet is the one of a deployment: each deployment writes it (the remote templates of the links
+            // to the fleet follow: they copy it from the same merged configuration).
+            if( ConfigurationTemplate.IsTemplate( a.Configuration ) )
+            {
+                a.AddPerDeploymentKey( ConfigurationTemplate.InstanceCountKey );
+                a.AddPerDeploymentKey( ConfigurationTemplate.InstancesKey );
+                a.AddPerDeploymentKey( ConfigurationTemplate.MaxInstanceCountKey );
+            }
             // A host built for a deployment burns the full name of its party: CK.AppHost reads its environment before
             // anything else (the .NET environment of the host follows it).
             if( context.Deployment != null && a.Configuration["FullName"] != null )
