@@ -158,6 +158,8 @@ the contributor validates the party of each configured instance and, for an Open
 their placeholders resolved. The instances share the type sets: the set of a fleet,
 or of a tenant template (an entry of `Parties` with instances), is named by its unresolved party name
 (`$Trolley-{Name}`); at run time, `PartyComponentDirectory` finds the set of an instance (`$Trolley-Red`) through it.
+The size of a fleet (`"InstanceCount"`, `"Instances"`, `"MaxInstanceCount"`) is a value per deployment (see the
+deployments of CK.Engine.Configuration): each deployment writes it.
 
 ## Requires
 
