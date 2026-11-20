@@ -519,6 +519,12 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             // "Defaults" above them).
             foreach( var k in keys ) a.DeclareInitSection( k.Key );
             DeclareAnchors( a, configuration );
+            // A host built for a deployment burns the full name of its party: CK.AppHost reads its environment before
+            // anything else (the .NET environment of the host follows it).
+            if( context.Deployment != null && a.Configuration["FullName"] != null )
+            {
+                a.AddLock( new ConfigurationLockEntry( a.Configuration.Path, "FullName", nameof( ConfigurationLevel.Compile ) ) );
+            }
             // The type sets of the local parties (the ones of the first instance: the instances share them).
             var root = CreateTypeSet( monitor, a, rootSetName ?? configuration.PartyName, configuration.LocalConfiguration.Configuration, null, ref success );
             var tenantSets = new HashSet<string>( StringComparer.OrdinalIgnoreCase );

@@ -93,6 +93,24 @@ public class ConfigurationTests
         identityConfig.Remotes.ShouldBeEmpty();
     }
 
+    [TestCase( "Production", "Sample/$Front/#Dev", true, "but its host is not in Development" )]
+    [TestCase( "Development", "Sample/$Front/#Production", false, "but its host is in Development" )]
+    [TestCase( "Production", "Sample/$Front/#Production", true, null )]
+    [TestCase( "Development", "Sample/$Front/#Dev", true, null )]
+    public void the_environment_of_the_host_follows_the_one_of_the_party( string hostEnvironment, string fullName, bool success, string? message )
+    {
+        var hostEnv = new HostingEnvironment() { ApplicationName = "HostApp", EnvironmentName = hostEnvironment };
+        var config = new MutableConfigurationSection( "FakePath" );
+        config["CK-AppIdentity:FullName"] = fullName;
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            var identityConfig = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, hostEnv, config.GetRequiredSection( "CK-AppIdentity" ) );
+            (identityConfig != null).ShouldBe( success );
+            if( message != null ) texts.ShouldContain( t => t.Contains( message ) );
+            else texts.ShouldNotContain( t => t.Contains( "its host is" ) );
+        }
+    }
+
     [Test]
     public void AppIdentityConfiguration_from_IHostEnvironment_and_IConfiguration()
     {

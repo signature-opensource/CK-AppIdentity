@@ -343,7 +343,29 @@ public sealed class ApplicationIdentityServiceConfiguration : ApplicationIdentit
             env = env.Substring( 0, CoreApplicationIdentity.EnvironmentNameMaxLength );
         }
         var devStore = GetDevStoreRootPath( hostEnvironment.IsDevelopment(), _defaultStoreRootPathSet, LocalDevSolution.SolutionFolder );
-        return Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env, hostEnvironment.ContentRootPath, devStore );
+        var c = Create( monitor, configuration, DefaultRootDomainName, hostEnvironment.ApplicationName, env, hostEnvironment.ContentRootPath, devStore );
+        return c != null && CheckHostEnvironment( monitor, c.EnvironmentName, hostEnvironment.IsDevelopment() ) ? c : null;
+    }
+
+    /// <summary>
+    /// The environment of the party is the reference, the one of the host must follow: a "#Dev" party in a host that is
+    /// not in Development is a warning (a production run of the development build is legitimate), another party in a host
+    /// in Development is an error (a configuration of a deployment never uses the development store nor the
+    /// user-secrets).
+    /// </summary>
+    internal static bool CheckHostEnvironment( IActivityMonitor monitor, string partyEnvironment, bool isDevelopmentHost )
+    {
+        bool isDevParty = partyEnvironment == CoreApplicationIdentity.DefaultEnvironmentName;
+        if( isDevParty && !isDevelopmentHost )
+        {
+            monitor.Warn( $"The party is in the \"{partyEnvironment}\" environment but its host is not in Development: a development build runs out of the development (no development store, no user-secrets)." );
+        }
+        else if( !isDevParty && isDevelopmentHost )
+        {
+            monitor.Error( $"The party is in the \"{partyEnvironment}\" environment but its host is in Development: a configuration of a deployment doesn't run in Development (the development store, the user-secrets). Set the environment of the host (DOTNET_ENVIRONMENT) or run the build of the deployment." );
+            return false;
+        }
+        return true;
     }
 
     /// <summary>
