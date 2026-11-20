@@ -11,7 +11,7 @@
     checkout) or a ".git" file (a linked worktree, a submodule).
   -->
   <PropertyGroup Condition=" '$(CKAppIdentityDevFolder)' != 'false' ">
-    <_CKAppIdentityGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git\HEAD'))</_CKAppIdentityGitFolderRoot>
+    <_CKAppIdentityGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git/HEAD'))</_CKAppIdentityGitFolderRoot>
     <_CKAppIdentityGitFileRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_CKAppIdentityGitFileRoot>
     <_CKAppIdentityDevRoot>$(_CKAppIdentityGitFolderRoot)</_CKAppIdentityDevRoot>
     <!-- The closest one: a worktree or a submodule inside a main checkout. -->
@@ -21,21 +21,22 @@
   <Target Name="CKAppIdentityDevParty" AfterTargets="Build" Condition=" '$(_CKAppIdentityDevRoot)' != '' ">
     <PropertyGroup>
       <_CKAppIdentityIsParty>$(CKAppIdentityParty)</_CKAppIdentityIsParty>
-      <_CKAppIdentityDevFolder>$(_CKAppIdentityDevRoot)\#Dev</_CKAppIdentityDevFolder>
-      <_CKAppIdentityAppHost Condition="Exists('$(TargetDir)$(AssemblyName).exe')">$(TargetDir)$(AssemblyName).exe</_CKAppIdentityAppHost>
+      <_CKAppIdentityDevFolder>$(_CKAppIdentityDevRoot)/#Dev</_CKAppIdentityDevFolder>
+      <!-- The native executable of the host: ".exe" on Windows, no extension on Linux and macOS. -->
+      <_CKAppIdentityAppHost Condition="Exists('$(TargetDir)$(AssemblyName)$(_NativeExecutableExtension)')">$(TargetDir)$(AssemblyName)$(_NativeExecutableExtension)</_CKAppIdentityAppHost>
       <!-- The paths are written with '/': the JSON needs no escaping. -->
       <_CKAppIdentityJsonProjectPath>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\','/'))</_CKAppIdentityJsonProjectPath>
       <_CKAppIdentityJsonDll>$([System.String]::Copy('$(TargetPath)').Replace('\','/'))</_CKAppIdentityJsonDll>
       <_CKAppIdentityJsonExecutable>$([System.String]::Copy('$(_CKAppIdentityAppHost)').Replace('\','/'))</_CKAppIdentityJsonExecutable>
     </PropertyGroup>
     <!-- Its content is ignored by git: nothing to commit. (The parties build in parallel: the first one writes it.) -->
-    <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' And !Exists('$(_CKAppIdentityDevFolder)\.gitignore') "
-                      File="$(_CKAppIdentityDevFolder)\.gitignore"
+    <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' And !Exists('$(_CKAppIdentityDevFolder)/.gitignore') "
+                      File="$(_CKAppIdentityDevFolder)/.gitignore"
                       Lines="*"
                       Overwrite="true"
                       ContinueOnError="true" />
     <WriteLinesToFile Condition=" '$(_CKAppIdentityIsParty)' == 'true' "
-                      File="$(_CKAppIdentityDevFolder)\Parties\$(MSBuildProjectName).json"
+                      File="$(_CKAppIdentityDevFolder)/Parties/$(MSBuildProjectName).json"
                       Lines="{ &quot;ProjectPath&quot;: &quot;$(_CKAppIdentityJsonProjectPath)&quot;, &quot;Executable&quot;: &quot;$(_CKAppIdentityJsonExecutable)&quot;, &quot;Dll&quot;: &quot;$(_CKAppIdentityJsonDll)&quot; }"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />

@@ -18,6 +18,5 @@ objects, designed to minimize the configuration mess.
 ## Testing on Unix
 
 The store permissions and the inter-process locks behave differently on Unix. From Windows,
-`.\Tests\Unix\Run-UnixTests.ps1` runs the tests in a dedicated WSL distribution that it creates
-and provisions itself; on Linux or macOS, run `Tests/Unix/run-tests.sh`.
-See [Tests/Unix](Tests/Unix/README.md).
+`.\Tests\Unix\Run-UnixTests.ps1` runs the tests in a dedicated WSL distribution (the Unix tools of the Stack);
+on Linux or macOS, the Stack's `Tools/Unix/run-tests.sh`. See [Tests/Unix](Tests/Unix/README.md).
