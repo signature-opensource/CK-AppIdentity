@@ -15,20 +15,21 @@ public class CentralProjectionTests
     const string _graph = """
         {
           "Domain": "Sample/Auth3",
+          "GlobalDomainPrefix": "Sample",
           "Builders": {
-            "Auth3/Auth3.Builder": {
+            "Auth3/Auth3.Auth3.Builder": {
               "App": {
                 "Defaults": { "Transport": { "ListeningAddress": [ "tcp:127.0.0.1:37300" ] } },
                 "Local": { "AuthCenter": {} }
               }
             },
-            "Front/Front.Builder": { "App": { "Local": { "HttpEndpoint": { "Urls": "http://localhost:5300" } } } },
-            "Worker/Worker.Builder": {
+            "Front/Auth3.Front.Builder": { "App": { "Local": { "HttpEndpoint": { "Urls": "http://localhost:5300" } } } },
+            "Worker/Auth3.Worker.Builder": {
               "App": {
                 "Parties": [ { "PartyName": "$Outside", "Address": "tcp:10.0.0.1:1234" } ]
               }
             },
-            "Other.Builder": { "App": { "FullName": "Elsewhere/$Other/#Prod" } }
+            "Elsewhere.Other.Builder": { "App": { "FullName": "Sample/Elsewhere/$Other/#Prod" } }
           },
           "Links": [
             { "From": "$Front", "To": "$Auth3", "Link": { "AuthCenterRemote": true, "Address": "tcp:127.0.0.1:37300", "KeyManagement": { "AutoTrustKey": "Once" } } },
@@ -42,9 +43,10 @@ public class CentralProjectionTests
     static (CentralConfiguration Central, NormalizedPath Root) Create( string json )
     {
         NormalizedPath root = Path.Combine( Path.GetTempPath(), "CK.AppIdentity.Engine.Tests", Guid.NewGuid().ToString( "N" ) );
-        foreach( var b in new[] { "Auth3/Auth3.Builder", "Front/Front.Builder", "Worker/Worker.Builder", "Other.Builder" } )
+        var builders = System.Text.Json.Nodes.JsonNode.Parse( json )?["Builders"]?.AsObject();
+        if( builders != null )
         {
-            Directory.CreateDirectory( root.Combine( b ) );
+            foreach( var (b, _) in builders ) Directory.CreateDirectory( root.Combine( b ) );
         }
         var central = CentralConfiguration.Parse( TestHelper.Monitor, root.AppendPart( "ckonf.json" ), json ).ShouldNotBeNull();
         return (central, root);
@@ -62,7 +64,7 @@ public class CentralProjectionTests
     {
         var (central, root) = Create( _graph );
 
-        var front = Project( central, root, "Front/Front.Builder" );
+        var front = Project( central, root, "Front/Auth3.Front.Builder" );
         front.GetRequiredSection( "App" ).GetChildren().Select( c => c.Key ).ShouldBe( ["FullName", "Local", "Parties"] );
         front["App:FullName"].ShouldBe( "Sample/Auth3/$Front/#Dev" );
         front["App:Parties:0:PartyName"].ShouldBe( "$Auth3" );
@@ -72,27 +74,27 @@ public class CentralProjectionTests
         front["App:Parties:1"].ShouldBeNull();
 
         // The links in their order; a link without content is a remote without configuration.
-        var auth3 = Project( central, root, "Auth3/Auth3.Builder" );
+        var auth3 = Project( central, root, "Auth3/Auth3.Auth3.Builder" );
         auth3["App:Parties:0:PartyName"].ShouldBe( "$Front" );
         auth3["App:Parties:0:Address"].ShouldBeNull( "Auth3 doesn't initiate: no address." );
         auth3["App:Parties:1:PartyName"].ShouldBe( "$Worker" );
         auth3.GetRequiredSection( "App:Parties:1" ).GetChildren().Select( c => c.Key ).ShouldBe( ["PartyName"] );
 
         // The explicit remotes stay, the links follow; the JSON kinds are kept.
-        var worker = Project( central, root, "Worker/Worker.Builder" );
+        var worker = Project( central, root, "Worker/Auth3.Worker.Builder" );
         worker["App:Parties:0:PartyName"].ShouldBe( "$Outside" );
         worker["App:Parties:1:PartyName"].ShouldBe( "$Auth3" );
-        File.ReadAllText( root.Combine( "Worker/Worker.Builder/ckonf.json" ) ).ShouldContain( "\"Retry\": 3" );
+        File.ReadAllText( root.Combine( "Worker/Auth3.Worker.Builder/ckonf.json" ) ).ShouldContain( "\"Retry\": 3" );
 
-        // An explicit FullName is kept.
-        Project( central, root, "Other.Builder" )["App:FullName"].ShouldBe( "Elsewhere/$Other/#Prod" );
+        // An explicit FullName is kept (the name of its App is its identity).
+        Project( central, root, "Elsewhere.Other.Builder" )["App:FullName"].ShouldBe( "Sample/Elsewhere/$Other/#Prod" );
     }
 
     [Test]
     public void the_Environment_applies_to_the_derived_FullName()
     {
         var (central, root) = Create( """
-            { "Domain": "Sample", "Environment": "#Staging", "Builders": { "Front/Front.Builder": { "App": {} } } }
+            { "Domain": "Sample", "GlobalDomainPrefix": "Sample", "Environment": "#Staging", "Builders": { "Front/Front.Builder": { "App": {} } } }
             """ );
         Project( central, root, "Front/Front.Builder" )["App:FullName"].ShouldBe( "Sample/$Front/#Staging" );
     }
@@ -109,6 +111,7 @@ public class CentralProjectionTests
         var (central, root) = Create( $$"""
             {
               "Domain": "Sample",
+              "GlobalDomainPrefix": "Sample",
               "Builders": { "Front/Front.Builder": { "App": {} }, "Auth3/Auth3.Builder": { "App": {} } },
               "Links": [ {{links}} ]
             }
@@ -151,6 +154,37 @@ public class CentralProjectionTests
         }
     }
 
+    [TestCase( """{ "Domain": "Sample/Auth3", "Builders": { "Front/Front.Builder": { "App": {} } } }""",
+               "must be the identity of its party: 'Sample.Auth3.Front'" )]
+    [TestCase( """{ "Domain": "Sample/Auth3", "GlobalDomainPrefix": "Sample", "Builders": { "Front/Sample.Auth3.Front.Builder": { "App": {} } } }""",
+               "must be the identity of its party: 'Auth3.Front'" )]
+    [TestCase( """{ "Builders": { "Front/Sample.Front.Builder": { "App": {} } } }""",
+               "must be the identity of its party: 'Front'" )]
+    [TestCase( """{ "Domain": "Sample", "Builders": { "Sample.Front.Builder": { "App": { "FullName": "Sample/$Back" } } } }""",
+               "must be the identity of its party: 'Sample.Back'" )]
+    [TestCase( """{ "Domain": "Sample/Auth3", "GlobalDomainPrefix": "Sample", "Builders": { "Elsewhere.Other.Builder": { "App": { "FullName": "Elsewhere/$Other" } } } }""",
+               "The domain 'Elsewhere' of the \"FullName\" of" )]
+    [TestCase( """{ "GlobalDomainPrefix": "Sample", "Builders": { "Front/Front.Builder": { "App": {} } } }""",
+               "requires a \"Domain\"" )]
+    [TestCase( """{ "Domain": "Sample/Auth3", "GlobalDomainPrefix": "Sam", "Builders": { "Front/Front.Builder": { "App": {} } } }""",
+               "it must be the \"Domain\" 'Sample/Auth3' or a prefix of it" )]
+    public void the_name_of_an_App_is_the_identity_of_its_party( string json, string expected )
+    {
+        var (central, root) = Create( json );
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( expected ), $"Expected: {expected}" );
+        }
+    }
+
+    [Test]
+    public void the_name_of_an_App_is_its_domain_and_its_party()
+    {
+        var (central, root) = Create( """{ "Domain": "Sample/Auth3", "Builders": { "Front/Sample.Auth3.Front.Builder": { "App": {} } } }""" );
+        Project( central, root, "Front/Sample.Auth3.Front.Builder" )["App:FullName"].ShouldBe( "Sample/Auth3/$Front/#Dev" );
+    }
+
     // An Opened tenant template owns its domain prefix (its run-time tenants are named by their creator); in a fleet App, a
     // tenant template uses the placeholder of its App (each process of the fleet has its own tenants).
     const string _openedTenants = """{ "DomainName": "Sample/Customers/{Name}", "PartyName": "${Name}", "MaxInstanceCount": 3 }""";
@@ -165,14 +199,14 @@ public class CentralProjectionTests
                  """, "The domain 'Sample/Customers/Acme' of 'ckonf:Builders:Front/Front.Builder:App:Parties:0' is under the domain prefix 'Sample/Customers'" )]
     [TestCase( $$"""
                  "Auth3/Auth3.Builder": { "App": { "Parties": [ {{_openedTenants}} ] } },
-                 "Other.Builder": { "App": { "FullName": "Sample/Customers/X/$Other" } }
+                 "Customers.X.Other.Builder": { "App": { "FullName": "Sample/Customers/X/$Other" } }
                  """, "The domain 'Sample/Customers/X'" )]
     [TestCase( $$"""
                  "Worker/Worker.Builder": { "App": { "InstanceCount": 2, "Parties": [ {{_openedTenants}} ] } }
                  """, "must use the placeholder of its App in its names (\"{Worker.Name}\" or \"{Worker.Index}\")" )]
     public void invalid_tenant_templates_are_errors( string builders, string expected )
     {
-        var (central, root) = Create( $$"""{ "Domain": "Sample", "Builders": { {{builders}} } }""" );
+        var (central, root) = Create( $$"""{ "Domain": "Sample", "GlobalDomainPrefix": "Sample", "Builders": { {{builders}} } }""" );
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
             central.WriteProjection( TestHelper.Monitor, central.Builders[0], [new AppIdentityAppBuilderContributor()] ).ShouldBeFalse();
@@ -186,6 +220,7 @@ public class CentralProjectionTests
         var (central, root) = Create( """
             {
               "Domain": "Sample",
+              "GlobalDomainPrefix": "Sample",
               "Builders": {
                 "Worker/Worker.Builder": {
                   "App": {
@@ -206,6 +241,7 @@ public class CentralProjectionTests
         var (central, root) = Create( """
             {
               "Domain": "Sample",
+              "GlobalDomainPrefix": "Sample",
               "Builders": {
                 "Auth3/Auth3.Builder": { "App": {} },
                 "Worker/Worker.Builder": { "App": { "InstanceCount": 2, "MaxInstanceCount": 4 } },
