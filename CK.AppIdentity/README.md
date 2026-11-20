@@ -208,29 +208,16 @@ The description is intrinsic to the parties, not a feature: the `ApplicationIden
   applications of each party. It is computed once all the drivers have set up the party, in their order, then each
   time a driver signals a change (`OnDescriptionChangedAsync`): `ILocalParty.DescriptionChanged` is raised when it
   changed.
-- **It is built in two phases.** The first one (`ContributeDescription`, a `PartyDescription.Builder`) states the
-  facts: the public URL, the client applications, the data announcements (`SetData( name, value )`), the routes
-  that the party hosts (`HostRoute( name, target )`, the target being optional) and the items it states along a route
-  (`Collect( name, value )`). The second one (`ContributeDerivedDescription`, a `PartyDescription.DerivedBuilder`) reads
-  the first one and sets what derives from it: the routes (`SetRoutes`) and the collected items (`SetCollected`).
-- **Data announcements and routes are an extensible part of the description.** `PartyDescription.Data` holds named
-  strings (announced, compared, persisted). `PartyDescription.Routes` holds, per route name, the
-  [`PartyRoute`](../CK.AppIdentity.Abstractions/PartyRoute.cs) to each party that hosts it (a name can have several
-  hosts, at most one route per host, sorted by host: `PartyDescription.FindRoute( name, host )`): the `Path` of the
-  parties to the host and, when the route has one, its `Target` (a mere string: an URL...). A party finds its own name
-  in no path it uses (no loop), takes the shortest one to a host (`SelectBest`) and extends it with its name
-  (`Extend`). The routes are announced and compared, never persisted: a route counts only from a connected remote.
-- **Items travel a route toward its host.** `PartyDescription.Collected` holds, per route name, the
-  [`CollectedItem`](../CK.AppIdentity.Abstractions/CollectedItem.cs)s of the party and the ones its remotes announce on
-  their way to the hosts of the route: an opaque `Value` (a mere string, like a route's `Target`) and the `Path` from
-  the party that states it (the `Holder`) to the announcing one. A party accepts an item from the remote that is the
-  last of its path (`TryAccept`: no loop, shorter than `PartyRoute.MaxLength`) and appends its name (`Extend`): the
-  reversed path is the way back to the holder. At most `CollectedItem.MaxCount` items per route name, each value of at
-  most `CollectedItem.MaxValueLength` characters. Announced and compared, never persisted, like the routes.
+- **A driver states facts** (`ContributeDescription`, a `PartyDescription.Builder`): the public URL, the client
+  applications (and their facts), the data announcements (`SetData( name, value )`). A description is what a party
+  states about itself to its remotes: nothing in it is forwarded (a System is a star around its Authentication Center:
+  what the System needs to know, the center reads from the descriptions of its remotes and states it).
+- **Data announcements are an extensible part of the description.** `PartyDescription.Data` holds named strings
+  (announced, compared, persisted).
 - **The encryption key of the party** (`PartyDescription.EncryptionKey`, a [`PartyEncryptionKey`](../CK.AppIdentity.Abstractions/PartyEncryptionKey.cs)):
   its public key and the signature of this public key by the party's identity key, set by the key management
   (`PartyDescription.Builder.EncryptionKey`). Only bytes here: its verification and its use belong to the key
-  management. Short-lived, it is announced and compared, never persisted (like the routes).
+  management. Short-lived, it is announced and compared, never persisted.
 - **`ILocalParty.RemoteDescriptionChanged`** is raised when a remote announces another description (by the agent's
   loop: `IRemoteParty.SetDescription` stays synchronous). The last known description read at set up raises nothing.
 - **The roles of a local party are the [asymmetric features](Features/README.md#asymmetric-features) it is** (their
@@ -240,7 +227,7 @@ The description is intrinsic to the parties, not a feature: the `ApplicationIden
 - **A remote's description is its last announcement** (`IRemoteParty.SetDescription`, called by the channel), persisted
   in the remote's folder of the shared store (`PartyDescription.json`: it is the remote's own statement, the same for
   every local party) and read back when the remote is set up, so that it is known while the remote is not connected. The
-  file is written only when its persisted part changes (not for the routes, the collected items or the encryption key).
+  file is written only when its persisted part changes (not for the encryption key).
   A change of its public URL is logged as a warning.
 
 The URL of a client application is derived, never stored: `PartyDescription.GetClientApplicationUrl( name )` (the

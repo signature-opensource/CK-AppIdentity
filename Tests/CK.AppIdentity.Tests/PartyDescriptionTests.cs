@@ -236,38 +236,26 @@ public class PartyDescriptionTests
         await host.StopAsync( cancel );
     }
 
-    // The first phase hosts a route and announces a data, the second one derives a route from the first phase.
-    [PartyFeature( "Routing", TypeActivation.ByDefault )]
-    public sealed class RoutingFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
+    // A driver announces a data.
+    [PartyFeature( "Region", TypeActivation.ByDefault )]
+    public sealed class RegionFeatureDriver : FeatureBuilderInitializationTests.NoopFeatureDriver
     {
-        public RoutingFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
+        public RegionFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
 
         protected internal override void ContributeDescription( ILocalParty party, PartyDescription.Builder builder )
         {
-            builder.HostRoute( "Hosted", "Some.Target" );
-            builder.HostRoute( "NoTarget" );
             builder.SetData( "Region", "eu-west" );
-        }
-
-        protected internal override void ContributeDerivedDescription( ILocalParty party, PartyDescription.DerivedBuilder builder )
-        {
-            foreach( var (name, target) in builder.HostedRoutes )
-            {
-                builder.SetRoutes( name, [PartyRoute.Hosted( target, party.FullName )] );
-            }
         }
     }
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task the_second_phase_derives_from_the_first_one_Async( CancellationToken cancel )
+    public async Task a_driver_announces_a_data_Async( CancellationToken cancel )
     {
-        using var host = BuildHost( null, typeof( RoutingFeatureDriver ) );
+        using var host = BuildHost( null, typeof( RegionFeatureDriver ) );
         await host.StartAsync( cancel );
         var root = host.Services.GetRequiredService<ApplicationIdentityService>();
         root.Description.Data["Region"].ShouldBe( "eu-west" );
-        root.Description.Routes["Hosted"].ShouldBe( [PartyRoute.Hosted( "Some.Target", root.FullName )] );
-        root.Description.FindRoute( "NoTarget", root.FullName ).ShouldNotBeNull().Target.ShouldBeNull();
         await host.StopAsync( cancel );
     }
 

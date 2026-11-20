@@ -91,17 +91,11 @@ sealed class PartyDescriber
                 // The configuration first (checked by the setup): a contribution sets the public URL only when it is not configured.
                 TryReadPublicUrl( monitor, local, out var url );
                 var builder = new PartyDescription.Builder { PublicUrl = url };
-                // The first phase states the facts, the second one derives from them.
                 foreach( var d in _s._builders )
                 {
                     d.ContributeDescription( local, builder );
                 }
-                var derived = new PartyDescription.DerivedBuilder( builder );
-                foreach( var d in _s._builders )
-                {
-                    d.ContributeDerivedDescription( local, derived );
-                }
-                var description = derived.Build().WithRoles( _s.GetRoles( local ) );
+                var description = builder.Build().WithRoles( _s.GetRoles( local ) );
                 await ((LocalParty)local).SetLocalDescriptionAsync( monitor, description ).ConfigureAwait( false );
             }
         }

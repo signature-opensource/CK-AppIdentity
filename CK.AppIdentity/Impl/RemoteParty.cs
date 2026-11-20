@@ -51,8 +51,8 @@ sealed class RemoteParty : ApplicationIdentityParty, IRemoteParty, IOwnedPartyIn
         {
             monitor.Info( $"Description of '{FullName}': {description}." );
         }
-        // Only the persisted projection is written (see PartyDescription.Write): a change of the routes, the collected
-        // items or the encryption key alone doesn't rewrite the file (this runs on the caller's thread, often a channel's).
+        // Only the persisted projection is written (see PartyDescription.Write): a change of the encryption key alone
+        // doesn't rewrite the file (this runs on the caller's thread, often a channel's).
         // An unreadable file is rewritten by the first announcement.
         if( _invalidPersistedDescription || !HasSamePersistedContent( previous, description ) )
         {
