@@ -537,6 +537,8 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     // the template: the template is the anchor.
     static void DeclareAnchors( AppConfiguration a, ApplicationIdentityServiceConfiguration c )
     {
+        // The address of a remote depends on where it is deployed.
+        a.AddPerDeploymentPartyKey( "Remote", "Address" );
         Declare( a, c.LocalConfiguration.Configuration.Path, "Party", "Local" );
         DeclareRemotes( a, c.Remotes, c.RemoteTemplates );
         foreach( var t in c.TenantDomains )

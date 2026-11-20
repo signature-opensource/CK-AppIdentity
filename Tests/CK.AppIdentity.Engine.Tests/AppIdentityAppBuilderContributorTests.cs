@@ -91,6 +91,10 @@ public class AppIdentityAppBuilderContributorTests
         anchors["Parties:2"].Kinds.ShouldNotContain( "OpenedRemoteTemplate" );
         anchors["Parties:1"].Fallbacks.ShouldBe( ["Defaults"] );
 
+        // The address of a remote is per deployment: in every remote (and the "Defaults" above them).
+        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, app, [], out var perDeployment ).ShouldBeTrue();
+        perDeployment.Select( k => k.Pattern ).ShouldBe( ["Parties:[*]:Address", "Defaults:Address"] );
+
         // What KeyManagement declares: the Opened template gets "Never" (the "Defaults" say "Once").
         var restriction = new PackageConfigurationLock( "KeyManagementFeatureDriver",
                                                         ["KeyManagement"],
