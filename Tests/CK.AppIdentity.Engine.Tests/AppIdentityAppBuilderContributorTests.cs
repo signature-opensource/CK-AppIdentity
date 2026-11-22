@@ -79,7 +79,8 @@ public class AppIdentityAppBuilderContributorTests
               ]
             }
             """ );
-        new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
+        var contributor = new AppIdentityAppBuilderContributor();
+        contributor.Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
         var app = context.Apps[0];
         app.InitSections.ShouldBe( ["FullName", "Defaults", "Local", "Parties"], ignoreOrder: true );
         var anchors = app.Anchors.ToDictionary( a => a.Path );
@@ -91,8 +92,9 @@ public class AppIdentityAppBuilderContributorTests
         anchors["Parties:2"].Kinds.ShouldNotContain( "OpenedRemoteTemplate" );
         anchors["Parties:1"].Fallbacks.ShouldBe( ["Defaults"] );
 
-        // The address of a remote is per deployment: in every remote (and the "Defaults" above them).
-        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, app, [], out var perDeployment ).ShouldBeTrue();
+        // The address of a remote is per deployment ([assembly: ConfigurationPerDeployment( "Remote:Address" )] of the
+        // engine): in every remote (and the "Defaults" above them).
+        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, app, [], [contributor], out var perDeployment ).ShouldBeTrue();
         perDeployment.Select( k => k.Pattern ).ShouldBe( ["Parties:[*]:Address", "Defaults:Address"] );
 
         // What KeyManagement declares: the Opened template gets "Never" (the "Defaults" say "Once").
@@ -175,8 +177,9 @@ public class AppIdentityAppBuilderContributorTests
         new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
         // The sets are named after the templates: an instance finds its set at run time ("$Trolley-Red").
         context.Apps[0].BinPathConfiguration.TypeSets.Select( s => s.Name ).ShouldBe( ["$Trolley-{Name}", "$Shop-{Name}"], ignoreOrder: true );
-        // The size of a fleet is the one of a deployment.
-        context.Apps[0].PerDeploymentKeys.ShouldBe( ["InstanceCount", "Instances", "MaxInstanceCount"], ignoreOrder: true );
+        // The size of a fleet is the one of a deployment (a rule of the App builder).
+        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, context.Apps[0], [], [], out var perDeployment ).ShouldBeTrue();
+        perDeployment.Select( k => k.Pattern ).ShouldBe( ["InstanceCount", "Instances", "MaxInstanceCount"], ignoreOrder: true );
     }
 
     [TestCase( """{ "InstanceCount": 2, "FullName": "Sample/$Trolley/#Dev" }""", "must use the \"{Name}\" or \"{Index}\" placeholder" )]

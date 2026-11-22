@@ -56,6 +56,8 @@ public class CentralProjectionTests
     {
         var b = central.FindBuilder( root.Combine( builder ) ).ShouldNotBeNull();
         central.WriteProjection( TestHelper.Monitor, b, [new AppIdentityAppBuilderContributor()] ).ShouldBeTrue();
+        // The root keys and the address of a link are declared by the [assembly: CentralConfigurationKey] of the engine.
+        central.PerDeploymentKeys.Select( k => k.Key ).ShouldContain( "Links:[*]:Link:Address" );
         return ImmutableConfigurationSection.CreateFromJson( "ckonf", File.ReadAllText( root.Combine( builder ).AppendPart( "ckonf.json" ) ) );
     }
 

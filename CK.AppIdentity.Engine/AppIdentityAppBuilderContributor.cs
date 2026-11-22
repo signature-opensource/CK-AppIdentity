@@ -7,6 +7,14 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 
 [assembly: CK.Setup.AppBuilderContributor( typeof( CK.Setup.AppIdentityAppBuilderContributor ) )]
+// The root keys of the central configuration that the contributor reads (see ProjectFromCentral): the address of a link
+// is the one of a deployment, each one writes its own.
+[assembly: CentralConfigurationKey( "Domain" )]
+[assembly: CentralConfigurationKey( "Environment" )]
+[assembly: CentralConfigurationKey( CK.Setup.AppIdentityAppBuilderContributor.GlobalDomainPrefixKey )]
+[assembly: CentralConfigurationKey( "Links", PerDeployment = ["[*]:Link:Address"] )]
+// The address of a remote depends on where it is deployed (in every anchor of the kind "Remote", see DeclareAnchors).
+[assembly: ConfigurationPerDeployment( "Remote:Address" )]
 
 namespace CK.Setup;
 
@@ -143,12 +151,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     /// <returns>True on success, false on error.</returns>
     public bool ProjectFromCentral( IActivityMonitor monitor, CentralProjectionContext context )
     {
-        context.ClaimKey( "Domain" );
-        context.ClaimKey( "Environment" );
-        context.ClaimKey( GlobalDomainPrefixKey );
-        context.ClaimKey( "Links" );
-        // An address is the one of a deployment: each one writes its own.
-        context.AddPerDeploymentKey( "Links:[*]:Link:Address" );
+        // The root keys are claimed by the [assembly: CentralConfigurationKey] of this engine.
         var file = context.Central.File;
         var central = context.Central.Configuration;
         bool success = true;
@@ -519,14 +522,6 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             // "Defaults" above them).
             foreach( var k in keys ) a.DeclareInitSection( k.Key );
             DeclareAnchors( a, configuration );
-            // The size of a fleet is the one of a deployment: each deployment writes it (the remote templates of the links
-            // to the fleet follow: they copy it from the same merged configuration).
-            if( ConfigurationTemplate.IsTemplate( a.Configuration ) )
-            {
-                a.AddPerDeploymentKey( ConfigurationTemplate.InstanceCountKey );
-                a.AddPerDeploymentKey( ConfigurationTemplate.InstancesKey );
-                a.AddPerDeploymentKey( ConfigurationTemplate.MaxInstanceCountKey );
-            }
             // A host built for a deployment burns the full name of its party: CK.AppHost reads its environment before
             // anything else (the .NET environment of the host follows it).
             if( context.Deployment != null && a.Configuration["FullName"] != null )
@@ -578,8 +573,6 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     // the template: the template is the anchor.
     static void DeclareAnchors( AppConfiguration a, ApplicationIdentityServiceConfiguration c )
     {
-        // The address of a remote depends on where it is deployed.
-        a.AddPerDeploymentPartyKey( "Remote", "Address" );
         Declare( a, c.LocalConfiguration.Configuration.Path, "Party", "Local" );
         DeclareRemotes( a, c.Remotes, c.RemoteTemplates );
         foreach( var t in c.TenantDomains )
