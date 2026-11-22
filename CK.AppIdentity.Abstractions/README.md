@@ -85,6 +85,7 @@ Here's a very simple example (with a test store root, which explains why we're n
 
 ```
 TestStore/
+├── .gitignore                                            <- "*": a store is never committed
 └── #Dev/                                                 <- the environment is the first level
     └── Test/                                             <- then the Domain and its path
         ├── $Listener/                                    <- SharedFileStore of Test/$Listener

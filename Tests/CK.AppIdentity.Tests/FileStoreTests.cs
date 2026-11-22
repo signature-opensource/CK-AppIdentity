@@ -102,6 +102,30 @@ public class FileStoreTests
         }
     }
 
+    [Test]
+    public void a_store_root_is_never_committed()
+    {
+        var root = TestHelper.TestProjectFolder.Combine( "obj/GitIgnoredStore" );
+        if( Directory.Exists( root ) ) Directory.Delete( root, recursive: true );
+        var config = ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+        {
+            c["FullName"] = "Test/$GitIgnored";
+            c["StoreRootPath"] = root;
+        } );
+        Throw.DebugAssert( config != null );
+        var gitIgnore = root.AppendPart( ".gitignore" );
+        File.ReadAllText( gitIgnore ).ShouldBe( "*\n", "Whatever its place, a store holds private keys: git ignores it." );
+
+        // An existing file is left as-is.
+        File.WriteAllText( gitIgnore, "# Mine\n*\n" );
+        ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+        {
+            c["FullName"] = "Test/$GitIgnored";
+            c["StoreRootPath"] = root;
+        } ).ShouldNotBeNull();
+        File.ReadAllText( gitIgnore ).ShouldBe( "# Mine\n*\n" );
+    }
+
     [SupportedOSPlatform( "windows" )]
     static void CheckOwnerOnlyAccess( string path )
     {

@@ -33,6 +33,10 @@ namespace CK.AppIdentity;
 /// the configuration in <see cref="ApplicationIdentityServiceConfiguration.StrictConfigurationMode"/>).
 /// </para>
 /// <para>
+/// The root has a ".gitignore" file with "*" (written when it is missing): the store is never committed, wherever it
+/// is (a "TestStore" folder of a test project, a relative store in a folder of the application).
+/// </para>
+/// <para>
 /// On Unix, the mode is applied at creation and then set again: the umask can only remove bits,
 /// so the folder or file is never wider than intended, but a group mode can be silently narrowed
 /// (0770 becomes 0750 under the usual 022 umask). On Windows, folders and files simply inherit
@@ -113,8 +117,39 @@ sealed partial class StoreFileSystem
             {
                 InitializeUnix( logger );
             }
+            EnsureGitIgnore( logger );
             _initialized = true;
             return !_hasSecurityWarning;
+        }
+    }
+
+    /// <summary>
+    /// The file that keeps a store out of git: <see cref="GitIgnoreFileName"/> at the root, with "*" (the store holds private
+    /// keys and trust anchors: it never belongs to a repository, wherever it is).
+    /// </summary>
+    internal const string GitIgnoreFileName = ".gitignore";
+
+    // Written once, whether the root is in a git working folder or not: a store can be created anywhere (a test project,
+    // a relative StoreRootPath). An existing file is left as-is. A failure (a shared root read-only for this account) is a
+    // warning: the store works without it.
+    void EnsureGitIgnore( IActivityLineEmitter logger )
+    {
+        var path = _root.AppendPart( GitIgnoreFileName );
+        if( File.Exists( path ) ) return;
+        try
+        {
+            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+            if( !OperatingSystem.IsWindows() ) options.UnixCreateMode = _fileMode;
+            using var f = new FileStream( path, options );
+            f.Write( "*\n"u8 );
+        }
+        catch( IOException ) when( File.Exists( path ) )
+        {
+            // Created by another process meanwhile.
+        }
+        catch( Exception ex )
+        {
+            logger.Warn( $"Unable to write '{path}': the store may be committed if it is in a git working folder.", ex );
         }
     }
 
