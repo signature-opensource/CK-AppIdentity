@@ -261,7 +261,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     public T? GetOption<T>( IParty party ) where T : class => GetOptions( party ).OfType<T>().FirstOrDefault();
 
     // Creates the options of the parties on which this feature is allowed (once per party), before the driver's setup.
-    // The option of a feature is looked up in the party's own keys, then in the "Defaults" above it (the nearest wins).
+    // The option of a feature is looked up in the party's own keys, then in the "Defaults" above it (the nearest wins; a
+    // configuration model is read key by key along them).
     internal bool CreateOptions( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         var directory = _s.OptionDirectory;
@@ -276,7 +277,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             var key = GetFeatureName( p );
             if( PartyComponentOptionDirectory.TryCreate( monitor,
                                                          options,
-                                                         name => c.TryGetFeatureSection( key, name ),
+                                                         name => c.GetFeatureSections( key, name ),
                                                          $"{c.Configuration.Path}:{key}",
                                                          _s.Services,
                                                          out var created ) )

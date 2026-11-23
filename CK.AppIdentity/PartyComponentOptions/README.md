@@ -56,6 +56,13 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 - **What applying an option means is the owner's**: when the owner acts on its options, it defines their base type or
   their interface and calls them.
 
+### An option with a configuration model
+
+An option may declare its configuration model (`[Configuration<TModel>]`, CK.ConfigurationModel): its constructor takes
+the model instead of an `IConfiguration`. The model is read key by key along the levels of the party (its section in
+the feature's section of the party, then in each `"Defaults"` above it: `ApplicationIdentityConfiguration.GetFeatureSections`),
+validated, and its errors logged (an invalid model is an error: the option is not created).
+
 ## The order and the requirements
 
 The options of an owner are ordered by the topology attributes between them: `[Requires<T>]`, `[RequiredBy<T>]` and

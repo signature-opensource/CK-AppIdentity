@@ -10,7 +10,7 @@ namespace CK.AppIdentity;
 /// </summary>
 public sealed class PartyComponentOptionInfo : IConfigurationOption
 {
-    readonly Func<IServiceProvider, IConfiguration?, object> _factory;
+    readonly Func<IServiceProvider, object?, object> _factory;
 
     /// <summary>
     /// Initializes a new <see cref="PartyComponentOptionInfo"/>. Called by the generated code.
@@ -19,18 +19,21 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     /// <param name="optionType">The option type.</param>
     /// <param name="activation">The activation of the option.</param>
     /// <param name="requires">The options without which this one cannot be enabled (its non optional relations).</param>
-    /// <param name="factory">Creates the option from the services of its owner and its configuration.</param>
+    /// <param name="factory">Creates the option from the services of its owner and its configuration (its section, or its model when it has one).</param>
+    /// <param name="model">The description of the option's configuration model (<c>[Configuration&lt;TModel&gt;]</c>), if any.</param>
     public PartyComponentOptionInfo( string name,
                                      Type optionType,
                                      TypeActivation activation,
                                      IReadOnlyList<string> requires,
-                                     Func<IServiceProvider, IConfiguration?, object> factory )
+                                     Func<IServiceProvider, object?, object> factory,
+                                     ConfigurationModelDescription? model = null )
     {
         Name = name;
         OptionType = optionType;
         Activation = activation;
         Requires = requires;
         _factory = factory;
+        Model = model;
     }
 
     /// <summary>
@@ -76,11 +79,18 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     /// The option's section in the section of its owner. Null when the option is enabled by default or by <c>true</c>.
     /// </param>
     /// <returns>The option.</returns>
-    public object Create( IServiceProvider services, IConfiguration? configuration )
+    public object Create( IServiceProvider services, object? configuration )
     {
         Throw.CheckNotNullArgument( services );
         return _factory( services, configuration );
     }
+
+    /// <summary>
+    /// Gets the description of the option's configuration model (<c>[Configuration&lt;TModel&gt;]</c>): the option receives
+    /// its model, read key by key along the levels of its owner's configuration. Null when the option reads its
+    /// <see cref="IConfiguration"/>.
+    /// </summary>
+    public ConfigurationModelDescription? Model { get; }
 
     /// <inheritdoc />
     public override string ToString() => Name;

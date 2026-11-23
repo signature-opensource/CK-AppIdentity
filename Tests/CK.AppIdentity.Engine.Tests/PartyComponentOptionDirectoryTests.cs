@@ -145,6 +145,35 @@ public class PartyComponentOptionDirectoryTests
         await ((IHostedService)party).StopAsync( default );
     }
 
+    [Test]
+    public async Task the_model_of_an_option_is_read_key_by_key_along_the_levels_Async()
+    {
+        var configuration = TestHelper.CreateDefaultEngineConfiguration();
+        configuration.FirstBinPath.Types.Add( _model );
+        configuration.FirstBinPath.Types.Add( typeof( ModeledOption ) );
+        var r = await configuration.RunSuccessfullyAsync();
+        await using var auto = r.LoadMap().CreateAutomaticServices( services =>
+        {
+            services.AddSingleton<FakeService>();
+            services.AddSingleton( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+            {
+                c["StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "OptionsStore" );
+                c["FullName"] = "Test/$OptionsOwner";
+                // The party's section enables the option and sets Count, the "Defaults" give its Name.
+                c["Defaults:FakeParty:Modeled:Name"] = "FromDefaults";
+                c["Defaults:FakeParty:Modeled:Count"] = "2";
+                c["Local:FakeParty:Modeled:Count"] = "4";
+            } ).ShouldNotBeNull() );
+        } );
+        var party = auto.Services.GetRequiredService<ApplicationIdentityService>();
+        await ((IHostedService)party).StartAsync( default );
+        await party.InitializationTask;
+        var option = auto.Services.GetRequiredService<FakePartyFeatureDriver>().GetOption<ModeledOption>( party ).ShouldNotBeNull();
+        option.Configuration.Name.ShouldBe( "FromDefaults" );
+        option.Configuration.Count.ShouldBe( 4 );
+        await ((IHostedService)party).StopAsync( default );
+    }
+
     // The selection rules (ConfigurationOptionSelector) are tested in CK.Configuration.Tests.
     static ImmutableConfigurationSection Section( string json )
         => new ImmutableConfigurationSection( new MutableConfigurationSection( "Owner" ).AddJson( json ) );

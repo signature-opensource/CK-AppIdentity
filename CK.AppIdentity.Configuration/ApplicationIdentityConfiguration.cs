@@ -90,6 +90,21 @@ public class ApplicationIdentityConfiguration
     }
 
     /// <summary>
+    /// Gets the sections of the configuration of a feature (a setting or an option of the feature) at every level: the
+    /// <c>{featureName}:{path}</c> section of the party, then of each "Defaults" above it, the nearest first (null where a
+    /// level has none). A configuration model is read key by key along them.
+    /// </summary>
+    /// <param name="featureName">The feature name (its key).</param>
+    /// <param name="path">The path in the feature's section.</param>
+    /// <returns>The sections, the nearest first.</returns>
+    public IReadOnlyList<ImmutableConfigurationSection?> GetFeatureSections( string featureName, string path )
+    {
+        var result = new ImmutableConfigurationSection?[_featureLevels.Length];
+        for( int i = 0; i < result.Length; i++ ) result[i] = _featureLevels[i].TryGetSection( $"{featureName}:{path}" );
+        return result;
+    }
+
+    /// <summary>
     /// Computes whether a feature is allowed for this party: it is declared (see <see cref="GetFeatureDeclaration(string)"/>),
     /// or it is not turned off and <paramref name="isAllowedByDefault"/> is true.
     /// </summary>

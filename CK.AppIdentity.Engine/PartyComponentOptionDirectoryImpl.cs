@@ -76,6 +76,11 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                      .AppendSourceString( o.Name ).Append( ", typeof(" ).Append( t.ToGlobalTypeName() ).Append( "), " )
                      .Append( "global::CK.Core.TypeActivation." ).Append( o.Activation.ToString() ).Append( ", new string[] {" );
                 foreach( var r in requires ) scope.AppendSourceString( r ).Append( "," );
+                // The model of the option ([Configuration<TModel>]): the factory receives it instead of the section.
+                var modelType = t.GetCustomAttributes( inherit: false )
+                                 .Select( a => a.GetType() )
+                                 .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
+                                 ?.GetGenericArguments()[0];
                 scope.Append( "}, (sp, configuration) => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
                 bool first = true;
                 foreach( var p in o.Constructor.GetParameters() )
@@ -85,13 +90,20 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                     // The option's configuration (null when it is enabled by default or by true), not a service.
                     if( p.ParameterType == typeof( IConfiguration ) )
                     {
-                        scope.Append( "configuration" );
+                        scope.Append( "(global::Microsoft.Extensions.Configuration.IConfiguration?)configuration" );
+                        continue;
+                    }
+                    if( modelType != null && p.ParameterType == modelType )
+                    {
+                        scope.Append( "(" ).Append( modelType.ToGlobalTypeName() ).Append( ")configuration!" );
                         continue;
                     }
                     scope.Append( "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<" )
                          .Append( p.ParameterType.ToGlobalTypeName() ).Append( ">( sp )" );
                 }
-                scope.Append( ") )," ).NewLine();
+                scope.Append( ")" );
+                if( modelType != null ) scope.Append( ", " ).Append( modelType.ToGlobalTypeName() ).Append( ".ModelDescription" );
+                scope.Append( " )," ).NewLine();
             }
             scope.Append( "} }," ).NewLine();
             monitor.Info( $"'{owner.ToCSharpName()}' has {island.Count} option(s): '{island.Select( o => o.Option.Name ).Concatenate( "', '" )}'." );

@@ -134,10 +134,16 @@ public static class AppIdentityTestHelper
                          .GetGenericArguments()[0];
             var a = t.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().Single();
             var ctor = t.GetConstructors().Single();
+            var modelType = t.GetCustomAttributes( inherit: false )
+                             .Select( x => x.GetType() )
+                             .FirstOrDefault( x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
+                             ?.GetGenericArguments()[0];
+            var model = modelType?.GetProperty( "ModelDescription", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static )
+                                 ?.GetValue( null ) as ConfigurationModelDescription;
             var info = new PartyComponentOptionInfo( a.Name, t, a.Activation, [], ( sp, configuration ) =>
             {
                 var args = ctor.GetParameters()
-                               .Select( p => p.ParameterType == typeof( Microsoft.Extensions.Configuration.IConfiguration )
+                               .Select( p => p.ParameterType == typeof( Microsoft.Extensions.Configuration.IConfiguration ) || p.ParameterType == modelType
                                                 ? configuration
                                                 : sp.GetRequiredService( p.ParameterType ) )
                                .ToArray();
@@ -150,7 +156,7 @@ public static class AppIdentityTestHelper
                     System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw( ex.InnerException );
                     throw;
                 }
-            } );
+            }, model );
             if( !byOwner.TryGetValue( owner, out var list ) ) byOwner.Add( owner, list = new List<PartyComponentOptionInfo>() );
             list.Add( info );
         }

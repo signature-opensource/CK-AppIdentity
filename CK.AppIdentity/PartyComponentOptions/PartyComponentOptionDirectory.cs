@@ -85,7 +85,7 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
                            IServiceProvider services,
                            out IReadOnlyList<object> created )
     {
-        return TryCreate( monitor, GetOptions( ownerType ), name => ownerSection?.TryGetSection( name ), ownerSection?.Path, services, out created );
+        return TryCreate( monitor, GetOptions( ownerType ), name => [ownerSection?.TryGetSection( name )], ownerSection?.Path, services, out created );
     }
 
     /// <summary>
@@ -93,28 +93,55 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// </summary>
     /// <param name="monitor">The monitor to use.</param>
     /// <param name="options">The ordered options of the owner.</param>
-    /// <param name="findOption">Finds the configuration of an option by its name. Null when not configured.</param>
+    /// <param name="findOptionLevels">
+    /// Finds the configuration of an option by its name at every level, the nearest first (its section in the owner's
+    /// section, then in the "Defaults" above it; null where a level has none). The selection takes the nearest one; a
+    /// configuration model is read key by key along them.
+    /// </param>
     /// <param name="ownerPath">The configuration path of the owner (for the errors).</param>
     /// <param name="services">The owner's services.</param>
     /// <param name="created">The created options, in their order.</param>
     /// <returns>True on success, false on error (errors are logged).</returns>
     public static bool TryCreate( IActivityMonitor monitor,
                                   IReadOnlyList<PartyComponentOptionInfo> options,
-                                  Func<string, ImmutableConfigurationSection?> findOption,
+                                  Func<string, IReadOnlyList<ImmutableConfigurationSection?>> findOptionLevels,
                                   string? ownerPath,
                                   IServiceProvider services,
                                   out IReadOnlyList<object> created )
     {
         created = [];
-        if( !ConfigurationOptionSelector.TrySelect( monitor, options, findOption, out var selected ) ) return false;
+        if( !ConfigurationOptionSelector.TrySelect( monitor,
+                                                    options,
+                                                    name => findOptionLevels( name ).FirstOrDefault( s => s != null ),
+                                                    out var selected ) )
+        {
+            return false;
+        }
         var result = new object[selected.Count];
         bool success = true;
         for( int i = 0; i < result.Length; i++ )
         {
             var (info, configuration) = selected[i];
+            object? arg = configuration;
+            if( info.Model != null )
+            {
+                // The model is read key by key along the levels (a bare "true" has no section at its level).
+                var levels = findOptionLevels( info.Name ).Select( s => s != null && s.Value == null ? s : null ).ToArray();
+                var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
+                arg = ConfigurationModelReader.TryRead( info.Model,
+                                                        levels,
+                                                        configuration?.Path ?? (ownerPath != null ? $"{ownerPath}:{info.Name}" : info.Name),
+                                                        collector );
+                collector.DumpLogs( monitor );
+                if( arg == null )
+                {
+                    success = false;
+                    continue;
+                }
+            }
             try
             {
-                result[i] = info.Create( services, configuration );
+                result[i] = info.Create( services, arg );
             }
             catch( Exception ex )
             {

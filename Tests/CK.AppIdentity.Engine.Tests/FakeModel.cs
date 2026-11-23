@@ -196,3 +196,23 @@ public sealed class NeedsFakeClientFeatureDriver : ClientFeatureDriver<NeedsFake
 {
     protected override NeedsFakeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
 }
+
+/// <summary>
+/// The configuration of the <see cref="ModeledOption"/>.
+/// </summary>
+[ConfigurationModel]
+public sealed partial class ModeledOptionConfiguration
+{
+    public required string Name { get; init; }
+
+    public int Count { get; init; } = 1;
+}
+
+[PartyFeatureOption( "Modeled", TypeActivation.Optional )]
+[Configuration<ModeledOptionConfiguration>]
+public sealed class ModeledOption : IPartyComponentOption<FakePartyFeatureDriver>
+{
+    public ModeledOption( ModeledOptionConfiguration configuration ) => Configuration = configuration;
+
+    public ModeledOptionConfiguration Configuration { get; }
+}
