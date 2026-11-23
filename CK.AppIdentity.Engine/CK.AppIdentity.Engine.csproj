@@ -5,9 +5,9 @@
     <Description>The engine of CK.AppIdentity: generates the PartyComponentOptionDirectory (the ordered options of each party component owner type) and the PartyComponentDirectory (the requirements and the order of the party components).</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.StObj.Engine" Version="37.0.0-0.uc.0.ci.45" />
+    <PackageReference Include="CK.StObj.Engine" Version="37.0.0-0.uc.0.ci.46" />
     <!-- The App builder contributor (the parties of the "ckonf.json"). -->
-    <PackageReference Include="CK.Engine" Version="37.0.0-0.uc.0.ci.45" />
+    <PackageReference Include="CK.Engine" Version="37.0.0-0.uc.0.ci.46" />
     <!-- The options of an owner are ordered by a ResourceSpace island. -->
     <PackageReference Include="CK.ResourceSpace" Version="36.0.2-0.uc.0.ci.53" />
   </ItemGroup>
