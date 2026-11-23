@@ -26,14 +26,7 @@ namespace CK.Setup;
 /// </summary>
 public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
 {
-    sealed class OptionModel
-    {
-        public required ICachedType Type { get; init; }
-        public required Type Owner { get; init; }
-        public required string Name { get; init; }
-        public required TypeActivation Activation { get; init; }
-        public required ConstructorInfo Constructor { get; init; }
-    }
+    const string _attributeHint = "[PartyFeatureOption] for the options of a feature driver, [PartyClientFeatureOption] for the options of a client feature";
 
     /// <inheritdoc />
     public override CSCodeGenerationResult Implement( IActivityMonitor monitor, Type classType, ICSCodeGenerationContext c, ITypeScope scope )
@@ -42,7 +35,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         // Skips the purely unified BinPath.
         if( group.IsUnifiedPure ) return CSCodeGenerationResult.Success;
 
-        if( !TryCollectOptions( monitor, group.TypeSet, out var options ) ) return CSCodeGenerationResult.Failed;
+        if( !ConfigurableOptions.TryCollect( monitor, group.TypeSet, [typeof( IPartyComponent )], _attributeHint, out var options ) ) return CSCodeGenerationResult.Failed;
         var owners = group.TypeSet.Select( t => t.Type )
                                   .Where( t => !t.IsAbstract
                                                && !t.IsInterface
@@ -51,12 +44,16 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                                   .OrderBy( t => t.FullName, StringComparer.Ordinal )
                                   .ToList();
         bool success = true;
-        var islands = new List<(Type Owner, List<(OptionModel Option, List<string> Requires)> Options)>();
+        var islands = new List<(Type Owner, List<OrderedConfigurableOption> Options)>();
         foreach( var owner in owners )
         {
             using( monitor.OpenInfo( $"Ordering the options of '{owner.ToCSharpName()}'." ) )
             {
-                var island = TryOrder( monitor, group, owner, options.Where( o => o.Owner.IsAssignableFrom( owner ) ).ToList() );
+                var island = ConfigurableOptions.TryOrder( monitor,
+                                                           group.TypeCache,
+                                                           group.EngineConfiguration.RevertOrderingNames,
+                                                           owner,
+                                                           options.Where( o => o.Owner.IsAssignableFrom( owner ) ).ToList() );
                 if( island == null ) success = false;
                 else islands.Add( (owner, island) );
             }
@@ -101,145 +98,5 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         }
         scope.Append( "} ) {}" ).NewLine();
         return CSCodeGenerationResult.Success;
-    }
-
-    static bool TryCollectOptions( IActivityMonitor monitor, IReadOnlySet<ICachedType> typeSet, out List<OptionModel> options )
-    {
-        options = new List<OptionModel>();
-        bool success = true;
-        foreach( var cached in typeSet )
-        {
-            var t = cached.Type;
-            if( !t.IsClass || t.IsAbstract ) continue;
-            var owners = t.GetInterfaces()
-                          .Where( i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> ) )
-                          .Select( i => i.GetGenericArguments()[0] )
-                          .ToList();
-            if( owners.Count == 0 ) continue;
-            if( owners.Count > 1 )
-            {
-                monitor.Error( $"The option '{t.ToCSharpName()}' is an option of more than one owner type ('{owners.Select( o => o.ToCSharpName() ).Concatenate( "', '" )}'): an option has one owner type." );
-                success = false;
-                continue;
-            }
-            var owner = owners[0];
-            var attributes = t.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().ToList();
-            if( attributes.Count != 1 )
-            {
-                monitor.Error( $"The option '{t.ToCSharpName()}' must be decorated with the attribute of its kind of owner: [PartyFeatureOption] for the options of a feature driver, [PartyClientFeatureOption] for the options of a client feature." );
-                success = false;
-                continue;
-            }
-            var a = attributes[0];
-            if( !a.OwnerKind.IsAssignableFrom( owner ) )
-            {
-                monitor.Error( $"The option '{t.ToCSharpName()}' is an option of '{owner.ToCSharpName()}' that is not a '{a.OwnerKind.ToCSharpName()}': its attribute [{a.GetType().Name.Replace( "Attribute", "" )}] is the one of another kind of owner." );
-                success = false;
-                continue;
-            }
-            var ctors = t.GetConstructors();
-            if( ctors.Length != 1 )
-            {
-                monitor.Error( $"The option '{t.ToCSharpName()}' must have exactly one public constructor (its IConfiguration parameter is its configuration, the other ones are resolved from the services of its owner)." );
-                success = false;
-                continue;
-            }
-            var parameters = ctors[0].GetParameters();
-            if( parameters.Count( p => p.ParameterType == typeof( IConfiguration ) ) > 1 )
-            {
-                monitor.Error( $"The constructor of the option '{t.ToCSharpName()}' has more than one IConfiguration parameter: an option has one configuration." );
-                success = false;
-                continue;
-            }
-            var section = parameters.FirstOrDefault( p => p.ParameterType != typeof( IConfiguration ) && typeof( IConfiguration ).IsAssignableFrom( p.ParameterType ) );
-            if( section != null )
-            {
-                monitor.Error( $"The parameter '{section.Name}' of the option '{t.ToCSharpName()}' is a '{section.ParameterType.ToCSharpName()}': the configuration of an option is a plain IConfiguration." );
-                success = false;
-                continue;
-            }
-            // The name and the activation are checked by the type cache (an option is a configurable type).
-            if( !cached.TryGetConfigurableType( monitor, out _ ) )
-            {
-                success = false;
-                continue;
-            }
-            options.Add( new OptionModel { Type = cached, Owner = owner, Name = a.Name, Activation = a.Activation, Constructor = ctors[0] } );
-        }
-        return success;
-    }
-
-    // The ResourceSpace island of an owner: its options in their order, with the names of the options they require.
-    static List<(OptionModel, List<string>)>? TryOrder( IActivityMonitor monitor, IRunningBinPathGroup group, Type owner, List<OptionModel> island )
-    {
-        var duplicate = island.GroupBy( o => o.Name, StringComparer.OrdinalIgnoreCase ).FirstOrDefault( g => g.Count() > 1 );
-        if( duplicate != null )
-        {
-            monitor.Error( $"The options '{duplicate.Select( o => o.Type.CSharpName ).Concatenate( "', '" )}' of '{owner.ToCSharpName()}' have the same name '{duplicate.Key}'." );
-            return null;
-        }
-        var byType = island.ToDictionary( o => o.Type );
-        var config = new ResSpaceConfiguration( group.TypeCache, byType.ContainsKey )
-        {
-            PackageResolver = new IslandResolver( owner ),
-            RevertOrderingNames = group.EngineConfiguration.RevertOrderingNames
-        };
-        var byRawType = island.ToDictionary( o => o.Type.Type );
-        var requires = island.ToDictionary( o => o, o => new List<string>() );
-        bool success = true;
-        foreach( var o in island )
-        {
-            var d = config.RegisterPackage( monitor, o.Type, isOptional: false );
-            if( d == null )
-            {
-                success = false;
-                continue;
-            }
-            // The non optional relations: "only with it", the requiring option can't be enabled without the required one.
-            // [Requires<T>] on o: o requires T. [RequiredBy<T>] on o: T requires o.
-            // Before the build, the references of a type's relations are their raw types.
-            foreach( var r in d.Requires )
-            {
-                if( !r.IsOptional && r.AsType is { } t && byRawType.TryGetValue( t, out var required ) ) AddRequirement( o, required.Name );
-            }
-            foreach( var r in d.RequiredBy )
-            {
-                if( !r.IsOptional && r.AsType is { } t && byRawType.TryGetValue( t, out var requiring ) ) AddRequirement( requiring, o.Name );
-            }
-        }
-        if( !success ) return null;
-        var collector = config.Build( monitor );
-        if( collector == null ) return null;
-        var data = new ResSpaceDataBuilder( collector ).Build( monitor );
-        if( data == null ) return null;
-        return data.CoreData.Packages.Where( p => p.Type != null && byType.ContainsKey( p.Type ) )
-                                     .Select( p => (byType[p.Type!], requires[byType[p.Type!]]) )
-                                     .ToList();
-
-        void AddRequirement( OptionModel requiring, string required )
-        {
-            var list = requires[requiring];
-            if( !list.Contains( required ) ) list.Add( required );
-        }
-    }
-
-    // The compatibility rule of an island: the options of an owner type assignable from the owner. A relation to another
-    // option (of another owner) is ignored.
-    sealed class IslandResolver : IResPackageDescriptorResolver
-    {
-        readonly Type _owner;
-
-        public IslandResolver( Type owner ) => _owner = owner;
-
-        public bool IsCompatible( ICachedType type )
-            => type.Type.GetInterfaces().Any( i => i.IsGenericType
-                                                   && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> )
-                                                   && i.GetGenericArguments()[0].IsAssignableFrom( _owner ) );
-
-        public bool ResolveRequired( IActivityMonitor monitor, IResPackageDescriptorRegistrar registrar, ResPackageDescriptor.Ref reference )
-        {
-            monitor.Error( $"The option '{reference}' is required but it is not an option of '{_owner.ToCSharpName()}' in this BinPath." );
-            return false;
-        }
     }
 }

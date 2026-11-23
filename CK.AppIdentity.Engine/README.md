@@ -8,7 +8,9 @@ knows them without any reflection at runtime.
 
 ## How it works
 
-[`PartyComponentOptionDirectoryImpl`](PartyComponentOptionDirectoryImpl.cs) implements the directory for each BinPath:
+[`PartyComponentOptionDirectoryImpl`](PartyComponentOptionDirectoryImpl.cs) implements the directory for each BinPath
+(steps 1 and 3 are `ConfigurableOptions.TryCollect` and `ConfigurableOptions.TryOrder` of CK.ResourceSpace, shared with
+the options of the App builder's aspects):
 
 1. **The options** are the concrete classes of the BinPath that implement `IPartyComponentOption<TOwner>` (once), with
    exactly one `IPartyComponentOptionAttribute` (`[PartyFeatureOption]` or `[PartyClientFeatureOption]`) whose kind of owner

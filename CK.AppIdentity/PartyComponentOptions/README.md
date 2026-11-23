@@ -9,7 +9,9 @@ know their component.
 ## An option is a class
 
 An option implements `IPartyComponentOption<TOwner>` (CK.AppIdentity.Abstractions) where `TOwner` is the party
-component it applies to, and is decorated with the attribute of its kind of owner:
+component it applies to, and is decorated with the attribute of its kind of owner. They are the party component level
+of the options of the configurable types (`IConfigurableOption<TOwner>` and `IConfigurableOptionAttribute` of
+CK.Abstractions: the App aspects and the Builder aspects have options too).
 
 | Owner | Attribute | Package |
 |---|---|---|
@@ -78,7 +80,7 @@ see [CK.AppIdentity.Engine](../../CK.AppIdentity.Engine/README.md).
   configuration )` creates an option, without reflection.
 - `IsOptionName( ownerType, key )`: whether a key of the owner's section is the name of one of its options.
 - `TrySelect( monitor, ownerType, ownerSection, out selected )`: the options that the owner's configuration enables, in
-  their order, each with its configuration section (a `SelectedPartyComponentOption`).
+  their order, each with its configuration section (a `SelectedConfigurationOption<PartyComponentOptionInfo>`).
 - `TryCreate( monitor, ownerType, ownerSection, services, out created )`: selects the options and creates them. An
   option that throws is an error, logged with its configuration path and the exception message ("Unable to create the option '...': ...").
 
@@ -99,7 +101,8 @@ In the owner's configuration section, the key of an option is its name:
 }
 ```
 
-`PartyComponentOptionDirectory.TrySelect` applies these rules:
+`PartyComponentOptionDirectory.TrySelect` applies the rules of `ConfigurationOptionSelector` (CK.Configuration: a
+`PartyComponentOptionInfo` is an `IConfigurationOption`):
 
 | Case | Result |
 |---|---|

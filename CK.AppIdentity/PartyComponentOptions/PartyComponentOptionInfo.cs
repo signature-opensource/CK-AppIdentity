@@ -8,7 +8,7 @@ namespace CK.AppIdentity;
 /// <summary>
 /// An option of a party component owner type, as the engine computed it (see <see cref="PartyComponentOptionDirectory"/>).
 /// </summary>
-public sealed class PartyComponentOptionInfo
+public sealed class PartyComponentOptionInfo : IConfigurationOption
 {
     readonly Func<IServiceProvider, IConfiguration?, object> _factory;
 
@@ -55,6 +55,11 @@ public sealed class PartyComponentOptionInfo
     /// is not <see cref="TypeActivation.Optional"/>.
     /// </summary>
     public bool IsEnabledByDefault => Activation != TypeActivation.Optional;
+
+    /// <summary>
+    /// Gets whether this option is always enabled: its <see cref="Activation"/> is <see cref="TypeActivation.Required"/>.
+    /// </summary>
+    public bool IsRequired => Activation == TypeActivation.Required;
 
     /// <summary>
     /// Gets the names of the options without which this one cannot be enabled: the targets of its non optional relations

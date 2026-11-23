@@ -3,7 +3,8 @@ using CK.Core;
 namespace CK.AppIdentity;
 
 /// <summary>
-/// An option of a party component: an option of a feature driver (decorated with <see cref="PartyFeatureOptionAttribute"/>)
+/// An option of a party component (the party component level of <see cref="IConfigurableOption{TOwner}"/>): an option of
+/// a feature driver (decorated with <see cref="PartyFeatureOptionAttribute"/>)
 /// or of a client feature (decorated with the PartyClientFeatureOption attribute of CK.AppIdentity.PartyClient). It applies to its
 /// <typeparamref name="TOwner"/> and to the owners derived from it.
 /// <para>
@@ -21,6 +22,6 @@ namespace CK.AppIdentity;
 /// </para>
 /// </summary>
 /// <typeparam name="TOwner">The party component type (or a base of it) to which this option applies.</typeparam>
-public interface IPartyComponentOption<TOwner> : IResourceGroup where TOwner : IPartyComponent
+public interface IPartyComponentOption<TOwner> : IConfigurableOption<TOwner> where TOwner : IPartyComponent
 {
 }

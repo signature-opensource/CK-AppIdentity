@@ -77,11 +77,11 @@ public class PartyComponentOptionDirectoryTests
         options[0].Requires.ShouldBeEmpty();
         options[1].Requires.ShouldBe( ["Tracing"] );
 
-        PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Tracing": true }""" ), out var selected ).ShouldBeTrue();
-        selected.Select( s => s.Info.Name ).ShouldBe( ["Tracing"] );
+        ConfigurationOptionSelector.TrySelect( TestHelper.Monitor, options, Section( """{ "Tracing": true }""" ), out var selected ).ShouldBeTrue();
+        selected.Select( s => s.Option.Name ).ShouldBe( ["Tracing"] );
         using( TestHelper.Monitor.CollectTexts( out var texts ) )
         {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Main": true, "Tracing": false }""" ), out _ ).ShouldBeFalse();
+            ConfigurationOptionSelector.TrySelect( TestHelper.Monitor, options, Section( """{ "Main": true, "Tracing": false }""" ), out _ ).ShouldBeFalse();
             texts.ShouldContain( "The option 'Main' requires the option 'Tracing' that is disabled." );
         }
     }
@@ -145,116 +145,9 @@ public class PartyComponentOptionDirectoryTests
         await ((IHostedService)party).StopAsync( default );
     }
 
-    // The selection is a pure function of the options and the configuration: it is tested on hand made options.
-    static readonly PartyComponentOptionInfo[] _options =
-    [
-        new PartyComponentOptionInfo( "Header", typeof( HeaderOption ), TypeActivation.ByDefault, [], (_, _) => new HeaderOption() ),
-        new PartyComponentOptionInfo( "Main", typeof( MainOption ), TypeActivation.Optional, [], (_, c) => new MainOption( c ) ),
-        new PartyComponentOptionInfo( "Compression", typeof( CompressionOption ), TypeActivation.ByDefault, ["Main"], (sp, _) => new CompressionOption( new FakeService() ) ),
-    ];
-
+    // The selection rules (ConfigurationOptionSelector) are tested in CK.Configuration.Tests.
     static ImmutableConfigurationSection Section( string json )
         => new ImmutableConfigurationSection( new MutableConfigurationSection( "Owner" ).AddJson( json ) );
-
-    static string[] Select( ImmutableConfigurationSection? section )
-    {
-        PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, _options, section, out var selected ).ShouldBeTrue();
-        return selected.Select( s => s.Info.Name ).ToArray();
-    }
-
-    [Test]
-    public void selection_defaults()
-    {
-        // Compression is enabled by default but Main is disabled: Compression is disabled with it.
-        Select( null ).ShouldBe( ["Header"] );
-        Select( Section( "{}" ) ).ShouldBe( ["Header"] );
-    }
-
-    [Test]
-    public void selection_true_false_and_section()
-    {
-        Select( Section( """{ "Main": true }""" ) ).ShouldBe( ["Header", "Main", "Compression"] );
-        Select( Section( """{ "Main": "True", "Header": false, "Compression": "false" }""" ) ).ShouldBe( ["Main"] );
-
-        PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, _options, Section( """{ "Main": { "Level": 3 } }""" ), out var selected ).ShouldBeTrue();
-        selected.Select( s => s.Info.Name ).ShouldBe( ["Header", "Main", "Compression"] );
-        selected[0].Configuration.ShouldBeNull();
-        selected[1].Configuration.ShouldNotBeNull()["Level"].ShouldBe( "3" );
-        selected[2].Configuration.ShouldBeNull();
-    }
-
-    [Test]
-    public void selection_errors()
-    {
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, _options, Section( """{ "Main": "yes" }""" ), out var selected ).ShouldBeFalse();
-            selected.ShouldBeEmpty();
-            texts.ShouldContain( "Invalid option 'Owner:Main' = 'yes': true, false or a section is expected." );
-        }
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, _options, Section( """{ "Compression": true }""" ), out var selected ).ShouldBeFalse();
-            texts.ShouldContain( "The option 'Compression' requires the option 'Main' that is disabled." );
-        }
-    }
-
-    [Test]
-    public void selection_follows_the_activation()
-    {
-        var options = new[]
-        {
-            new PartyComponentOptionInfo( "Opt", typeof( object ), TypeActivation.Optional, [], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "ByDefault", typeof( object ), TypeActivation.ByDefault, [], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "Must", typeof( object ), TypeActivation.Required, ["Opt"], (_, _) => new object() ),
-        };
-        // A required option is always enabled: here it requires "Opt" that is disabled, this is an error (not a silent drop).
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( "{}" ), out _ ).ShouldBeFalse();
-            texts.ShouldContain( "The option 'Must' requires the option 'Opt' that is disabled." );
-        }
-        // It can't be turned off.
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": true, "Must": false }""" ), out _ ).ShouldBeFalse();
-            texts.ShouldContain( "The option 'Owner:Must' is required: it can't be turned off." );
-        }
-        // A redundant true or false is a warning.
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": true, "ByDefault": true, "Must": true }""" ), out var selected ).ShouldBeTrue();
-            selected.Select( s => s.Info.Name ).ShouldBe( ["Opt", "ByDefault", "Must"] );
-            texts.ShouldContain( "Redundant 'Owner:ByDefault' = true: the option is enabled by default." );
-            texts.ShouldContain( "Redundant 'Owner:Must' = true: the option is required." );
-        }
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "Opt": { "A": 1 }, "ByDefault": false }""" ), out var selected ).ShouldBeTrue();
-            selected.Select( s => s.Info.Name ).ShouldBe( ["Opt", "Must"] );
-            texts.ShouldNotContain( t => t.StartsWith( "Redundant" ) );
-        }
-    }
-
-    [Test]
-    public void selection_cascade_of_defaults()
-    {
-        var options = new[]
-        {
-            new PartyComponentOptionInfo( "A", typeof( object ), TypeActivation.Optional, [], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "B", typeof( object ), TypeActivation.ByDefault, ["A"], (_, _) => new object() ),
-            new PartyComponentOptionInfo( "C", typeof( object ), TypeActivation.ByDefault, ["B"], (_, _) => new object() ),
-        };
-        using( TestHelper.Monitor.CollectTexts( out var texts ) )
-        {
-            PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, (ImmutableConfigurationSection?)null, out var selected ).ShouldBeTrue();
-            selected.ShouldBeEmpty();
-            texts.ShouldContain( "The option 'B' (enabled by default) is disabled: it requires the option 'A' that is disabled." );
-            texts.ShouldContain( "The option 'C' (enabled by default) is disabled: it requires the option 'B' that is disabled." );
-        }
-        PartyComponentOptionDirectory.TrySelect( TestHelper.Monitor, options, Section( """{ "A": true }""" ), out var all ).ShouldBeTrue();
-        all.Select( s => s.Info.Name ).ShouldBe( ["A", "B", "C"] );
-    }
 
     static async Task CheckEngineErrorAsync( string expected, params Type[] options )
     {
