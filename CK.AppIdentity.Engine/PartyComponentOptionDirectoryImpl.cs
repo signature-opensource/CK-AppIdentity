@@ -81,6 +81,13 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                                  .Select( a => a.GetType() )
                                  .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
                                  ?.GetGenericArguments()[0];
+                // Its generated description (TModel.ModelDescription) must exist: a clear error rather than generated
+                // code that doesn't compile (the project of the model misses its direct CK.ConfigurationModel reference).
+                if( modelType != null && !ConfigurationModelDescription.TryGet( modelType, out _, out var modelError ) )
+                {
+                    monitor.Error( $"Invalid option '{o.Name}' ('{t.ToCSharpName()}'). {modelError}" );
+                    return CSCodeGenerationResult.Failed;
+                }
                 scope.Append( "}, (sp, configuration) => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
                 bool first = true;
                 foreach( var p in o.Constructor.GetParameters() )

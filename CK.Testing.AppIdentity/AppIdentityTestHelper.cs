@@ -138,8 +138,11 @@ public static class AppIdentityTestHelper
                              .Select( x => x.GetType() )
                              .FirstOrDefault( x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
                              ?.GetGenericArguments()[0];
-            var model = modelType?.GetProperty( "ModelDescription", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static )
-                                 ?.GetValue( null ) as ConfigurationModelDescription;
+            ConfigurationModelDescription? model = null;
+            if( modelType != null && !ConfigurationModelDescription.TryGet( modelType, out model, out var modelError ) )
+            {
+                Throw.CKException( $"Invalid option '{a.Name}' ('{t.Name}'). {modelError}" );
+            }
             var info = new PartyComponentOptionInfo( a.Name, t, a.Activation, [], ( sp, configuration ) =>
             {
                 var args = ctor.GetParameters()
