@@ -8,8 +8,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CK.Abstractions" Version="32.0.0-0.uc.0.ci.26" />
-        <PackageReference Include="CK.Configuration" Version="3.0.0-0.uc.0.ci.18" />
+        <PackageReference Include="CK.Abstractions" Version="32.0.0-0.uc.0.ci.28" />
+        <PackageReference Include="CK.Configuration" Version="3.0.0-0.uc.0.ci.19" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
     </ItemGroup>
 
