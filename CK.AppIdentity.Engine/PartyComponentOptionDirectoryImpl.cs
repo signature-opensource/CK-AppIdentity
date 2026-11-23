@@ -60,6 +60,8 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         }
         if( !success ) return CSCodeGenerationResult.Failed;
 
+        // The models of the options: their description and their creation, generated (no reflection at run time).
+        var models = new ConfigurationModelCodeWriter( scope );
         scope.Append( "public " ).Append( scope.Name )
              .Append( "() : base( new global::System.Collections.Generic.Dictionary<global::System.Type, global::System.Collections.Generic.IReadOnlyList<global::CK.AppIdentity.PartyComponentOptionInfo>>" ).NewLine()
              .Append( "{" ).NewLine();
@@ -81,11 +83,10 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                                  .Select( a => a.GetType() )
                                  .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
                                  ?.GetGenericArguments()[0];
-                // Its generated description (TModel.ModelDescription) must exist: a clear error rather than generated
-                // code that doesn't compile (the project of the model misses its direct CK.ConfigurationModel reference).
-                if( modelType != null && !ConfigurationModelDescription.TryGet( modelType, out _, out var modelError ) )
+                string? modelDescription = null;
+                if( modelType != null && !models.TryGetDescription( monitor, modelType, out modelDescription ) )
                 {
-                    monitor.Error( $"Invalid option '{o.Name}' ('{t.ToCSharpName()}'). {modelError}" );
+                    monitor.Error( $"Invalid configuration model of the option '{o.Name}' ('{t.ToCSharpName()}')." );
                     return CSCodeGenerationResult.Failed;
                 }
                 scope.Append( "}, (sp, configuration) => new " ).Append( t.ToGlobalTypeName() ).Append( "(" );
@@ -109,7 +110,7 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                          .Append( p.ParameterType.ToGlobalTypeName() ).Append( ">( sp )" );
                 }
                 scope.Append( ")" );
-                if( modelType != null ) scope.Append( ", " ).Append( modelType.ToGlobalTypeName() ).Append( ".ModelDescription" );
+                if( modelDescription != null ) scope.Append( ", " ).Append( modelDescription );
                 scope.Append( " )," ).NewLine();
             }
             scope.Append( "} }," ).NewLine();

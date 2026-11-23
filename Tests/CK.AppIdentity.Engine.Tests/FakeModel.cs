@@ -201,7 +201,7 @@ public sealed class NeedsFakeClientFeatureDriver : ClientFeatureDriver<NeedsFake
 /// The configuration of the <see cref="ModeledOption"/>.
 /// </summary>
 [ConfigurationModel]
-public sealed partial class ModeledOptionConfiguration
+public sealed class ModeledOptionConfiguration
 {
     public required string Name { get; init; }
 

@@ -61,7 +61,8 @@ public sealed class CompressionOption : IPartyComponentOption<FakeFeatureDriver>
 An option may declare its configuration model (`[Configuration<TModel>]`, CK.ConfigurationModel): its constructor takes
 the model instead of an `IConfiguration`. The model is read key by key along the levels of the party (its section in
 the feature's section of the party, then in each `"Defaults"` above it: `ApplicationIdentityConfiguration.GetFeatureSections`),
-validated, and its errors logged (an invalid model is an error: the option is not created).
+validated, and its errors logged (an invalid model is an error: the option is not created). The engine generates the description of
+the model and its creation (CK.ConfigurationModel.Engine): no reflection at run time; the model must be public.
 
 ## The order and the requirements
 
