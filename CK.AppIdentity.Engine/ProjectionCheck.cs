@@ -33,7 +33,7 @@ static class ProjectionCheck
     const string PartyClientSectionName = "PartyClient";
     static readonly HashSet<string> _typeSetKeys = new( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
 
-    sealed record Option( string Name, Type Owner, Type Type );
+    sealed record Option( string Name, Type Owner, Type Type, IReadOnlyList<Type> RequiredFeatures );
 
     // The projected JSON with the burnt values (their configuration paths) set in it.
     static string WithCompiledValues( string json, IReadOnlyDictionary<string, string?> compiled )
@@ -111,6 +111,7 @@ static class ProjectionCheck
         var drivers = result.Components.Where( i => typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( i.ComponentType ) ).ToList();
         var clientFeatures = result.Components.Where( i => !typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( i.ComponentType ) ).ToList();
         var options = CollectOptions( monitor, group );
+        if( options == null ) return false;
         var partyDrivers = new Dictionary<string, HashSet<Type>>( StringComparer.OrdinalIgnoreCase );
         bool success = true;
 
@@ -136,7 +137,7 @@ static class ProjectionCheck
                     }
                     else if( k.Value == null )
                     {
-                        CheckOptions( f.ComponentType, client.Key, name => k.TryGetSection( name ) );
+                        CheckOptions( f.ComponentType, client.Key, name => k.TryGetSection( name ), outer );
                     }
                 }
             }
@@ -145,10 +146,10 @@ static class ProjectionCheck
 
         void CheckParty( string partyName, ApplicationIdentityConfiguration local, IEnumerable<ApplicationIdentityConfiguration> remotes )
         {
-            CheckKeys( partyName, local, isLocal: true );
-            foreach( var r in remotes ) CheckKeys( partyName, r, isLocal: false );
             var scope = drivers.Where( d => IsMember( partyName, d.ComponentType ) && IsActive( d, local.GetFeatureDeclarationSection( d.FeatureName ) ) ).ToList();
             partyDrivers[partyName] = scope.Select( d => d.ComponentType ).ToHashSet();
+            CheckKeys( partyName, local, isLocal: true );
+            foreach( var r in remotes ) CheckKeys( partyName, r, isLocal: false );
             success &= PartyComponentDirectory.CheckScope( monitor, $"the party '{partyName}'", scope, result.MultipleAbstractions.Contains, _ => false );
         }
 
@@ -169,19 +170,33 @@ static class ProjectionCheck
                 }
                 else
                 {
-                    CheckOptions( member.ComponentType, setName, name => p.TryGetFeatureSection( key, name ) );
+                    // The features of a remote are the ones of its local party (the party of the options).
+                    CheckOptions( member.ComponentType, setName, name => p.TryGetFeatureSection( key, name ), partyDrivers[setName] );
                 }
             }
         }
 
-        // The options enabled in the section of an owner (true or a section) must be members of the set.
-        void CheckOptions( Type owner, string setName, Func<string, ImmutableConfigurationSection?> find )
+        // The options enabled in the section of an owner (true or a section) must be members of the set, and the party
+        // features they require must be active in the party ("only with it": an explicit option without them is an error;
+        // an option enabled by default is disabled with them at run time).
+        void CheckOptions( Type owner, string setName, Func<string, ImmutableConfigurationSection?> find, IReadOnlySet<Type> activeDrivers )
         {
             foreach( var o in options.Where( o => o.Owner.IsAssignableFrom( owner ) ) )
             {
-                if( find( o.Name ) is { } s && !IsFalse( s ) && !IsMember( setName, o.Type ) )
+                if( find( o.Name ) is not { } s || IsFalse( s ) ) continue;
+                if( !IsMember( setName, o.Type ) )
                 {
                     Error( s.Path, $"the option '{o.Type:N}' is not a member of the type set of '{setName}'" );
+                    continue;
+                }
+                foreach( var r in o.RequiredFeatures )
+                {
+                    if( !activeDrivers.Contains( r ) )
+                    {
+                        var name = drivers.FirstOrDefault( d => d.ComponentType == r )?.FeatureName ?? r.ToCSharpName();
+                        monitor.Error( $"\"{Trim( s.Path )}\": the option '{o.Name}' requires the party feature '{name}' that is not active in the party '{setName}'." );
+                        success = false;
+                    }
                 }
             }
         }
@@ -191,11 +206,12 @@ static class ProjectionCheck
 
         void Error( string path, string text )
         {
-            // The paths are the ones of the projection ("CK-AppIdentity:Local:..."), without the root of the file.
-            if( path.StartsWith( "appsettings:", StringComparison.Ordinal ) ) path = path.Substring( 12 );
-            monitor.Error( $"\"{path}\": {text}. The types drive: a key doesn't bring its type in, add it to the \"Types\" of the set." );
+            monitor.Error( $"\"{Trim( path )}\": {text}. The types drive: a key doesn't bring its type in, add it to the \"Types\" of the set." );
             success = false;
         }
+
+        // The paths are the ones of the projection ("CK-AppIdentity:Local:..."), without the root of the file.
+        static string Trim( string path ) => path.StartsWith( "appsettings:", StringComparison.Ordinal ) ? path.Substring( 12 ) : path;
     }
 
     // Whether a component is active given its declaration: a Required one always, otherwise its declaration (true or a
@@ -209,9 +225,11 @@ static class ProjectionCheck
 
     static bool IsFalse( ImmutableConfigurationSection s ) => string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase );
 
-    static List<Option> CollectOptions( IActivityMonitor monitor, IRunningBinPathGroup group )
+    // Returns null on error (an invalid relation of an option).
+    static List<Option>? CollectOptions( IActivityMonitor monitor, IRunningBinPathGroup group )
     {
         var options = new List<Option>();
+        bool success = true;
         foreach( var cached in group.TypeSet )
         {
             var t = cached.Type;
@@ -221,9 +239,31 @@ static class ProjectionCheck
             // The option directory reports the invalid declarations.
             if( cached.TryGetConfigurableType( monitor, out var configurable ) && configurable != null )
             {
-                options.Add( new Option( configurable.Name, owner, t ) );
+                // The party features it requires: its non optional [Requires] to a feature driver (the reader of the
+                // ResourceSpace: the rules of the topology).
+                var visitor = new RequiredFeatureCollector();
+                success &= ResPackageRelationReader.Read( monitor, cached, ref visitor );
+                options.Add( new Option( configurable.Name, owner, t, (IReadOnlyList<Type>?)visitor.Features ?? [] ) );
             }
         }
-        return options;
+        return success ? options : null;
+    }
+
+    struct RequiredFeatureCollector : IResPackageRelationVisitor
+    {
+        public List<Type>? Features;
+
+        public void OnPackage( ResPackageDescriptor.Ref package ) { }
+
+        public void OnRelation( ResRelationKind kind, ResPackageDescriptor.Ref target )
+        {
+            if( kind == ResRelationKind.Requires
+                && !target.IsOptional
+                && target.AsType is { } t
+                && typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( t ) )
+            {
+                (Features ??= []).Add( t );
+            }
+        }
     }
 }

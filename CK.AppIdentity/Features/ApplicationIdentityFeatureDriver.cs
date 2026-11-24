@@ -280,7 +280,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
                                                          name => c.GetFeatureSections( key, name ),
                                                          $"{c.Configuration.Path}:{key}",
                                                          _s.Services,
-                                                         out var created ) )
+                                                         out var created,
+                                                         o => o.FindMissingFeature( _s.Services, p ) ) )
             {
                 _options.Add( p, created );
             }

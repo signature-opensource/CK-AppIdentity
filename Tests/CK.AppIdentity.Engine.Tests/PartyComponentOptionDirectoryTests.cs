@@ -87,6 +87,40 @@ public class PartyComponentOptionDirectoryTests
     }
 
     [Test]
+    public async Task an_option_can_require_a_party_feature_Async()
+    {
+        var configuration = TestHelper.CreateDefaultEngineConfiguration();
+        configuration.FirstBinPath.Types.Add( typeof( PartyComponentOptionDirectory ), typeof( ApplicationIdentityService ),
+                                              typeof( FakePartyFeatureDriver ), typeof( FakeMailFeatureDriver ), typeof( NotifyOption ) );
+        var r = await configuration.RunSuccessfullyAsync();
+        await using var auto = r.LoadMap().CreateAutomaticServices( services =>
+        {
+            services.AddSingleton( ApplicationIdentityServiceConfiguration.CreateEmpty( "Test", "Options" ) );
+        } );
+        var directory = auto.Services.GetRequiredService<PartyComponentOptionDirectory>();
+        var notify = directory.GetOptions( typeof( FakePartyFeatureDriver ) ).ShouldHaveSingleItem();
+        // Outside the options of its owner: not a requirement between options, a required party feature.
+        notify.Requires.ShouldBeEmpty();
+        notify.RequiredFeatures.ShouldBe( [typeof( FakeMailFeatureDriver )] );
+
+        // "Only with it": the level gives the missing requirement (the feature not allowed on the party of the owner).
+        static string? MailOff( PartyComponentOptionInfo o ) => o.RequiredFeatures.Count > 0 ? "the party feature 'FakeMail'" : null;
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), null, auto.Services, out var created, MailOff ).ShouldBeTrue();
+            created.ShouldBeEmpty();
+            texts.ShouldContain( "The option 'Notify' (enabled by default) is disabled: it requires the party feature 'FakeMail' that is disabled." );
+        }
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), Section( """{ "Notify": true }""" ), auto.Services, out _, MailOff ).ShouldBeFalse();
+            texts.ShouldContain( "The option 'Notify' requires the party feature 'FakeMail' that is disabled." );
+        }
+        directory.TryCreate( TestHelper.Monitor, typeof( FakePartyFeatureDriver ), null, auto.Services, out var all, o => null ).ShouldBeTrue();
+        all.ShouldHaveSingleItem().ShouldBeOfType<NotifyOption>();
+    }
+
+    [Test]
     public async Task an_option_is_created_with_the_services_of_its_owner_Async()
     {
         await using var auto = await CreateServicesAsync();

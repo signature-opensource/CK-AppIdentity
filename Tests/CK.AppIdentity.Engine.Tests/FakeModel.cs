@@ -59,6 +59,27 @@ public sealed class CompressionOption : IPartyComponentOption<FakePartyFeatureDr
     public FakeService Service { get; }
 }
 
+// Another party feature, and an option of FakeParty that requires it (outside the options of its owner: the party
+// feature of the party of its owner, "only with it"). Used only by its own test (not in the common model).
+[PartyFeature( "FakeMail", TypeActivation.Optional )]
+public sealed class FakeMailFeatureDriver : ApplicationIdentityFeatureDriver
+{
+    public FakeMailFeatureDriver( ApplicationIdentityService s ) : base( s ) { }
+
+    protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+
+    protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
+
+    protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+
+    protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+}
+
+[PartyFeatureOption( "Notify", TypeActivation.ByDefault ), Requires<FakeMailFeatureDriver>]
+public sealed class NotifyOption : IPartyComponentOption<FakePartyFeatureDriver>
+{
+}
+
 // A non optional [RequiredBy<T>]: Main requires Tracing (Tracing comes first and can be enabled alone).
 // Used only by its own test (not in the common model).
 [PartyFeatureOption( "Tracing", TypeActivation.Optional ), RequiredBy<MainOption>]

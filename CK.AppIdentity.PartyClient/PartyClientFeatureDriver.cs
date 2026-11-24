@@ -226,7 +226,7 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                 continue;
             }
             f._name = _componentDirectory.Find( driver.FeatureType )!.FeatureName!;
-            if( !TrySetOptions( monitor, f, section ) )
+            if( !TrySetOptions( monitor, local, f, section ) )
             {
                 success = false;
                 continue;
@@ -245,10 +245,10 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     }
 
     // Selects the options of a created feature from its section, creates them and gives them to the feature.
-    bool TrySetOptions( IActivityMonitor monitor, ClientFeature feature, ImmutableConfigurationSection section )
+    bool TrySetOptions( IActivityMonitor monitor, ILocalParty local, ClientFeature feature, ImmutableConfigurationSection section )
     {
         if( _optionDirectory == null ) return true;
-        if( !_optionDirectory.TryCreate( monitor, feature.GetType(), section, _services, out var options ) ) return false;
+        if( !_optionDirectory.TryCreate( monitor, feature.GetType(), section, _services, out var options, o => o.FindMissingFeature( _services, local ) ) ) return false;
         feature.Options = options;
         return true;
     }

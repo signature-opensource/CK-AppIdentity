@@ -60,12 +60,14 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// <param name="ownerSection">The configuration section of the owner. Null when the owner has none.</param>
     /// <param name="selected">The selected options, in their order.</param>
     /// <returns>True on success, false on error (errors are logged).</returns>
+    /// <param name="findMissingRequirement">Optional: see <see cref="PartyComponentOptionInfo.FindMissingFeature"/>.</param>
     public bool TrySelect( IActivityMonitor monitor,
                            Type ownerType,
                            ImmutableConfigurationSection? ownerSection,
-                           out IReadOnlyList<SelectedConfigurationOption<PartyComponentOptionInfo>> selected )
+                           out IReadOnlyList<SelectedConfigurationOption<PartyComponentOptionInfo>> selected,
+                           Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null )
     {
-        return ConfigurationOptionSelector.TrySelect( monitor, GetOptions( ownerType ), ownerSection, out selected );
+        return ConfigurationOptionSelector.TrySelect( monitor, GetOptions( ownerType ), ownerSection, out selected, findMissingRequirement );
     }
 
     /// <summary>
@@ -79,13 +81,15 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// <param name="services">The owner's services.</param>
     /// <param name="created">The created options, in their order.</param>
     /// <returns>True on success, false on error (errors are logged).</returns>
+    /// <param name="findMissingRequirement">Optional: see <see cref="PartyComponentOptionInfo.FindMissingFeature"/>.</param>
     public bool TryCreate( IActivityMonitor monitor,
                            Type ownerType,
                            ImmutableConfigurationSection? ownerSection,
                            IServiceProvider services,
-                           out IReadOnlyList<object> created )
+                           out IReadOnlyList<object> created,
+                           Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null )
     {
-        return TryCreate( monitor, GetOptions( ownerType ), name => [ownerSection?.TryGetSection( name )], ownerSection?.Path, services, out created );
+        return TryCreate( monitor, GetOptions( ownerType ), name => [ownerSection?.TryGetSection( name )], ownerSection?.Path, services, out created, findMissingRequirement );
     }
 
     /// <summary>
@@ -101,19 +105,22 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// <param name="ownerPath">The configuration path of the owner (for the errors).</param>
     /// <param name="services">The owner's services.</param>
     /// <param name="created">The created options, in their order.</param>
+    /// <param name="findMissingRequirement">Optional: see <see cref="PartyComponentOptionInfo.FindMissingFeature"/>.</param>
     /// <returns>True on success, false on error (errors are logged).</returns>
     public static bool TryCreate( IActivityMonitor monitor,
                                   IReadOnlyList<PartyComponentOptionInfo> options,
                                   Func<string, IReadOnlyList<ImmutableConfigurationSection?>> findOptionLevels,
                                   string? ownerPath,
                                   IServiceProvider services,
-                                  out IReadOnlyList<object> created )
+                                  out IReadOnlyList<object> created,
+                                  Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null )
     {
         created = [];
         if( !ConfigurationOptionSelector.TrySelect( monitor,
                                                     options,
                                                     name => findOptionLevels( name ).FirstOrDefault( s => s != null ),
-                                                    out var selected ) )
+                                                    out var selected,
+                                                    findMissingRequirement ) )
         {
             return false;
         }

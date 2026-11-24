@@ -21,12 +21,17 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     /// <param name="requires">The options without which this one cannot be enabled (its non optional relations).</param>
     /// <param name="factory">Creates the option from the services of its owner and its configuration (its section, or its model when it has one).</param>
     /// <param name="model">The description of the option's configuration model (<c>[Configuration&lt;TModel&gt;]</c>), if any.</param>
+    /// <param name="requiredFeatures">
+    /// The feature drivers that this option requires (its non optional <c>[Requires]</c> to a party feature): it is
+    /// enabled only when their feature is allowed on the party of its owner.
+    /// </param>
     public PartyComponentOptionInfo( string name,
                                      Type optionType,
                                      TypeActivation activation,
                                      IReadOnlyList<string> requires,
                                      Func<IServiceProvider, object?, object> factory,
-                                     ConfigurationModelDescription? model = null )
+                                     ConfigurationModelDescription? model = null,
+                                     IReadOnlyList<Type>? requiredFeatures = null )
     {
         Name = name;
         OptionType = optionType;
@@ -34,6 +39,33 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
         Requires = requires;
         _factory = factory;
         Model = model;
+        RequiredFeatures = requiredFeatures ?? [];
+    }
+
+    /// <summary>
+    /// Gets the feature drivers that this option requires: it is enabled only when their feature is allowed on the party
+    /// of its owner (the "only with it" rule of <see cref="ConfigurationOptionSelector"/>).
+    /// </summary>
+    public IReadOnlyList<Type> RequiredFeatures { get; }
+
+    /// <summary>
+    /// Names the first required feature (see <see cref="RequiredFeatures"/>) that is not allowed on a party: for the
+    /// <c>findMissingRequirement</c> of <see cref="ConfigurationOptionSelector"/>.
+    /// </summary>
+    /// <param name="services">The services where the feature drivers are.</param>
+    /// <param name="party">The party of the owner of this option.</param>
+    /// <returns>Null when every required feature is allowed on the party, "the party feature 'Name'" otherwise.</returns>
+    public string? FindMissingFeature( IServiceProvider services, IParty party )
+    {
+        foreach( var t in RequiredFeatures )
+        {
+            if( services.GetService( t ) is not ApplicationIdentityFeatureDriver d )
+            {
+                return $"the party feature '{t.ToCSharpName()}' (not a service)";
+            }
+            if( !d.IsAllowedFeature( party ) ) return $"the party feature '{d.GetFeatureName( party )}'";
+        }
+        return null;
     }
 
     /// <summary>

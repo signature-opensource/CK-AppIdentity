@@ -68,9 +68,17 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
         foreach( var (owner, island) in islands )
         {
             scope.Append( "{ typeof(" ).Append( owner.ToGlobalTypeName() ).Append( "), new global::CK.AppIdentity.PartyComponentOptionInfo[] {" ).NewLine();
-            foreach( var (o, requires) in island )
+            foreach( var (o, requires, requiredTypes) in island )
             {
                 var t = o.Type.Type;
+                // A requirement outside the options of the owner: a party feature (a feature driver), allowed or not on
+                // the party of the owner at run time ("only with it").
+                var notFeature = requiredTypes.FirstOrDefault( r => r.IsAbstract || !typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( r ) );
+                if( notFeature != null )
+                {
+                    monitor.Error( $"The option '{o.Name}' ('{t.ToCSharpName()}') requires '{notFeature.ToCSharpName()}': outside the options of its owner, an option of a party component can require a party feature (a concrete feature driver) only." );
+                    return CSCodeGenerationResult.Failed;
+                }
                 // An option is a resource group, not a StObj type: its assembly may host no StObj type at all (an
                 // assembly of options only), it must be referenced by the generated code.
                 scope.Workspace.EnsureAssemblyReference( t );
@@ -110,7 +118,13 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
                          .Append( p.ParameterType.ToGlobalTypeName() ).Append( ">( sp )" );
                 }
                 scope.Append( ")" );
-                if( modelDescription != null ) scope.Append( ", " ).Append( modelDescription );
+                scope.Append( ", " ).Append( modelDescription ?? "null" );
+                if( requiredTypes.Count > 0 )
+                {
+                    scope.Append( ", new global::System.Type[] {" );
+                    foreach( var r in requiredTypes ) scope.Append( "typeof(" ).Append( r.ToGlobalTypeName() ).Append( ")," );
+                    scope.Append( "}" );
+                }
                 scope.Append( " )," ).NewLine();
             }
             scope.Append( "} }," ).NewLine();
