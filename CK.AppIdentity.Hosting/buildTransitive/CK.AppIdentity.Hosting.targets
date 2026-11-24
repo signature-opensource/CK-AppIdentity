@@ -10,8 +10,9 @@
     the parties in Development use "#Dev/Store": the closest folder above the project with a ".git" folder (a main
     checkout) or a ".git" file (a linked worktree, a submodule).
   -->
+  <!-- '.git/HEAD' and not '.git\HEAD': this function does not translate the separator, a '\' finds nothing on Linux. -->
   <PropertyGroup Condition=" '$(CKAppIdentityDevFolder)' != 'false' ">
-    <_CKAppIdentityGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git\HEAD'))</_CKAppIdentityGitFolderRoot>
+    <_CKAppIdentityGitFolderRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git/HEAD'))</_CKAppIdentityGitFolderRoot>
     <_CKAppIdentityGitFileRoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.git'))</_CKAppIdentityGitFileRoot>
     <_CKAppIdentityDevRoot>$(_CKAppIdentityGitFolderRoot)</_CKAppIdentityDevRoot>
     <!-- The closest one: a worktree or a submodule inside a main checkout. -->
@@ -23,6 +24,8 @@
       <_CKAppIdentityIsParty>$(CKAppIdentityParty)</_CKAppIdentityIsParty>
       <_CKAppIdentityDevFolder>$(_CKAppIdentityDevRoot)\#Dev</_CKAppIdentityDevFolder>
       <_CKAppIdentityAppHost Condition="Exists('$(TargetDir)$(AssemblyName).exe')">$(TargetDir)$(AssemblyName).exe</_CKAppIdentityAppHost>
+      <!-- Outside Windows the executable has no extension. -->
+      <_CKAppIdentityAppHost Condition=" '$(_CKAppIdentityAppHost)' == '' And !$([MSBuild]::IsOSPlatform('Windows')) And Exists('$(TargetDir)$(AssemblyName)') ">$(TargetDir)$(AssemblyName)</_CKAppIdentityAppHost>
       <!-- The paths are written with '/': the JSON needs no escaping. -->
       <_CKAppIdentityJsonProjectPath>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\','/'))</_CKAppIdentityJsonProjectPath>
       <_CKAppIdentityJsonDll>$([System.String]::Copy('$(TargetPath)').Replace('\','/'))</_CKAppIdentityJsonDll>
