@@ -9,7 +9,7 @@
 
     <ItemGroup>
         <PackageReference Include="CK.AppBuilder.Abstractions" Version="32.0.0-0.uc.2.ci.34" />
-        <PackageReference Include="CK.Configuration" Version="3.0.0-0.uc.1.ci.23" />
+        <PackageReference Include="CK.Configuration" Version="3.0.0-0.uc.1.ci.24" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
     </ItemGroup>
 
