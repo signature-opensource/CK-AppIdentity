@@ -28,7 +28,7 @@ Features.
 
 ![FeatureDriver](../docs/FeatureDriver.png)
 
-A driver declares its feature with its [`PartyFeatureAttribute`](PartyFeatureAttribute.cs): its name and its activation,
+A driver declares its feature with its [`PartyFeatureAttribute`](https://github.com/signature-opensource/CK-Abstractions/blob/stable/CK.AppBuilder.Abstractions/Party/PartyFeatureAttribute.cs): its name and its activation,
 explicitly (the attribute is not inherited, a driver without it is an error of the engine). A Feature can be opt-in
 (`TypeActivation.Optional`: a party has it only when it declares it), opt-out (`TypeActivation.ByDefault`: a party has it
 unless it turns it off) or always there (`TypeActivation.Required`).

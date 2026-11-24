@@ -12,14 +12,10 @@ namespace CK.AppIdentity;
 /// key has a set of values. A fact without value is its key with the empty value ("Admin"); a fact with a value states
 /// it ("Enlistment" = "app-identity/enlist"). Combining facts is a union: associative, commutative and idempotent. Each
 /// consumer decides what it accepts (the transport, for instance, expects exactly one value for "Enlistment").
+/// The rules of a key and a value are the ones of <see cref="PartyClientFactAttribute"/>.
 /// </summary>
 public sealed class ClientApplicationFacts : IEquatable<ClientApplicationFacts>
 {
-    /// <summary>
-    /// The maximal length of a value.
-    /// </summary>
-    public const int MaxValueLength = 256;
-
     /// <summary>
     /// No fact.
     /// </summary>
@@ -65,14 +61,14 @@ public sealed class ClientApplicationFacts : IEquatable<ClientApplicationFacts>
         var sets = new SortedDictionary<string, SortedSet<string>>( StringComparer.Ordinal );
         foreach( var (key, value) in facts )
         {
-            if( !IsValidKey( key ) )
+            if( !PartyClientFactAttribute.IsValidKey( key ) )
             {
                 error = $"Invalid fact key '{key}': a non empty name without whitespace, '=' nor ',' is expected.";
                 return false;
             }
-            if( !IsValidValue( value ) )
+            if( !PartyClientFactAttribute.IsValidValue( value ) )
             {
-                error = $"Invalid value of the fact '{key}': a string of at most {MaxValueLength} characters without control character is expected.";
+                error = $"Invalid value of the fact '{key}': a string of at most {PartyClientFactAttribute.MaxValueLength} characters without control character is expected.";
                 return false;
             }
             if( !sets.TryGetValue( key, out var set ) ) sets.Add( key, set = new SortedSet<string>( StringComparer.Ordinal ) );
@@ -84,24 +80,6 @@ public sealed class ClientApplicationFacts : IEquatable<ClientApplicationFacts>
                     : new ClientApplicationFacts( sets.ToImmutableSortedDictionary( kv => kv.Key, kv => kv.Value.ToImmutableArray(), StringComparer.Ordinal ) );
         return true;
     }
-
-    /// <summary>
-    /// Gets whether a string is a valid key: a non empty name without whitespace, '=' nor ','.
-    /// </summary>
-    /// <param name="key">The key.</param>
-    /// <returns>True when valid.</returns>
-    public static bool IsValidKey( [NotNullWhen( true )] string? key ) => !string.IsNullOrEmpty( key )
-                                                                          && !key.Any( c => char.IsWhiteSpace( c ) || char.IsControl( c ) || c == '=' || c == ',' );
-
-    /// <summary>
-    /// Gets whether a string is a valid value: at most <see cref="MaxValueLength"/> characters without control character
-    /// (the empty string is the value of a fact without value).
-    /// </summary>
-    /// <param name="value">The value.</param>
-    /// <returns>True when valid.</returns>
-    public static bool IsValidValue( [NotNullWhen( true )] string? value ) => value != null
-                                                                              && value.Length <= MaxValueLength
-                                                                              && !value.Any( char.IsControl );
 
     /// <summary>
     /// Gets the values of each key, sorted (the keys and their values, in ordinal order).

@@ -14,7 +14,7 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
 - **A package brings a client feature:** a class that specializes [`ClientFeature`](ClientFeature.cs), and its driver, a
   [`ClientFeatureDriver<T>`](IClientFeatureDriver.cs) (an `[IsMultiple]` auto service) that creates the feature of a
   client from its configuration. A client feature declares its name and its activation:
-  `[PartyClientFeature( "NgApp", TypeActivation.Optional )]` ([`PartyClientFeatureAttribute`](PartyClientFeatureAttribute.cs),
+  `[PartyClientFeature( "NgApp", TypeActivation.Optional )]` ([`PartyClientFeatureAttribute`](https://github.com/signature-opensource/CK-Abstractions/blob/stable/CK.AppBuilder.Abstractions/PartyClient/PartyClientFeatureAttribute.cs),
   not inherited: each concrete client feature declares its own). The engine reads it into the `PartyComponentDirectory`
   (`ClientFeature.Name`); the names are unique among the client features. A client has an `Optional` feature when it
   declares it (`true` or its section), a `ByDefault` one unless it says `false`, a `Required` one always (`false` is an
@@ -75,7 +75,7 @@ The declarations are read on the party only: a "Defaults" section doesn't declar
 ## The options of a client feature
 
 A package can add an option to a client feature: a class decorated with `[PartyClientFeatureOption( "Name", TypeActivation.X )]`
-([`PartyClientFeatureOptionAttribute`](PartyClientFeatureOptionAttribute.cs)) that implements `IPartyComponentOption<TFeature>`. It
+([`PartyClientFeatureOptionAttribute`](https://github.com/signature-opensource/CK-Abstractions/blob/stable/CK.AppBuilder.Abstractions/PartyClient/PartyClientFeatureOptionAttribute.cs)) that implements `IPartyComponentOption<TFeature>`. It
 applies to `TFeature` and to the features derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 
@@ -102,7 +102,7 @@ client that its party doesn't serve (no request path) is not announced.
 ## The facts of a client
 
 A type that a client is built from states facts about it with
-[`[PartyClientFact( key, value )]`](PartyClientFactAttribute.cs) (repeatable, not inherited, the value is optional): a
+[`[PartyClientFact( key, value )]`](https://github.com/signature-opensource/CK-Abstractions/blob/stable/CK.AppBuilder.Abstractions/PartyClient/PartyClientFactAttribute.cs) (repeatable, not inherited, the value is optional): a
 TypeScript package that is an approval page states `[PartyClientFact( "Enlistment", "app-identity/enlist" )]` (the path of
 the page), an administration application `[PartyClientFact( "Admin" )]`. The engine that builds a client unions the facts
 of the types the client is built from, once per build (the TypeScript engine does it for the client applications, from

@@ -18,7 +18,7 @@ namespace CK.AppIdentity;
 /// A client feature is a party component: it owns options (<see cref="PartyClientFeatureOptionAttribute"/>).
 /// </para>
 /// </summary>
-public abstract class ClientFeature : IPartyComponent
+public abstract class ClientFeature : IPartyClientFeature
 {
     /// <summary>
     /// Initializes a new client feature.
