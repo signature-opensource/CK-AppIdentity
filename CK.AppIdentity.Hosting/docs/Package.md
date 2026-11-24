@@ -1,3 +1,5 @@
-One extension method, AddApplicationIdentityServiceConfiguration on the HostApplicationBuilder of a host, that wires the application identity
-into a host: it reads the "CK-AppIdentity" configuration section, registers the resulting ApplicationIdentityServiceConfiguration
-as a singleton, and initializes CK.Core.CoreApplicationIdentity from it.
+Wires the application identity into a host: `AddApplicationIdentityServiceConfiguration` reads the "CK-AppIdentity"
+configuration section of a `HostApplicationBuilder`.
+
+It registers the resulting `ApplicationIdentityServiceConfiguration` as a singleton, and initializes
+`CK.Core.CoreApplicationIdentity` from it.
