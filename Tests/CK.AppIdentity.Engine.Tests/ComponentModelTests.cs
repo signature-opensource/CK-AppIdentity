@@ -7,7 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using Shouldly;
+using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using static CK.Testing.MonitorTestHelper;
@@ -113,18 +115,29 @@ namespace CK.AppIdentity.Engine.Tests
             return _map;
         }
 
-        static async Task<(AutomaticServices Services, ApplicationIdentityService Party)> StartAsync( Action<MutableConfigurationSection> configure )
+        static Task<(AutomaticServices Services, ApplicationIdentityService Party)> StartAsync( Action<MutableConfigurationSection> configure )
+        {
+            return StartAsync( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+            {
+                c["StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "ComponentModelStore" );
+                c["FullName"] = "Test/$ModelHost";
+                configure( c );
+            } ).ShouldNotBeNull() );
+        }
+
+        // The configuration of a host (Microsoft's providers): a key can have a value and children.
+        static Task<(AutomaticServices Services, ApplicationIdentityService Party)> StartAsync( Dictionary<string, string?> keys )
+        {
+            keys["CK-AppIdentity:StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "ComponentModelStore" );
+            keys["CK-AppIdentity:FullName"] = "Test/$ModelHost";
+            var section = new ConfigurationBuilder().AddInMemoryCollection( keys ).Build().GetSection( "CK-AppIdentity" );
+            return StartAsync( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, section ).ShouldNotBeNull() );
+        }
+
+        static async Task<(AutomaticServices Services, ApplicationIdentityService Party)> StartAsync( ApplicationIdentityServiceConfiguration configuration )
         {
             var map = await GetMapAsync();
-            var services = map.CreateAutomaticServices( services =>
-            {
-                services.AddSingleton( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
-                {
-                    c["StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "ComponentModelStore" );
-                    c["FullName"] = "Test/$ModelHost";
-                    configure( c );
-                } ).ShouldNotBeNull() );
-            } );
+            var services = map.CreateAutomaticServices( services => services.AddSingleton( configuration ) );
             var party = services.Services.GetRequiredService<ApplicationIdentityService>();
             await ((IHostedService)party).StartAsync( default );
             await party.InitializationTask;
@@ -172,6 +185,26 @@ namespace CK.AppIdentity.Engine.Tests
                 model.Count.ShouldBe( 4 );
                 driver.GetModel<ModeledFeatureConfiguration>( party ).ShouldBeSameAs( model );
                 driver.GetOption<ExtraOption>( party ).ShouldNotBeNull();
+                await ((IHostedService)party).StopAsync( default );
+            }
+        }
+
+        [Test]
+        public async Task a_section_with_a_value_and_keys_is_read_Async()
+        {
+            // An IConfiguration key can have a value and children: "true" with keys is a section.
+            var (services, party) = await StartAsync( new Dictionary<string, string?>
+            {
+                ["CK-AppIdentity:Local:ModeledFeature"] = "true",
+                ["CK-AppIdentity:Local:ModeledFeature:Name"] = "WithKeys",
+                ["CK-AppIdentity:Local:PartyClient:A:ModeledClient"] = "true",
+                ["CK-AppIdentity:Local:PartyClient:A:ModeledClient:Width"] = "640"
+            } );
+            await using( services )
+            {
+                services.Services.GetRequiredService<ModeledFeatureDriver>().SetupModel.ShouldNotBeNull().Name.ShouldBe( "WithKeys" );
+                party.GetRequiredFeature<PartyClientFeature>().Find( "A" ).ShouldNotBeNull()
+                     .GetFeature<ModeledClientFeature>().ShouldNotBeNull().Model.Width.ShouldBe( 640 );
                 await ((IHostedService)party).StopAsync( default );
             }
         }

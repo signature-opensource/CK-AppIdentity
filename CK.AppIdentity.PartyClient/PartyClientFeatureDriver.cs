@@ -214,13 +214,14 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         declared.Sort( ( a, b ) => _componentDirectory.IndexOf( a.Driver.FeatureType ).CompareTo( _componentDirectory.IndexOf( b.Driver.FeatureType ) ) );
         foreach( var (driver, section) in declared )
         {
-            // The configuration model of the feature: read from its section (a bare true has none), its options reserved.
+            // The configuration model of the feature: read from its section (a bare true without keys has none), its options
+            // reserved.
             object? model = null;
             if( _componentDirectory.Find( driver.FeatureType )!.Model is { } description )
             {
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
                 var reserved = _optionDirectory?.GetOptions( driver.FeatureType ).Select( o => o.Name ) ?? [];
-                model = ConfigurationModelReader.TryRead( description, [section.Value == null ? section : null], section.Path, collector, reserved );
+                model = ConfigurationModelReader.TryRead( description, [section.Value == null || section.GetChildren().Any() ? section : null], section.Path, collector, reserved );
                 collector.DumpLogs( monitor );
                 if( model == null )
                 {
