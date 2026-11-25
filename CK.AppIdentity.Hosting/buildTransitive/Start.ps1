@@ -185,7 +185,8 @@ try {
     foreach( $party in $parties ) {
         # Each party runs in its own console window (its logs), from its project folder (its appsettings.json).
         $instance = Get-Property $party 'Instance'
-        $instanceArgs = if( $instance ) { @( "--Instance=$instance" ) } else { @() }
+        # Always an array: in Windows PowerShell, "if" returning an empty @() gives $null (".Count" throws in strict mode).
+        $instanceArgs = @( if( $instance ) { "--Instance=$instance" } )
         if( $party.Executable -and (Test-Path $party.Executable) ) {
             if( $instanceArgs.Count -gt 0 ) {
                 $p = Start-Process -FilePath $party.Executable -ArgumentList $instanceArgs -WorkingDirectory $party.ProjectPath -PassThru

@@ -99,6 +99,40 @@ public class DevFolderTargetsTests
     }
 
     [Test]
+    [CancelAfter( 180000 )]
+    public async Task Start_ps1_starts_a_party_that_is_not_a_fleet_with_Windows_PowerShell_Async()
+    {
+        if( !OperatingSystem.IsWindows() ) Assert.Ignore( "Windows PowerShell (5.1) is the shell of a double-clicked script on Windows." );
+        var root = CreateRoot();
+        try
+        {
+            CreateGitFolder( root );
+            CreateProject( root, "Party.Host" );
+            await BuildAsync( root.AppendPart( "Party.Host" ) );
+            // The party exits at once ("return 0;"): the script starts it, then reports that it stopped. Under its
+            // Set-StrictMode, the arguments of a party without instance must not be $null (".Count" would throw).
+            var info = new ProcessStartInfo( "powershell", $"-NoProfile -ExecutionPolicy Bypass -File \"{root.Combine( "#Dev/Start.ps1" ).Path}\" -SkipBuild -NoBrowser -Timeout 20" )
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false
+            };
+            using var p = Process.Start( info ).ShouldNotBeNull();
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            await p.WaitForExitAsync();
+            var output = await stdout + await stderr;
+            output.ShouldNotContain( "Count", customMessage: output );
+            output.ShouldContain( "Party.Host stopped", customMessage: output );
+        }
+        finally
+        {
+            TestHelper.CleanupFolder( root, ensureFolderAvailable: false );
+        }
+    }
+
+    [Test]
     [CancelAfter( 120000 )]
     public async Task in_a_submodule_or_a_linked_worktree_the_Dev_folder_is_in_it_Async()
     {
