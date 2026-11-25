@@ -262,6 +262,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// feature's section of the party key by key along its levels (the party, then the "Defaults" above it), the names of
     /// its options reserved. It is read before this driver sets the party up (with its options): an invalid section fails
     /// the setup (every error is logged), a party without section gets the defaults of the model.
+    /// <para>
+    /// The model of an asymmetric feature is the one of its side: the Local side has the model of the local parties that
+    /// declare "XXX", the Remote side the model of the remotes that declare "XXXRemote".
+    /// </para>
     /// </summary>
     /// <typeparam name="TModel">The model type.</typeparam>
     /// <param name="party">A party on which this feature is allowed.</param>
@@ -282,6 +286,10 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <returns>The option, null when it is not enabled.</returns>
     public T? GetOption<T>( IParty party ) where T : class => GetOptions( party ).OfType<T>().FirstOrDefault();
 
+    // The model of an asymmetric feature is the one of its side: the Local side reads the "XXX" section of the local
+    // parties, the Remote side the "XXXRemote" section of the remotes.
+    bool IsModelSide( IParty p ) => _asymmetric == null || (p is ILocalParty) == (_asymmetric.Local == this);
+
     // Reads the model and creates the options of the parties on which this feature is allowed (once per party), before
     // the driver's setup. The option of a feature is looked up in the party's own keys, then in the "Defaults" above it
     // (the nearest wins; a configuration model is read key by key along them).
@@ -294,7 +302,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         {
             foreach( var p in parties )
             {
-                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
+                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) || !IsModelSide( p ) ) continue;
                 var c = GetConfiguration( p );
                 var key = GetFeatureName( p );
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );

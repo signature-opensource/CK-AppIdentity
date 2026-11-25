@@ -204,7 +204,9 @@ The model is read before the driver sets the party up (with its options), from t
 the levels** (the party's section, then the one of each "Defaults" above it: `ApplicationIdentityConfiguration.GetFeatureLevels`),
 the names of the options of the feature reserved (an option is a key of its owner's section). The model is closed: an
 unknown key, a missing required one or an invalid value is an error (all of them are logged) and the setup fails; a
-party without section gets the defaults of the model. The engine generates the description of the model
+party without section gets the defaults of the model. The model of an asymmetric feature is the one of its side: the
+Local side has the model of the local parties ("XXX"), the Remote side the one of the remotes ("XXXRemote"). The engine
+generates the description of the model
 (`PartyComponentInfo.Model`, CK.ConfigurationModel.Engine): no reflection at run time; the model must be public.
 
 __Important:__ There is no namespace or other partitioning of names/keys: drivers who don't know each other can perfectly well use

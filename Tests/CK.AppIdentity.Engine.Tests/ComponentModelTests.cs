@@ -56,6 +56,39 @@ namespace CK.AppIdentity.Engine.Tests.Modeled
     {
     }
 
+    /// <summary>
+    /// The two sides of an asymmetric feature: only the Local side has a model (the "AsymRemote" key of a remote is the
+    /// Remote side's).
+    /// </summary>
+    [PartyFeature( "Asym", TypeActivation.Optional, Side = FeatureSide.Local )]
+    [Configuration<ModeledFeatureConfiguration>]
+    public sealed class AsymLocalDriver : ApplicationIdentityFeatureDriver
+    {
+        public AsymLocalDriver( ApplicationIdentityService s ) : base( s ) { }
+
+        protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+
+        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
+
+        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+
+        protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+    }
+
+    [PartyFeature( "Asym", TypeActivation.Optional, Side = FeatureSide.Remote )]
+    public sealed class AsymRemoteDriver : ApplicationIdentityFeatureDriver
+    {
+        public AsymRemoteDriver( ApplicationIdentityService s ) : base( s ) { }
+
+        protected override Task<bool> SetupAsync( FeatureLifetimeContext context ) => Task.FromResult( true );
+
+        protected override Task<bool> SetupDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.FromResult( true );
+
+        protected override Task TeardownDynamicRemoteAsync( FeatureLifetimeContext context, IOwnedParty party ) => Task.CompletedTask;
+
+        protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
+    }
+
     [ConfigurationModel]
     public sealed class ModeledClientConfiguration
     {
@@ -109,7 +142,9 @@ namespace CK.AppIdentity.Engine.Tests
                                                       typeof( ModeledFeatureDriver ),
                                                       typeof( ExtraOption ),
                                                       typeof( ModeledClientFeature ),
-                                                      typeof( ModeledClientFeatureDriver ) );
+                                                      typeof( ModeledClientFeatureDriver ),
+                                                      typeof( AsymLocalDriver ),
+                                                      typeof( AsymRemoteDriver ) );
                 _map = (await configuration.RunSuccessfullyAsync()).LoadMap();
             }
             return _map;
@@ -205,6 +240,25 @@ namespace CK.AppIdentity.Engine.Tests
                 services.Services.GetRequiredService<ModeledFeatureDriver>().SetupModel.ShouldNotBeNull().Name.ShouldBe( "WithKeys" );
                 party.GetRequiredFeature<PartyClientFeature>().Find( "A" ).ShouldNotBeNull()
                      .GetFeature<ModeledClientFeature>().ShouldNotBeNull().Model.Width.ShouldBe( 640 );
+                await ((IHostedService)party).StopAsync( default );
+            }
+        }
+
+        [Test]
+        public async Task the_Local_side_of_an_asymmetric_feature_reads_the_model_of_the_local_parties_Async()
+        {
+            // The "AsymRemote" key of a remote is the Remote side's: the Local side's model is not read from it.
+            var (services, party) = await StartAsync( c =>
+            {
+                c["Local:Asym:Name"] = "Local";
+                c["Parties:0:PartyName"] = "Other";
+                c["Parties:0:AsymRemote:Hint"] = "for the Remote side";
+            } );
+            await using( services )
+            {
+                var driver = services.Services.GetRequiredService<AsymLocalDriver>();
+                driver.GetModel<ModeledFeatureConfiguration>( party ).Name.ShouldBe( "Local" );
+                Should.Throw<InvalidOperationException>( () => driver.GetModel<ModeledFeatureConfiguration>( party.Remotes.Single() ) );
                 await ((IHostedService)party).StopAsync( default );
             }
         }
