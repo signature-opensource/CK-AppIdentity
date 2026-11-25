@@ -20,7 +20,7 @@ public class DevFolderTargetsTests
 {
     static NormalizedPath TargetsPath => TestHelper.SolutionFolder.Combine( "CK.AppIdentity.Hosting/buildTransitive/CK.AppIdentity.Hosting.targets" );
 
-    static void CreateProject( NormalizedPath folder, string name, string? partyProperty = "true", string? devFolderProperty = null )
+    static void CreateProject( NormalizedPath folder, string name, string? partyProperty = "true", string? devFolderProperty = null, string program = "return 0;" )
     {
         var project = folder.AppendPart( name );
         Directory.CreateDirectory( project );
@@ -35,7 +35,7 @@ public class DevFolderTargetsTests
               <Import Project="{TargetsPath.Path}" />
             </Project>
             """ );
-        File.WriteAllText( project.AppendPart( "Program.cs" ), "return 0;" );
+        File.WriteAllText( project.AppendPart( "Program.cs" ), program );
     }
 
     static async Task BuildAsync( NormalizedPath project )
@@ -125,6 +125,59 @@ public class DevFolderTargetsTests
             var output = await stdout + await stderr;
             output.ShouldNotContain( "Count", customMessage: output );
             output.ShouldContain( "Party.Host stopped", customMessage: output );
+        }
+        finally
+        {
+            TestHelper.CleanupFolder( root, ensureFolderAvailable: false );
+        }
+    }
+
+    // A party that says it is ready (its "DevRunningStatus.json" in "#Dev/Store", as the DevRunningStatus feature writes
+    // it), its client application served at '/' on an in process endpoint (its window shows it), then waits.
+    const string _inProcessParty = """"
+        using System.Diagnostics;
+        using System.IO;
+        using System.Threading;
+        var p = Process.GetCurrentProcess();
+        var root = Directory.GetCurrentDirectory();
+        var store = Path.Combine( root, "..", "#Dev", "Store", "Party" );
+        Directory.CreateDirectory( store );
+        File.WriteAllText( Path.Combine( store, "DevRunningStatus.json" ),
+            $$$"""
+            { "ProcessId": {{{p.Id}}}, "ProcessStartTime": "{{{p.StartTime.ToUniversalTime():O}}}", "ContentRootPath": "{{{root.Replace( '\\', '/' )}}}",
+              "Ready": true, "FullName": "Test/$Party/#Dev", "Http": { "DefaultUrl": "app://localhost" },
+              "Clients": [ { "Name": "App", "RequestPath": "/", "Serving": true } ] }
+            """ );
+        Thread.Sleep( 120000 );
+        """";
+
+    [Test]
+    [CancelAfter( 180000 )]
+    public async Task Start_ps1_opens_no_browser_for_an_in_process_endpoint_Async()
+    {
+        if( !OperatingSystem.IsWindows() ) Assert.Ignore( "Windows PowerShell (5.1) is the shell of a double-clicked script on Windows." );
+        var root = CreateRoot();
+        try
+        {
+            CreateGitFolder( root );
+            CreateProject( root, "Party.Host", program: _inProcessParty );
+            await BuildAsync( root.AppendPart( "Party.Host" ) );
+            var info = new ProcessStartInfo( "powershell", $"-NoProfile -ExecutionPolicy Bypass -File \"{root.Combine( "#Dev/Start.ps1" ).Path}\" -SkipBuild -Timeout 30" )
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false
+            };
+            using var p = Process.Start( info ).ShouldNotBeNull();
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            // "Press Enter to stop the parties.": the stopped input ends the wait.
+            p.StandardInput.Close();
+            await p.WaitForExitAsync();
+            var output = await stdout + await stderr;
+            output.ShouldContain( "Party.Host (Test/$Party/#Dev) is ready.", customMessage: output );
+            output.ShouldContain( "app://localhost/ is shown by the window of its party: no browser.", customMessage: output );
         }
         finally
         {

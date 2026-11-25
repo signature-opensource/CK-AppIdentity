@@ -17,7 +17,8 @@
        until its client applications are served. A client application whose dev server failed (its "Error") stops the
        wait: its error is printed.
     5. Prints the parties and their URLs, and what an operator must do for them (the "Pending" messages of the sections
-       of their "DevRunningStatus.json": an approval, for instance), opens the browser on the default client application.
+       of their "DevRunningStatus.json": an approval, for instance), opens the browser on the default client application
+       when it is served on http or https (an in process endpoint, "app://...", is shown by the window of its party).
     6. Press Enter: the parties are stopped like Ctrl+C in their window (they stop the dev servers they started); a
        party that doesn't exit in time is killed with its process tree.
 
@@ -276,7 +277,12 @@ try {
         Write-Step 'Waiting for an operator'
         foreach( $m in $pendingMessages ) { Write-Host $m -ForegroundColor Cyan }
     }
-    if( -not $NoBrowser -and $browserUrl ) { Start-Process $browserUrl }
+    if( -not $NoBrowser -and $browserUrl ) {
+        # Only a browser opens http or https: an in process endpoint ("app://localhost") is shown by the window of its
+        # party (Windows would ask which application opens the "app" scheme).
+        if( $browserUrl -match '^https?://' ) { Start-Process $browserUrl }
+        else { Write-Host "$browserUrl is shown by the window of its party: no browser." }
+    }
     Write-Host "`nPress Enter to stop the parties." -ForegroundColor Yellow
     [Console]::ReadLine() | Out-Null
 }
