@@ -136,12 +136,25 @@ public static class PartyComponentAnalysis
         if( !success ) return null;
         var ordered = Sort( monitor, components, requires, abstractions );
         if( ordered == null ) return null;
-        var infos = ordered.Select( t => new PartyComponentInfo( t,
-                                                                 requires[t],
-                                                                 abstractions[t],
-                                                                 names[t].Name,
-                                                                 names[t].Activation,
-                                                                 names[t].Side ) ).ToList();
+        // The configuration model of a component ([Configuration<TModel>]): described by reflection (the engine
+        // generates its description for the run time).
+        var infos = new List<PartyComponentInfo>();
+        foreach( var t in ordered )
+        {
+            var modelType = t.GetCustomAttributes( inherit: false )
+                             .Select( a => a.GetType() )
+                             .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
+                             ?.GetGenericArguments()[0];
+            ConfigurationModelDescription? model = null;
+            if( modelType != null && !ConfigurationModelDescription.TryGet( modelType, out model, out var modelError ) )
+            {
+                monitor.Error( $"Invalid configuration model of the party component '{t.ToCSharpName()}'. {modelError}" );
+                success = false;
+                continue;
+            }
+            infos.Add( new PartyComponentInfo( t, requires[t], abstractions[t], names[t].Name, names[t].Activation, names[t].Side, model ) );
+        }
+        if( !success ) return null;
         return new Result( infos, multiple );
 
         static bool IsAbstraction( Type i ) => i.IsInterface && i != typeof( IPartyComponentAbstraction ) && typeof( IPartyComponentAbstraction ).IsAssignableFrom( i );

@@ -202,6 +202,17 @@ namespace CK.AppIdentity.Engine.Tests
         }
 
         [Test]
+        public void the_analysis_of_the_components_describes_their_model()
+        {
+            // The analysis (used by the engine and by the test helpers of CK.Testing.AppIdentity) has the model.
+            var cache = new CK.TypeCache.GlobalTypeCache();
+            var result = PartyComponentAnalysis.Analyze( TestHelper.Monitor, [cache.Get( typeof( ModeledFeatureDriver ) ), cache.Get( typeof( ModeledClientFeature ) )] )
+                                               .ShouldNotBeNull();
+            result.Components.Single( c => c.ComponentType == typeof( ModeledFeatureDriver ) ).Model.ShouldNotBeNull().ModelType.ShouldBe( typeof( ModeledFeatureConfiguration ) );
+            result.Components.Single( c => c.ComponentType == typeof( ModeledClientFeature ) ).Model.ShouldNotBeNull().ModelType.ShouldBe( typeof( ModeledClientConfiguration ) );
+        }
+
+        [Test]
         public async Task the_model_of_a_feature_is_read_key_by_key_along_the_levels_Async()
         {
             var (services, party) = await StartAsync( c =>

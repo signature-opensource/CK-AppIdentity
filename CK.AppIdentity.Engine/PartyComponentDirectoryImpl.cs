@@ -31,10 +31,8 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
         var models = new ConfigurationModelCodeWriter( scope );
         foreach( var i in result.Components )
         {
-            var modelType = i.ComponentType.GetCustomAttributes( inherit: false )
-                             .Select( a => a.GetType() )
-                             .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
-                             ?.GetGenericArguments()[0];
+            // The model is the one of the analysis: its description is generated.
+            var modelType = i.Model?.ModelType;
             string? modelDescription = null;
             if( modelType != null && !models.TryGetDescription( monitor, modelType, out modelDescription ) )
             {
