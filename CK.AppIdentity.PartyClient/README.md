@@ -72,6 +72,14 @@ The rules fail closed:
 
 The declarations are read on the party only: a "Defaults" section doesn't declare clients.
 
+## A client feature with a configuration model
+
+A client feature may declare its configuration model (`[Configuration<TModel>]` on the feature type): its driver
+specializes `ClientFeatureDriver<T, TModel>` and creates the feature from the model. `PartyClientFeatureDriver` reads it
+from the feature's section (a bare `true` is the defaults of the model), the names of the options of the feature
+reserved: an unknown key, a missing required one or an invalid value is an error before the driver is called. A driver
+without model specializes `ClientFeatureDriver<T>` and reads its section itself.
+
 ## The options of a client feature
 
 A package can add an option to a client feature: a class decorated with `[PartyClientFeatureOption( "Name", TypeActivation.X )]`

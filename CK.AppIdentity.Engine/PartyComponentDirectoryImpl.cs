@@ -27,15 +27,28 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
 
         scope.Append( "public " ).Append( scope.Name )
              .Append( "() : base( new global::CK.AppIdentity.PartyComponentInfo[] {" ).NewLine();
+        // The models of the components ([Configuration<TModel>]): their description, generated (no reflection at run time).
+        var models = new ConfigurationModelCodeWriter( scope );
         foreach( var i in result.Components )
         {
+            var modelType = i.ComponentType.GetCustomAttributes( inherit: false )
+                             .Select( a => a.GetType() )
+                             .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
+                             ?.GetGenericArguments()[0];
+            string? modelDescription = null;
+            if( modelType != null && !models.TryGetDescription( monitor, modelType, out modelDescription ) )
+            {
+                monitor.Error( $"Invalid configuration model of the party component '{i.ComponentType.ToCSharpName()}'." );
+                return CSCodeGenerationResult.Failed;
+            }
             scope.Append( "new global::CK.AppIdentity.PartyComponentInfo( typeof(" ).Append( i.ComponentType.ToGlobalTypeName() ).Append( "), new global::System.Type[] {" );
             foreach( var r in i.Requires ) scope.Append( "typeof(" ).Append( r.ToGlobalTypeName() ).Append( ")," );
             scope.Append( "}, new global::System.Type[] {" );
             foreach( var a in i.Abstractions ) scope.Append( "typeof(" ).Append( a.ToGlobalTypeName() ).Append( ")," );
             scope.Append( "}, " ).AppendSourceString( i.FeatureName )
                  .Append( ", global::CK.Core.TypeActivation." ).Append( i.Activation.ToString() )
-                 .Append( ", global::CK.AppIdentity.FeatureSide." ).Append( i.Side.ToString() ).Append( " )," ).NewLine();
+                 .Append( ", global::CK.AppIdentity.FeatureSide." ).Append( i.Side.ToString() )
+                 .Append( ", " ).Append( modelDescription ?? "null" ).Append( " )," ).NewLine();
         }
         scope.Append( "}, new global::System.Collections.Generic.HashSet<global::System.Type>() {" );
         foreach( var m in result.MultipleAbstractions.OrderBy( m => m.FullName, StringComparer.Ordinal ) ) scope.Append( "typeof(" ).Append( m.ToGlobalTypeName() ).Append( ")," );

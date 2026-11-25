@@ -18,13 +18,16 @@ public sealed class PartyComponentInfo
     /// <param name="featureName">The name of the feature of this component (a feature driver, a client feature).</param>
     /// <param name="activation">The activation of this component.</param>
     /// <param name="side">The side of an asymmetric feature.</param>
+    /// <param name="model">The description of the configuration model of the component (its <c>[Configuration&lt;TModel&gt;]</c>), if any.</param>
     public PartyComponentInfo( Type componentType,
                                IReadOnlyList<Type> requires,
                                IReadOnlyList<Type> abstractions,
                                string featureName,
                                TypeActivation activation,
-                               FeatureSide side )
+                               FeatureSide side,
+                               ConfigurationModelDescription? model = null )
     {
+        Model = model;
         ComponentType = componentType;
         Requires = requires;
         Abstractions = abstractions;
@@ -73,6 +76,13 @@ public sealed class PartyComponentInfo
     /// Gets the side of an asymmetric feature (see <see cref="PartyFeatureAttribute"/>).
     /// </summary>
     public FeatureSide Side { get; }
+
+    /// <summary>
+    /// Gets the description of the configuration model of this component (its <c>[Configuration&lt;TModel&gt;]</c>):
+    /// a feature driver reads the model of each party (<see cref="ApplicationIdentityFeatureDriver.GetModel{TModel}(IParty)"/>),
+    /// a client feature receives it from its driver. Null when the component reads its section itself.
+    /// </summary>
+    public ConfigurationModelDescription? Model { get; }
 
     /// <inheritdoc />
     public override string ToString() => ComponentType.Name;

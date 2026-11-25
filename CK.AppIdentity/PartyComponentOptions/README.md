@@ -62,7 +62,9 @@ An option may declare its configuration model (`[Configuration<TModel>]`, CK.Con
 the model instead of an `IConfiguration`. The model is read key by key along the levels of the party (its section in
 the feature's section of the party, then in each `"Defaults"` above it: `ApplicationIdentityConfiguration.GetFeatureSections`),
 validated, and its errors logged (an invalid model is an error: the option is not created). The engine generates the description of
-the model and its creation (CK.ConfigurationModel.Engine): no reflection at run time; the model must be public.
+the model and its creation (CK.ConfigurationModel.Engine): no reflection at run time; the model must be public. Its
+owner can have a model too ([a feature](../Features/README.md#a-feature-with-a-configuration-model), a client feature):
+the names of its options are reserved keys of the owner's model.
 
 ## The order and the requirements
 

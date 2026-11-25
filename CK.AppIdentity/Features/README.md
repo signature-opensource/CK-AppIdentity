@@ -196,6 +196,17 @@ value is resolved with the `TryResolveValue` / `TryResolveSection` extension met
 A setting that must be configured on each party (anything to do with security, for example) is read on the party only
 (`TryGetSection`).
 
+### A feature with a configuration model
+
+A feature driver may declare the configuration model of its feature (`[Configuration<TModel>]`, CK.ConfigurationModel):
+then it doesn't read its section, it gets the model of each party, `ApplicationIdentityFeatureDriver.GetModel<TModel>( party )`.
+The model is read before the driver sets the party up (with its options), from the feature's section **key by key along
+the levels** (the party's section, then the one of each "Defaults" above it: `ApplicationIdentityConfiguration.GetFeatureLevels`),
+the names of the options of the feature reserved (an option is a key of its owner's section). The model is closed: an
+unknown key, a missing required one or an invalid value is an error (all of them are logged) and the setup fails; a
+party without section gets the defaults of the model. The engine generates the description of the model
+(`PartyComponentInfo.Model`, CK.ConfigurationModel.Engine): no reflection at run time; the model must be public.
+
 __Important:__ There is no namespace or other partitioning of names/keys: drivers who don't know each other can perfectly well use
 common keys... or should but don't. We didn't consider this to be an issue at this stage, and even saw it as a
 strength of the system: the same configuration key can therefore impact several Features "naturally". 

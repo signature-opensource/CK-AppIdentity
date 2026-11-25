@@ -90,6 +90,24 @@ public class ApplicationIdentityConfiguration
     }
 
     /// <summary>
+    /// Gets the section of a feature at every level: the <c>{featureName}</c> section of the party, then of each "Defaults"
+    /// above it, the nearest first (null where a level has none, or declares it by a value: <c>true</c>). The configuration
+    /// model of the feature is read key by key along them.
+    /// </summary>
+    /// <param name="featureName">The feature name (its key).</param>
+    /// <returns>The sections, the nearest first.</returns>
+    public IReadOnlyList<ImmutableConfigurationSection?> GetFeatureLevels( string featureName )
+    {
+        var result = new ImmutableConfigurationSection?[_featureLevels.Length];
+        for( int i = 0; i < result.Length; i++ )
+        {
+            var s = _featureLevels[i].TryGetSection( featureName );
+            result[i] = s != null && s.Value == null ? s : null;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Gets the sections of the configuration of a feature (a setting or an option of the feature) at every level: the
     /// <c>{featureName}:{path}</c> section of the party, then of each "Defaults" above it, the nearest first (null where a
     /// level has none). A configuration model is read key by key along them.

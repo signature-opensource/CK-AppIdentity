@@ -1,4 +1,5 @@
 using CK.Core;
+using CK.Setup;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -22,6 +23,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly System.Type _componentType;
     // The options of each party (created before the setup of the party).
     readonly ConditionalWeakTable<IParty, IReadOnlyList<object>> _options;
+    readonly ConditionalWeakTable<IParty, object> _models;
+    readonly ConfigurationModelDescription? _model;
     // The drivers of an asymmetric feature share this (null for a symmetric feature).
     internal readonly AsymmetricDrivers? _asymmetric;
     // Set by ApplicationIdentityStaticFeatureDriver.
@@ -85,6 +88,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         _asymmetric = asymmetric;
         _componentType = info.ComponentType;
         _options = new ConditionalWeakTable<IParty, IReadOnlyList<object>>();
+        _models = new ConditionalWeakTable<IParty, object>();
+        _model = info.Model;
         _isAllowedByDefault = !info.IsOptional;
         _activation = info.Activation;
         _featureName = name;
@@ -253,6 +258,23 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     }
 
     /// <summary>
+    /// Gets the configuration model of this feature for a party: its <c>[Configuration&lt;TModel&gt;]</c>, read from the
+    /// feature's section of the party key by key along its levels (the party, then the "Defaults" above it), the names of
+    /// its options reserved. It is read before this driver sets the party up (with its options): an invalid section fails
+    /// the setup (every error is logged), a party without section gets the defaults of the model.
+    /// </summary>
+    /// <typeparam name="TModel">The model type.</typeparam>
+    /// <param name="party">A party on which this feature is allowed.</param>
+    /// <returns>The model.</returns>
+    public TModel GetModel<TModel>( IParty party ) where TModel : class
+    {
+        Throw.CheckNotNullArgument( party );
+        if( _model == null ) Throw.InvalidOperationException( $"The feature '{_featureName}' has no configuration model (its driver has no [Configuration<TModel>])." );
+        if( !_models.TryGetValue( party, out var m ) ) Throw.InvalidOperationException( $"The feature '{_featureName}' is not allowed on '{party}' (or the party is not set up yet): it has no model." );
+        return (TModel)m;
+    }
+
+    /// <summary>
     /// Gets an option of this feature for a party (see <see cref="GetOptions(IParty)"/>).
     /// </summary>
     /// <typeparam name="T">The option type.</typeparam>
@@ -260,16 +282,29 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <returns>The option, null when it is not enabled.</returns>
     public T? GetOption<T>( IParty party ) where T : class => GetOptions( party ).OfType<T>().FirstOrDefault();
 
-    // Creates the options of the parties on which this feature is allowed (once per party), before the driver's setup.
-    // The option of a feature is looked up in the party's own keys, then in the "Defaults" above it (the nearest wins; a
-    // configuration model is read key by key along them).
+    // Reads the model and creates the options of the parties on which this feature is allowed (once per party), before
+    // the driver's setup. The option of a feature is looked up in the party's own keys, then in the "Defaults" above it
+    // (the nearest wins; a configuration model is read key by key along them).
     internal bool CreateOptions( IActivityMonitor monitor, IEnumerable<IParty> parties )
     {
         var directory = _s.OptionDirectory;
-        if( directory == null ) return true;
-        var options = directory.GetOptions( _componentType );
-        if( options.Count == 0 ) return true;
+        var options = directory?.GetOptions( _componentType ) ?? [];
         bool success = true;
+        if( _model != null )
+        {
+            foreach( var p in parties )
+            {
+                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
+                var c = GetConfiguration( p );
+                var key = GetFeatureName( p );
+                var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
+                var model = ConfigurationModelReader.TryRead( _model, c.GetFeatureLevels( key ), $"{c.Configuration.Path}:{key}", collector, options.Select( o => o.Name ) );
+                collector.DumpLogs( monitor );
+                if( model == null ) success = false;
+                else _models.Add( p, model );
+            }
+        }
+        if( options.Count == 0 ) return success;
         foreach( var p in parties )
         {
             if( _options.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
