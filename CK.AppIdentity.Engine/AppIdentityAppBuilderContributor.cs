@@ -9,9 +9,8 @@ using Microsoft.Extensions.Configuration;
 [assembly: CK.Setup.AppBuilderContributor( typeof( CK.Setup.AppIdentityAppBuilderContributor ) )]
 // The root keys of the central configuration that the contributor reads (see ProjectFromCentral): the address of a link
 // is the one of a deployment, each one writes its own.
-[assembly: CentralConfigurationKey( "Domain" )]
+// ("Domain" and "GlobalDomainPrefix" are keys of the central configuration itself: the domain of the solution.)
 [assembly: CentralConfigurationKey( "Environment" )]
-[assembly: CentralConfigurationKey( CK.Setup.AppIdentityAppBuilderContributor.GlobalDomainPrefixKey )]
 [assembly: CentralConfigurationKey( "Links", PerDeployment = ["[*]:Link:Address"] )]
 // The address of a remote depends on where it is deployed (in every anchor of the kind "Remote", see DeclareAnchors).
 [assembly: ConfigurationPerDeployment( "Remote:Address" )]
@@ -133,13 +132,12 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     public IReadOnlyList<DeclaredClient> Clients => _clients;
 
     /// <summary>
-    /// Projects the parties of the central configuration in the Apps of the builder. It handles four root keys:
+    /// Projects the parties of the central configuration in the Apps of the AppContext. It reads the domain of the
+    /// solution (<see cref="CentralConfiguration.Domain"/>) and handles two root keys:
     /// <list type="bullet">
-    ///   <item>"Domain" and "Environment" (defaults to "#Dev"): the "FullName" of an App that doesn't write it is
-    ///   "{Domain}/${Party}/{Environment}". The name of an App is the identity of its party, "{Domain}.{Party}" ('/'
-    ///   mapped to '.': "Sample.Auth3.Front"), so are its projects ("Sample.Auth3.Front.App", ".Builder", ".Host").</item>
-    ///   <item>"GlobalDomainPrefix" (see <see cref="GlobalDomainPrefixKey"/>): the prefix of the "Domain" that the names
-    ///   of the Apps leave out ("Sample": "Auth3.Front").</item>
+    ///   <item>"Environment" (defaults to "#Dev"): the "FullName" of an App that doesn't write it is
+    ///   "{Domain}/{Party}/{Environment}". The name of an App is its party name ("$Front"), possibly after the segments
+    ///   of its domain relative to the domain of the solution ("Customers.$Acme" is "{Domain}/Customers/$Acme").</item>
     ///   <item>"Links": the directed links between the parties, <c>{ "From": "$X", "To": "$Y", "Link": { ... } }</c>:
     ///   "Link" is the remote entry of X for Y (its "PartyName" is Y), appended to the "Parties" of X. A link without its
     ///   reverse is valid; a remote both linked and in the "Parties" of the App is an error. The "Address" of a link is a
@@ -155,7 +153,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         var file = context.Central.File;
         var central = context.Central.Configuration;
         bool success = true;
-        var domain = central["Domain"];
+        var domain = context.Central.Domain;
         if( domain != null && !CoreApplicationIdentity.IsValidDomainName( domain ) )
         {
             monitor.Error( $"Invalid \"Domain\" '{domain}' in '{file}'." );
@@ -167,33 +165,18 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             monitor.Error( $"Invalid \"Environment\" '{environment}' in '{file}' (\"#Dev\" by default: it starts with a '#')." );
             success = false;
         }
-        // The prefix of the domain that the names of the Apps leave out.
-        var globalPrefix = central[GlobalDomainPrefixKey];
-        if( globalPrefix != null )
-        {
-            if( domain == null )
-            {
-                monitor.Error( $"\"{GlobalDomainPrefixKey}\" '{globalPrefix}' in '{file}' requires a \"Domain\"." );
-                success = false;
-            }
-            else if( !CoreApplicationIdentity.IsValidDomainName( globalPrefix )
-                     || !(domain.Equals( globalPrefix, StringComparison.OrdinalIgnoreCase )
-                          || domain.StartsWith( globalPrefix + '/', StringComparison.OrdinalIgnoreCase )) )
-            {
-                monitor.Error( $"Invalid \"{GlobalDomainPrefixKey}\" '{globalPrefix}' in '{file}': it must be the \"Domain\" '{domain}' or a prefix of it (whole parts)." );
-                success = false;
-            }
-        }
         if( !success ) return false;
-        // The party of each App: its name is "{Domain}.{Party}" ('/' mapped to '.', without the "GlobalDomainPrefix").
+        // The party of each App: its name is its party name, after the segments of its domain relative to the "Domain".
         var parties = new Dictionary<string, CentralApp>( StringComparer.OrdinalIgnoreCase );
+        var appDomains = new Dictionary<CentralApp, string?>();
         foreach( var a in context.Central.AllApps )
         {
-            if( !CheckAppName( monitor, file, a, domain, globalPrefix, out var nameParty ) )
+            if( !CheckAppName( monitor, file, a, domain, out var nameParty, out var appDomain ) )
             {
                 success = false;
                 continue;
             }
+            appDomains.Add( a, appDomain );
             // A fleet App (a template: "InstanceCount" or "Instances") names its party with a placeholder: "$Trolley-{Name}".
             var partyName = RawPartyName( a.Configuration )
                             ?? (ConfigurationTemplate.IsTemplate( a.Configuration ) ? $"{nameParty}-{{Name}}" : nameParty);
@@ -209,9 +192,9 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         foreach( var a in context.Apps )
         {
             var partyName = parties.First( kv => kv.Value == a.App ).Key;
-            if( domain != null && !a.Node.ContainsKey( "FullName" ) )
+            if( appDomains[a.App] is string appDomain && !a.Node.ContainsKey( "FullName" ) )
             {
-                a.Node.Insert( 0, "FullName", $"{domain}/{partyName}/{environment}" );
+                a.Node.Insert( 0, "FullName", $"{appDomain}/{partyName}/{environment}" );
             }
             var outgoing = links.Where( l => l.From.Equals( partyName, StringComparison.OrdinalIgnoreCase ) ).ToList();
             if( outgoing.Count == 0 ) continue;
@@ -317,11 +300,12 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                     if( ConfigurationTemplate.IsTemplate( p ) && TenantDomainTemplate.IsTenantTemplate( p ) )
                     {
                         var names = $"{p["FullName"]} {p["DomainName"]}";
+                        var placeholder = PlaceholderName( app.Name );
                         if( isFleet
-                            && names.IndexOf( $"{app.Name}.Name}}", StringComparison.OrdinalIgnoreCase ) < 0
-                            && names.IndexOf( $"{app.Name}.Index}}", StringComparison.OrdinalIgnoreCase ) < 0 )
+                            && names.IndexOf( $"{placeholder}.Name}}", StringComparison.OrdinalIgnoreCase ) < 0
+                            && names.IndexOf( $"{placeholder}.Index}}", StringComparison.OrdinalIgnoreCase ) < 0 )
                         {
-                            monitor.Error( $"The tenant template '{p.Path}' of the fleet {app} in '{file}' must use the placeholder of its App in its names (\"{{{app.Name}.Name}}\" or \"{{{app.Name}.Index}}\"): each process of the fleet has its own tenants." );
+                            monitor.Error( $"The tenant template '{p.Path}' of the fleet {app} in '{file}' must use the placeholder of its App in its names (\"{{{placeholder}.Name}}\" or \"{{{placeholder}.Index}}\"): each process of the fleet has its own tenants." );
                             success = false;
                         }
                         var raw = p["DomainName"];
@@ -472,7 +456,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             // A fleet App ("InstanceCount", "Instances" or "MaxInstanceCount"): its party is validated for each instance
             // (and the first dynamic one of an Opened fleet), its placeholders resolved; the instances share the type sets,
             // named after the templates ("$Trolley-{Name}").
-            if( !ConfigurationTemplate.TryReadInstances( monitor, a.Configuration, a.Name, out var instances ) )
+            if( !ConfigurationTemplate.TryReadInstances( monitor, a.Configuration, PlaceholderName( a.Name ), out var instances ) )
             {
                 success = false;
                 continue;
@@ -481,7 +465,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             var checkedInstances = CheckedInstances( instances );
             if( checkedInstances != null )
             {
-                rootSetName = RawPartyName( section ) ?? $"${a.Name}-{{Name}}";
+                rootSetName = RawPartyName( section ) ?? $"{PartyOf( a.Name )}-{{Name}}";
                 if( checkedInstances.Count == 0
                     || !ConfigurationTemplate.TryResolve( monitor, rootSetName, section.Path, checkedInstances[0], [], out var r )
                     || r == rootSetName )
@@ -497,7 +481,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 foreach( var i in (IEnumerable<ConfigurationInstance?>?)checkedInstances ?? [null] )
                 {
                     var s = section;
-                    var defaultPartyName = a.Name;
+                    var defaultPartyName = PartyOf( a.Name ).TrimStart( '$' );
                     if( i != null )
                     {
                         s = ConfigurationTemplate.Instantiate( monitor, section, i );
@@ -641,52 +625,37 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     // The party name written by a party section: its "PartyName", or the party of its "FullName" (a template's name
     // has placeholders: it is not parsed as a full name).
     /// <summary>
-    /// The root key of the central configuration that holds the prefix of its "Domain" that the names of the Apps (and
-    /// of their projects) leave out: with <c>"Domain": "Acme/Europe/Paris"</c> and <c>"GlobalDomainPrefix": "Acme/Europe"</c>,
-    /// the App of the party "$Shop" is "Paris.Shop" ("Paris.Shop.App", "Paris.Shop.Builder", "Paris.Shop.Host").
+    /// The root key of the central configuration that holds the prefix of its "Domain" that the names of the projects of
+    /// the Apps leave out (see <see cref="CentralConfiguration.GlobalDomainPrefixKey"/>).
     /// </summary>
-    public const string GlobalDomainPrefixKey = "GlobalDomainPrefix";
+    public const string GlobalDomainPrefixKey = CentralConfiguration.GlobalDomainPrefixKey;
 
-    // The name of an App of a central configuration is the identity of its party: "{Domain}.{Party}", the '/' of the domain
-    // mapped to '.' and the "GlobalDomainPrefix" left out (the parts of a domain and a party name have no '.'). Its domain
-    // is the "Domain", or the one of its explicit "FullName"; an explicit party name ("PartyName", "FullName") is its party
-    // (a fleet: "$Party-{Name}").
-    static bool CheckAppName( IActivityMonitor monitor, NormalizedPath file, CentralApp a, string? domain, string? globalPrefix, out string party )
+    // The party of an App: the last segment of its name ("Customers.$Acme" -> "$Acme").
+    static string PartyOf( string appName ) => appName.Split( '.' )[^1];
+
+    // The placeholder of a fleet App in its templates: its party without the '$' ("{Worker.Name}").
+    static string PlaceholderName( string appName ) => PartyOf( appName ).TrimStart( '$' );
+
+    // The name of an App of a central configuration is its party name ("$Front"), possibly after the segments of its
+    // domain relative to the "Domain" ("Customers.$Acme": "{Domain}/Customers"). An explicit party name ("PartyName",
+    // "FullName") must be its party (a fleet: "$Party-{Name}"), the domain of an explicit "FullName" must be its domain.
+    // Without "Domain" and without segments, the domain of the App is the one of its "FullName" (null without it).
+    static bool CheckAppName( IActivityMonitor monitor, NormalizedPath file, CentralApp a, string? domain, out string party, out string? appDomain )
     {
         var parts = a.Name.Split( '.' );
-        party = '$' + parts[^1];
-        var nameDomain = string.Join( '/', parts[..^1] );
-        if( globalPrefix != null ) nameDomain = nameDomain.Length == 0 ? globalPrefix : $"{globalPrefix}/{nameDomain}";
+        party = parts[^1];
+        var segments = string.Join( '/', parts[..^1] );
         var fullName = a.Configuration["FullName"];
-        var explicitDomain = fullName != null
-                                ? string.Join( '/', fullName.Split( '/' ).TakeWhile( p => !p.StartsWith( '$' ) ) )
-                                : domain ?? "";
+        var explicitDomain = fullName != null ? string.Join( '/', fullName.Split( '/' ).TakeWhile( p => !p.StartsWith( '$' ) ) ) : null;
+        appDomain = domain != null
+                        ? (segments.Length == 0 ? domain : $"{domain}/{segments}")
+                        : (segments.Length == 0 ? explicitDomain : segments);
         var raw = RawPartyName( a.Configuration );
-        if( !nameDomain.Equals( explicitDomain, StringComparison.OrdinalIgnoreCase )
+        if( (explicitDomain != null && !explicitDomain.Equals( appDomain, StringComparison.OrdinalIgnoreCase ))
             || (raw != null && !raw.Equals( party, StringComparison.OrdinalIgnoreCase )
                             && !raw.StartsWith( party + "-{", StringComparison.OrdinalIgnoreCase )) )
         {
-            var expectedDomain = explicitDomain;
-            if( globalPrefix != null )
-            {
-                if( expectedDomain.Equals( globalPrefix, StringComparison.OrdinalIgnoreCase ) )
-                {
-                    expectedDomain = "";
-                }
-                else if( expectedDomain.StartsWith( globalPrefix + '/', StringComparison.OrdinalIgnoreCase ) )
-                {
-                    expectedDomain = expectedDomain[(globalPrefix.Length + 1)..];
-                }
-                else
-                {
-                    monitor.Error( $"The domain '{explicitDomain}' of the \"FullName\" of {a} in '{file}' is not under the \"{GlobalDomainPrefixKey}\" '{globalPrefix}': the name of an App is the identity of its party." );
-                    return false;
-                }
-            }
-            var expectedParty = raw != null ? raw.Split( "-{" )[0].TrimStart( '$' ) : parts[^1];
-            var expected = expectedDomain.Length == 0 ? expectedParty : $"{expectedDomain.Replace( '/', '.' )}.{expectedParty}";
-            var prefixText = globalPrefix != null ? $" without the \"{GlobalDomainPrefixKey}\" '{globalPrefix}'" : "";
-            monitor.Error( $"The name of {a} in '{file}' must be the identity of its party: '{expected}' (its domain '{explicitDomain}'{prefixText}, then its party name, '/' mapped to '.'), and its projects '{expected}.App', '{expected}.Builder' and '{expected}.Host'." );
+            monitor.Error( $"The \"FullName\" of {a} in '{file}' must be its party '{party}' in its domain '{appDomain}' (the name of an App is its party name, after the segments of its domain relative to the \"Domain\")." );
             return false;
         }
         return true;

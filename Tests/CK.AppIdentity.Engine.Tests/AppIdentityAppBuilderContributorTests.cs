@@ -94,14 +94,14 @@ public class AppIdentityAppBuilderContributorTests
 
         // The address of a remote is per deployment ([assembly: ConfigurationPerDeployment( "Remote:Address" )] of the
         // engine): in every remote (and the "Defaults" above them).
-        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, app, [], [contributor], out var perDeployment ).ShouldBeTrue();
+        AppContextConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, app, [], [contributor], out var perDeployment ).ShouldBeTrue();
         perDeployment.Select( k => k.Pattern ).ShouldBe( ["Parties:[*]:Address", "Defaults:Address"] );
 
         // What KeyManagement declares: the Opened template gets "Never" (the "Defaults" say "Once").
         var restriction = new PackageConfigurationLock( "KeyManagementFeatureDriver",
                                                         ["KeyManagement"],
                                                         new ConfigurationLockAttribute( "OpenedRemoteTemplate:AutoTrustKey", ConfigurationLevel.Compile ) { Value = "Never" } );
-        AppBuilderConfiguration.ApplyLocks( TestHelper.Monitor, app, [], [restriction] ).ShouldBeTrue();
+        AppContextConfiguration.ApplyLocks( TestHelper.Monitor, app, [], [restriction] ).ShouldBeTrue();
         app.BinPathConfiguration.CompiledValues.Count.ShouldBe( 1 );
         app.BinPathConfiguration.CompiledValues["CK-AppIdentity:Parties:1:KeyManagement:AutoTrustKey"].ShouldBe( "Never" );
         app.BurntKeys.ShouldBe( ["Parties:1:KeyManagement:AutoTrustKey"] );
@@ -178,7 +178,7 @@ public class AppIdentityAppBuilderContributorTests
         // The sets are named after the templates: an instance finds its set at run time ("$Trolley-Red").
         context.Apps[0].BinPathConfiguration.TypeSets.Select( s => s.Name ).ShouldBe( ["$Trolley-{Name}", "$Shop-{Name}"], ignoreOrder: true );
         // The size of a fleet is the one of a deployment (a rule of the App builder).
-        AppBuilderConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, context.Apps[0], [], [], out var perDeployment ).ShouldBeTrue();
+        AppContextConfiguration.CollectPerDeploymentKeys( TestHelper.Monitor, context.Apps[0], [], [], out var perDeployment ).ShouldBeTrue();
         perDeployment.Select( k => k.Pattern ).ShouldBe( ["InstanceCount", "Instances", "MaxInstanceCount"], ignoreOrder: true );
     }
 

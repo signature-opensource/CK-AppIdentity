@@ -11,7 +11,7 @@ know their component.
 An option implements `IPartyComponentOption<TOwner>` (CK.AppIdentity.Abstractions) where `TOwner` is the party
 component it applies to, and is decorated with the attribute of its kind of owner. They are the party component level
 of the options of the configurable types (`IConfigurableOption<TOwner>` and `IConfigurableOptionAttribute` of
-CK.Abstractions: the App aspects and the Builder aspects have options too).
+CK.Abstractions: the App aspects and the AppContext aspects have options too).
 
 | Owner | Attribute | Package |
 |---|---|---|
