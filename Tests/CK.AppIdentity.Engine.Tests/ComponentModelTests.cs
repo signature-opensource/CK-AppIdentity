@@ -263,7 +263,7 @@ namespace CK.AppIdentity.Engine.Tests
             {
                 c["Local:Asym:Name"] = "Local";
                 c["Parties:0:PartyName"] = "Other";
-                c["Parties:0:AsymRemote:Hint"] = "for the Remote side";
+                c["Parties:0:AsymRemote"] = "true";
             } );
             await using( services )
             {

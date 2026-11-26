@@ -129,8 +129,6 @@ public class FeatureActivationTests
             c["Local:OptIn"] = "false";
             c["Local:OptOut"] = "true";
             c["Local:Must"] = "true";
-            // A section is never redundant: it is the configuration of the feature.
-            c["Parties:0:OptOut:Some"] = "Setting";
         }, cancel );
         await using( sp )
         {
@@ -139,6 +137,20 @@ public class FeatureActivationTests
             texts.ShouldContain( t => t.StartsWith( "Redundant \"OptIn\": false: the feature is optional" ) );
             texts.ShouldContain( t => t.StartsWith( "Redundant \"OptOut\": true: the feature is allowed by default" ) && !t.Contains( "Activation/$Remote" ) );
             texts.ShouldContain( t => t.StartsWith( "Redundant \"Must\": true: the feature is required" ) );
+        }
+    }
+
+    [Test]
+    [CancelAfter( 5000 )]
+    public async Task a_feature_without_model_has_no_configuration_Async( CancellationToken cancel )
+    {
+        using var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 200 );
+        var (sp, s) = await StartAsync( c => c["Parties:0:OptOut:Some"] = "Setting", cancel );
+        await using( sp )
+        {
+            await Should.ThrowAsync<CKException>( () => s.InitializationTask.WaitAsync( cancel ) );
+            var texts = await CollectAsync( logs, "has no configuration of its own" );
+            texts.ShouldContain( t => t.Contains( "OptOut:Some\": the feature 'OptOut' has no configuration of its own (no [Configuration<TModel>]), its keys are its options (none)." ) );
         }
     }
 

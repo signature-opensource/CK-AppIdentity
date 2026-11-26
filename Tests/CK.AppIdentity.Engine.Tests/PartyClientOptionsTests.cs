@@ -43,6 +43,7 @@ public class PartyClientOptionsTests
                                                   typeof( BuildClientFeature ),
                                                   typeof( OtherBuildClientFeature ),
                                                   typeof( ServeClientFeature ),
+                                                  typeof( WindowOption ),
                                                   typeof( NeedsFakeClientFeature ),
                                                   typeof( BuildClientFeatureDriver ),
                                                   typeof( OtherBuildClientFeatureDriver ),
@@ -138,13 +139,47 @@ public class PartyClientOptionsTests
     [Test]
     public async Task an_option_of_another_kind_of_feature_or_an_unknown_key_is_refused_Async()
     {
-        // DerivedOnly is an option of FakeDerivedClientFeature, not of FakeClientFeature: its driver refuses the key.
+        // DerivedOnly is an option of FakeDerivedClientFeature, not of FakeClientFeature (that has no model): the key is refused.
         var texts = await FailAsync( c => c["Local:PartyClient:A:Fake:DerivedOnly"] = "true" );
-        texts.ShouldContain( t => t.Contains( "Unexpected 'DerivedOnly' in \"CK-AppIdentity:Local:PartyClient:A:Fake\"" ) );
+        texts.ShouldContain( t => t.Contains( "Unknown key \"CK-AppIdentity:Local:PartyClient:A:Fake:DerivedOnly\": the client feature 'Fake' has no configuration of its own" ) );
         texts = await FailAsync( c => c["Local:PartyClient:A:Unknown"] = "true" );
         texts.ShouldContain( t => t.Contains( "Unknown \"CK-AppIdentity:Local:PartyClient:A:Unknown\": the keys of a client are its features" ) );
         texts = await FailAsync( c => c["Local:PartyClient:A:Types:0"] = "Some.Type, Some.Assembly" );
         texts.ShouldContain( t => t.Contains( "The client 'A' of 'Test/$OptionsHost" ) && t.Contains( "has no feature." ) );
+    }
+
+    [Test]
+    public async Task an_option_may_require_another_feature_of_its_client_Async()
+    {
+        // Window (an option of Build) requires Serve, that is created after Build: the options are selected once every
+        // feature of the client is created.
+        var (services, party) = await StartAsync( c =>
+        {
+            c["Local:PartyClient:App:Build:Window"] = "true";
+            c["Local:PartyClient:App:Serve"] = "true";
+        } );
+        await using( services )
+        {
+            Client( party, "App" ).GetFeature<BuildClientFeature>().ShouldNotBeNull().Options.ShouldHaveSingleItem().ShouldBeOfType<WindowOption>();
+            await ((IHostedService)party).StopAsync( default );
+        }
+        var texts = await FailAsync( c => c["Local:PartyClient:App:Build:Window"] = "true" );
+        texts.ShouldContain( t => t.Contains( "Window" ) && t.Contains( "the client feature 'ServeClientFeature'" ), string.Join( Environment.NewLine, texts ) );
+    }
+
+    [Test]
+    public async Task the_compile_time_keys_are_ignored_at_run_time_Async()
+    {
+        // Build has no configuration model: only its options and the keys of its compile time model are accepted.
+        var (services, party) = await StartAsync( c => c["Local:PartyClient:App:Build:Port"] = "3000" );
+        await using( services )
+        {
+            services.Services.GetRequiredService<PartyComponentDirectory>().Find( typeof( BuildClientFeature ) ).ShouldNotBeNull().CompileKeys.ShouldBe( ["Port"] );
+            Client( party, "App" ).GetFeature<BuildClientFeature>().ShouldNotBeNull();
+            await ((IHostedService)party).StopAsync( default );
+        }
+        var texts = await FailAsync( c => c["Local:PartyClient:App:Build:Nope"] = "3000" );
+        texts.ShouldContain( t => t.Contains( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Build:Nope\"" ) && t.Contains( "(Window)" ) );
     }
 
     [Test]

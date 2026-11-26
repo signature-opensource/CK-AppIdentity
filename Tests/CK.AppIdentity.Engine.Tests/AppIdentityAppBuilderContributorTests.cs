@@ -23,6 +23,35 @@ public class AppIdentityAppBuilderContributorTests
     const string OtherType = "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests";
 
     [Test]
+    public void the_compile_time_model_of_a_feature_is_read_by_the_contributor()
+    {
+        var context = CreateContext( """
+            {
+              "FullName": "Sample/$Front",
+              "Local": { "PartyClient": { "App": { "Build": { "Port": 3000, "Window": true }, "Serve": true } } }
+            }
+            """ );
+        context.Apps[0].ConfigurableTypes = [typeof( Fake.BuildClientFeature ), typeof( Fake.ServeClientFeature ), typeof( Fake.WindowOption )];
+        var c = new AppIdentityAppBuilderContributor();
+        c.Contribute( TestHelper.Monitor, context ).ShouldBeTrue();
+        var app = c.Clients.ShouldHaveSingleItem();
+        app.GetCompileModel<Fake.BuildCompileConfiguration>( "Build" ).ShouldNotBeNull().Port.ShouldBe( 3000 );
+        app.GetCompileModel<Fake.BuildCompileConfiguration>( "Serve" ).ShouldBeNull( "Serve has no compile time model." );
+        // The keys of the compile time model are compile keys (the option "Window" is not); the section stays declared.
+        context.Apps[0].CompileKeys.ShouldBe( ["Local:PartyClient:App:Build:Port"] );
+        context.Apps[0].DeclarationKeys.ShouldContain( "Local:PartyClient:App:Build" );
+
+        // An unknown key of a feature that has a compile time model is a build error.
+        context = CreateContext( """{ "FullName": "Sample/$Front", "Local": { "PartyClient": { "App": { "Build": { "Nope": 1 } } } } }""" );
+        context.Apps[0].ConfigurableTypes = [typeof( Fake.BuildClientFeature ), typeof( Fake.WindowOption )];
+        using( TestHelper.Monitor.CollectTexts( out var texts ) )
+        {
+            new AppIdentityAppBuilderContributor().Contribute( TestHelper.Monitor, context ).ShouldBeFalse();
+            texts.ShouldContain( t => t.Contains( "Nope" ) );
+        }
+    }
+
+    [Test]
     public void the_declared_clients_are_exposed_with_their_features_and_their_type_set()
     {
         var context = CreateContext( $$"""
@@ -32,7 +61,7 @@ public class AppIdentityAppBuilderContributorTests
                 "ExcludedTypes": [ "{{OtherType}}" ],
                 "PartyClient": {
                   "App": { "Types": [ "{{FakeType}}" ], "NgApp": { "ActiveCultures": "fr" }, "Hosting": { "RequestPath": "/" } },
-                  "Tool": { "Types": [ { "Name": "{{FakeType}}", "Optional": true } ], "Native": { "Store": "Play" } }
+                  "Tool": { "Types": [ "{{FakeType}}" ], "Native": { "Store": "Play" } }
                 }
               },
               "Parties": [ { "FullName": "Tenant/$Tenant", "Local": { "Types": [ "{{OtherType}}" ] } } ]
@@ -140,7 +169,7 @@ public class AppIdentityAppBuilderContributorTests
     [TestCase( """{ "FullName": "Sample/$Front", "Local": { "Types": [ "No.Such.Type, No.Such.Assembly" ] } }""",
                "Unable to find the type 'No.Such.Type, No.Such.Assembly' of \"ckonf:Apps:Front:Local:Types:0\"" )]
     [TestCase( """{ "FullName": "Sample/$Front", "Local": { "ExcludedTypes": [ "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests" ], "PartyClient": { "App": { "Types": [ "CK.AppIdentity.Engine.Tests.Fake.FakeService, CK.AppIdentity.Engine.Tests" ] } } } }""",
-               "The client 'App' of App 'Front' adds the type" )]
+               "The type set 'App' (\"ckonf:Apps:Front:Local:PartyClient:App\") adds the type" )]
     [TestCase( """{ "FullName": "not a valid full name!" }""",
                "Invalid party in App 'Front'" )]
     public void invalid_parties_are_build_errors( string json, string expected )

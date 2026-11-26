@@ -33,18 +33,25 @@ public class PartyClientFeatureTests
         protected override Task TeardownAsync( FeatureLifetimeContext context ) => Task.CompletedTask;
     }
 
+    [ConfigurationModel]
+    public sealed class ServedConfiguration
+    {
+        public string? Color { get; init; }
+    }
+
     /// <summary>
     /// A served client feature ("Served"): it requires the opt-in "Serving" feature of its party, it gives a request path
-    /// derived from its client name and has a "Color".
+    /// derived from its client name and has a "Color" (its model).
     /// </summary>
     [Requires<ServingFeatureDriver>]
     [PartyClientFeature( "Served", TypeActivation.Optional )]
+    [Configuration<ServedConfiguration>]
     public sealed class ServedClientFeature : ClientFeature
     {
-        public ServedClientFeature( PartyClient client, ImmutableConfigurationSection configuration )
+        public ServedClientFeature( PartyClient client, ImmutableConfigurationSection configuration, ServedConfiguration model )
             : base( client, configuration )
         {
-            Color = configuration["Color"];
+            Color = model.Color;
         }
 
         public string? Color { get; }
@@ -55,19 +62,11 @@ public class PartyClientFeatureTests
         }
     }
 
-    public sealed class ServedClientFeatureDriver : ClientFeatureDriver<ServedClientFeature>
+    public sealed class ServedClientFeatureDriver : ClientFeatureDriver<ServedClientFeature, ServedConfiguration>
     {
-        protected override ServedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
+        protected override ServedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration, ServedConfiguration model )
         {
-            foreach( var c in configuration.GetChildren() )
-            {
-                if( c.Key != "Color" )
-                {
-                    monitor.Error( $"Unknown key \"{c.Path}\" of {client}." );
-                    return null;
-                }
-            }
-            return new ServedClientFeature( client, configuration );
+            return new ServedClientFeature( client, configuration, model );
         }
     }
 
@@ -268,7 +267,7 @@ public class PartyClientFeatureTests
 
     [Test]
     [CancelAfter( 10000 )]
-    public async Task the_driver_validates_the_section_of_its_feature_Async( CancellationToken cancel )
+    public async Task the_model_validates_the_section_of_its_feature_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
         using var host = BuildHost( c =>
@@ -278,7 +277,19 @@ public class PartyClientFeatureTests
         }, _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
-            (await logs.WaitForAsync( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Served:Origin\" of client 'App' of 'Clients/$App/#Dev'." )).ShouldBeTrue();
+            (await logs.WaitForAsync( "Unknown key 'CK-AppIdentity:Local:PartyClient:App:Served:Origin': the keys of 'CK-AppIdentity:Local:PartyClient:App:Served' are Color." )).ShouldBeTrue();
+        }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task a_feature_without_model_has_no_configuration_Async( CancellationToken cancel )
+    {
+        using var logs = new AllMonitorsTexts();
+        using var host = BuildHost( c => c["Local:PartyClient:App:Tool:Size"] = "3", _drivers );
+        {
+            await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
+            (await logs.WaitForAsync( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Tool:Size\": the client feature 'Tool' has no configuration of its own (no [Configuration<TModel>]), its keys are its options (none)." )).ShouldBeTrue();
         }
     }
 

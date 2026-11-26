@@ -114,49 +114,17 @@ public sealed class DerivedOnlyOption : IPartyComponentOption<FakeDerivedClientF
 }
 
 /// <summary>
-/// Like the drivers of real client features, they refuse a key of the feature section that is not an option of the
-/// feature: the options are selected by the PartyClient feature.
+/// The fake client features have no configuration model: their section has only their options (the PartyClient feature
+/// refuses any other key and selects the options).
 /// </summary>
 public sealed class FakeClientFeatureDriver : ClientFeatureDriver<FakeClientFeature>
 {
-    readonly PartyComponentOptionDirectory _options;
-
-    public FakeClientFeatureDriver( PartyComponentOptionDirectory options ) => _options = options;
-
-    protected override FakeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
-    {
-        return FakeDrivers.CheckOnlyOptions( monitor, _options, typeof( FakeClientFeature ), configuration )
-                ? new FakeClientFeature( client, configuration )
-                : null;
-    }
+    protected override FakeClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
 }
 
 public sealed class FakeDerivedClientFeatureDriver : ClientFeatureDriver<FakeDerivedClientFeature>
 {
-    readonly PartyComponentOptionDirectory _options;
-
-    public FakeDerivedClientFeatureDriver( PartyComponentOptionDirectory options ) => _options = options;
-
-    protected override FakeDerivedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration )
-    {
-        return FakeDrivers.CheckOnlyOptions( monitor, _options, typeof( FakeDerivedClientFeature ), configuration )
-                ? new FakeDerivedClientFeature( client, configuration )
-                : null;
-    }
-}
-
-static class FakeDrivers
-{
-    public static bool CheckOnlyOptions( IActivityMonitor monitor, PartyComponentOptionDirectory options, System.Type featureType, ImmutableConfigurationSection configuration )
-    {
-        var unknown = configuration.GetChildren().Where( c => !options.IsOptionName( featureType, c.Key ) ).Select( c => c.Key ).ToList();
-        if( unknown.Count > 0 )
-        {
-            monitor.Error( $"Unexpected '{unknown.Concatenate( "', '" )}' in \"{configuration.Path}\": a fake feature has only options." );
-            return false;
-        }
-        return true;
-    }
+    protected override FakeDerivedClientFeature? Create( IActivityMonitor monitor, PartyClient client, ImmutableConfigurationSection configuration ) => new( client, configuration );
 }
 
 /// <summary>
@@ -168,10 +136,28 @@ public interface IFakeBuild : IPartyComponentAbstraction
 {
 }
 
+/// <summary>
+/// The compile time model of the <see cref="BuildClientFeature"/>: its keys are read by the build, ignored at run time.
+/// </summary>
+[ConfigurationModel]
+public sealed class BuildCompileConfiguration
+{
+    public int? Port { get; init; }
+}
+
 [PartyClientFeature( "Build", TypeActivation.Optional )]
+[CompileConfiguration<BuildCompileConfiguration>]
 public sealed class BuildClientFeature : ClientFeature, IFakeBuild
 {
     public BuildClientFeature( PartyClient client, ImmutableConfigurationSection configuration ) : base( client, configuration ) { }
+}
+
+/// <summary>
+/// An option of "Build" that requires another feature of its client: "Serve" (created after "Build", that it requires).
+/// </summary>
+[PartyClientFeatureOption( "Window", TypeActivation.Optional ), Requires<ServeClientFeature>]
+public sealed class WindowOption : IPartyComponentOption<BuildClientFeature>
+{
 }
 
 [PartyClientFeature( "OtherBuild", TypeActivation.Optional )]

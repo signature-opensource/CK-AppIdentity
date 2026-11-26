@@ -330,7 +330,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
             foreach( var p in parties )
             {
                 // Once per party: a model-less feature marks its checked parties in the models (it has no model to read).
-                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
+                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) || !IsModelSide( p ) ) continue;
                 _models.Add( p, this );
                 var c = GetConfiguration( p );
                 var key = GetFeatureName( p );
