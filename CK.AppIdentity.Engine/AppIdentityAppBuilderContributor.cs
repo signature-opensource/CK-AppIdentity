@@ -187,7 +187,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             }
         }
         var links = ReadLinks( monitor, context.Central, parties, ref success );
-        success &= CheckTenantTemplates( monitor, context.Central, domain );
+        success &= CheckTenantTemplates( monitor, context.Central, domain, appDomains );
         if( !success ) return false;
         foreach( var a in context.Apps )
         {
@@ -249,7 +249,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         //    App ("{Trolley.Name}" or "{Trolley.Index}"), otherwise the processes of the fleet would create the same tenants.
         //  - An Opened tenant template owns its domain prefix: its run-time tenants are named by their creator, so no other
         //    party of the System has its domain directly under it, and no other tenant template has the same prefix.
-        static bool CheckTenantTemplates( IActivityMonitor monitor, CentralConfiguration central, string? domain )
+        static bool CheckTenantTemplates( IActivityMonitor monitor, CentralConfiguration central, string? domain, Dictionary<CentralApp, string?> appDomains )
         {
             bool success = true;
             var file = central.File;
@@ -258,7 +258,9 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             if( domain != null ) domains.Add( (domain, "Domain") );
             foreach( var a in central.AllApps )
             {
+                // The domain of the App: the one of its "FullName", or the one its name derives.
                 if( DomainOf( a.Configuration["FullName"] ) is string d ) domains.Add( (d, $"{a.Configuration.Path}:FullName") );
+                else if( appDomains.GetValueOrDefault( a ) is string derived ) domains.Add( (derived, $"{a.Configuration.Path} ({a})") );
                 Collect( monitor, file, a, ConfigurationTemplate.IsTemplate( a.Configuration ), a.Configuration.GetSection( "Parties" ), prefixes, domains, ref success );
             }
             for( int i = 0; i < prefixes.Count; ++i )
