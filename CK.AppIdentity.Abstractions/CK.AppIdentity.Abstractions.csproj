@@ -8,9 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CK.PerfectEvent" Version="30.0.0-0.linux.0.ci.13" />
+        <PackageReference Include="CK.PerfectEvent" Version="30.0.0-0.linux.0.ci.15" />
         <!-- The options of the party components are resource groups, ordered by the topology attributes. -->
-        <PackageReference Include="CK.ResourceSpace.Abstractions" Version="32.0.0-0.linux.0.ci.16" />
+        <PackageReference Include="CK.ResourceSpace.Abstractions" Version="32.0.0-0.linux.0.ci.18" />
     </ItemGroup>
 
     <ItemGroup>
