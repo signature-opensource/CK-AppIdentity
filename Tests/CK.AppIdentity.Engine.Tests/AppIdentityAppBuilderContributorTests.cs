@@ -40,6 +40,10 @@ public class AppIdentityAppBuilderContributorTests
         // The keys of the compile time model are compile keys (the option "Window" is not); the section stays declared.
         context.Apps[0].CompileKeys.ShouldBe( ["Local:PartyClient:App:Build:Port"] );
         context.Apps[0].DeclarationKeys.ShouldContain( "Local:PartyClient:App:Build" );
+        // The build knows the options that the configuration enables.
+        app.IsOptionEnabled( "Build", typeof( Fake.WindowOption ) ).ShouldBeTrue();
+        app.IsOptionEnabled( "Serve", typeof( Fake.WindowOption ) ).ShouldBeFalse();
+        app.IsOptionEnabled( "Nope", typeof( Fake.WindowOption ) ).ShouldBeFalse();
 
         // An unknown key of a feature that has a compile time model is a build error.
         context = CreateContext( """{ "FullName": "Sample/$Front", "Local": { "PartyClient": { "App": { "Build": { "Nope": 1 } } } } }""" );

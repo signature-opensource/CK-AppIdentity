@@ -82,6 +82,28 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         public TModel? GetCompileModel<TModel>( string featureName ) where TModel : class => _compileModels.GetValueOrDefault( featureName ) as TModel;
 
         /// <summary>
+        /// Gets whether a feature of this client enables an option: the feature is declared (true or its section) and the
+        /// option is declared in its section (true or its section), or is there by default (an option that is not
+        /// <see cref="TypeActivation.Optional"/>) unless it is turned off (false). The run time selects the options
+        /// (their requirements are checked then): this is what the configuration says.
+        /// </summary>
+        /// <param name="featureName">The feature name ("NgApp").</param>
+        /// <param name="optionType">The option type (its <see cref="IPartyComponentOptionAttribute"/> gives its name and activation).</param>
+        /// <returns>True when the configuration enables the option.</returns>
+        public bool IsOptionEnabled( string featureName, Type optionType )
+        {
+            Throw.CheckNotNullArgument( optionType );
+            var attr = optionType.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().FirstOrDefault();
+            Throw.CheckArgument( "The type must be a party component option.", attr != null );
+            if( !_features.TryGetValue( featureName, out var feature ) || IsFalse( feature ) ) return false;
+            var option = feature.TryGetSection( attr.Name );
+            if( option == null ) return attr.Activation != TypeActivation.Optional;
+            return !IsFalse( option );
+
+            static bool IsFalse( ImmutableConfigurationSection s ) => string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase );
+        }
+
+        /// <summary>
         /// Gets the App whose root party declares this client.
         /// </summary>
         public AppConfiguration App { get; }

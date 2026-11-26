@@ -168,6 +168,30 @@ public class PartyClientOptionsTests
     }
 
     [Test]
+    public async Task the_models_of_an_option_can_be_read_before_the_setup_Async()
+    {
+        // What a desktop application needs before its host starts: the clients that enable an option and its model.
+        var map = await GetMapAsync();
+        await using var services = map.CreateAutomaticServices( s =>
+        {
+            s.AddSingleton( ApplicationIdentityServiceConfiguration.Create( TestHelper.Monitor, c =>
+            {
+                c["StoreRootPath"] = TestHelper.TestProjectFolder.AppendPart( "PartyClientStore" );
+                c["FullName"] = "Test/$OptionsHost";
+                c["Local:PartyClient:App:Build:Window:Title"] = "The title";
+                c["Local:PartyClient:App:Serve"] = "true";
+                c["Local:PartyClient:Other:Build:Window"] = "false";
+                c["Local:PartyClient:Third:Build"] = "true";
+            } ).ShouldNotBeNull() );
+        } );
+        var driver = services.Services.GetRequiredService<PartyClientFeatureDriver>();
+        driver.TryFindOptionModels( TestHelper.Monitor, typeof( WindowOption ), out var found ).ShouldBeTrue();
+        var (name, model) = found.ShouldHaveSingleItem();
+        name.ShouldBe( "App" );
+        model.ShouldBeOfType<WindowOptionConfiguration>().Title.ShouldBe( "The title" );
+    }
+
+    [Test]
     public async Task the_compile_time_keys_are_ignored_at_run_time_Async()
     {
         // Build has no configuration model: only its options and the keys of its compile time model are accepted.

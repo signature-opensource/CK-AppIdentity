@@ -156,8 +156,18 @@ public sealed class BuildClientFeature : ClientFeature, IFakeBuild
 /// An option of "Build" that requires another feature of its client: "Serve" (created after "Build", that it requires).
 /// </summary>
 [PartyClientFeatureOption( "Window", TypeActivation.Optional ), Requires<ServeClientFeature>]
+[Configuration<WindowOptionConfiguration>]
 public sealed class WindowOption : IPartyComponentOption<BuildClientFeature>
 {
+    public WindowOption( WindowOptionConfiguration configuration ) => Configuration = configuration;
+
+    public WindowOptionConfiguration Configuration { get; }
+}
+
+[ConfigurationModel]
+public sealed class WindowOptionConfiguration
+{
+    public string Title { get; init; } = "Window";
 }
 
 [PartyClientFeature( "OtherBuild", TypeActivation.Optional )]

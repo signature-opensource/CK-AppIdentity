@@ -41,6 +41,7 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     readonly IServiceProvider _services;
     readonly PartyComponentDirectory _componentDirectory;
     readonly PartyComponentOptionDirectory? _optionDirectory;
+    readonly ApplicationIdentityService _s;
 
     /// <summary>
     /// Initializes a new <see cref="PartyClientFeatureDriver"/>.
@@ -68,12 +69,65 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         }
         _services = services;
         _optionDirectory = optionDirectory;
+        _s = s;
     }
 
     /// <summary>
     /// Gets the keys of a client section that are its type set: compile time keys, ignored at run time.
     /// </summary>
     public static IReadOnlySet<string> TypeSetKeys { get; } = new HashSet<string>( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
+
+    /// <summary>
+    /// Finds the clients of the root party whose feature enables an option, and reads the option's configuration model,
+    /// before the party is set up (the options are created by its setup): for what must be known before the host starts
+    /// (the window of a desktop application). The configuration says it: the requirements of the option are checked
+    /// by the setup.
+    /// </summary>
+    /// <param name="monitor">The monitor that logs the errors of the models.</param>
+    /// <param name="optionType">The option type: an option of a client feature.</param>
+    /// <param name="found">The clients and the models of their option (null when the option has no model).</param>
+    /// <returns>True on success, false when a model is invalid (the errors are logged).</returns>
+    public bool TryFindOptionModels( IActivityMonitor monitor, Type optionType, out IReadOnlyList<(string ClientName, object? Model)> found )
+    {
+        Throw.CheckNotNullArgument( optionType );
+        var result = new List<(string, object?)>();
+        found = result;
+        if( _optionDirectory == null ) return true;
+        var clients = _s.LocalConfiguration.Configuration.TryGetSection( PartyClientSectionName );
+        if( clients == null ) return true;
+        bool success = true;
+        foreach( var client in clients.GetChildren() )
+        {
+            foreach( var (name, driver) in _drivers )
+            {
+                var option = _optionDirectory.GetOptions( driver.FeatureType ).FirstOrDefault( o => o.OptionType == optionType );
+                if( option == null ) continue;
+                var feature = client.TryGetSection( name );
+                if( feature == null || IsFalse( feature ) ) continue;
+                var section = feature.TryGetSection( option.Name );
+                if( section == null ? !option.IsEnabledByDefault : IsFalse( section ) ) continue;
+                object? model = null;
+                if( option.Model != null )
+                {
+                    var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
+                    model = ConfigurationModelReader.TryRead( option.Model,
+                                                              [section != null && (section.Value == null || section.GetChildren().Any()) ? section : null],
+                                                              $"{feature.Path}:{option.Name}",
+                                                              collector );
+                    collector.DumpLogs( monitor );
+                    if( model == null )
+                    {
+                        success = false;
+                        continue;
+                    }
+                }
+                result.Add( (client.Key, model) );
+            }
+        }
+        return success;
+
+        static bool IsFalse( ImmutableConfigurationSection s ) => string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase );
+    }
 
     /// <summary>
     /// The section of "PartyClient" is the set of the clients of the party: this driver reads it (the client features
