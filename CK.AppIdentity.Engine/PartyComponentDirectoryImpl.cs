@@ -46,7 +46,14 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
             scope.Append( "}, " ).AppendSourceString( i.FeatureName )
                  .Append( ", global::CK.Core.TypeActivation." ).Append( i.Activation.ToString() )
                  .Append( ", global::CK.AppIdentity.FeatureSide." ).Append( i.Side.ToString() )
-                 .Append( ", " ).Append( modelDescription ?? "null" ).Append( " )," ).NewLine();
+                 .Append( ", " ).Append( modelDescription ?? "null" );
+            if( i.CompileKeys.Count > 0 )
+            {
+                scope.Append( ", new string[] {" );
+                foreach( var k in i.CompileKeys ) scope.AppendSourceString( k ).Append( "," );
+                scope.Append( "}" );
+            }
+            scope.Append( " )," ).NewLine();
         }
         scope.Append( "}, new global::System.Collections.Generic.HashSet<global::System.Type>() {" );
         foreach( var m in result.MultipleAbstractions.OrderBy( m => m.FullName, StringComparer.Ordinal ) ) scope.Append( "typeof(" ).Append( m.ToGlobalTypeName() ).Append( ")," );

@@ -22,8 +22,11 @@ namespace CK.AppIdentity;
 ///   <item>The requirements of the features are checked (see <see cref="PartyComponentDirectory.CheckScope"/>): a
 ///   required feature of the party must be allowed by the party, a required abstraction implemented by a feature of the
 ///   client, a unique abstraction implemented once.</item>
-///   <item>The features are created in their order (a feature after the ones it requires), then their options are
-///   selected from their section, created from the services and given to them (see <see cref="ClientFeature.Options"/>).</item>
+///   <item>The features are created in their order (a feature after the ones it requires), then, once they are all
+///   created, their options are selected from their section, created from the services and given to them (see
+///   <see cref="ClientFeature.Options"/>): an option may require another feature of the client.</item>
+///   <item>No model, no configuration: the section of a client feature without <c>[Configuration&lt;TModel&gt;]</c> has
+///   only its options and its compile time keys (an unknown key is an error).</item>
 /// </list>
 /// </summary>
 [PartyFeature( "PartyClient", TypeActivation.ByDefault )]
@@ -71,6 +74,12 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     /// Gets the keys of a client section that are its type set: compile time keys, ignored at run time.
     /// </summary>
     public static IReadOnlySet<string> TypeSetKeys { get; } = new HashSet<string>( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
+
+    /// <summary>
+    /// The section of "PartyClient" is the set of the clients of the party: this driver reads it (the client features
+    /// are configured by their models).
+    /// </summary>
+    protected override bool OwnsItsSection => true;
 
     /// <inheritdoc />
     protected override Task<bool> SetupAsync( FeatureLifetimeContext context )
@@ -212,18 +221,36 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
             return false;
         }
         declared.Sort( ( a, b ) => _componentDirectory.IndexOf( a.Driver.FeatureType ).CompareTo( _componentDirectory.IndexOf( b.Driver.FeatureType ) ) );
+        var created = new List<(ClientFeature Feature, ImmutableConfigurationSection Section)>( declared.Count );
         foreach( var (driver, section) in declared )
         {
             // The configuration model of the feature: read from its section (a bare true without keys has none), its options
-            // reserved.
+            // and its compile time keys reserved. No model, no configuration: the section has only these keys.
             object? model = null;
-            if( _componentDirectory.Find( driver.FeatureType )!.Model is { } description )
+            var info = _componentDirectory.Find( driver.FeatureType )!;
+            var options = _optionDirectory?.GetOptions( driver.FeatureType ) ?? [];
+            var reserved = options.Select( o => o.Name ).Concat( info.CompileKeys ).ToList();
+            if( info.Model is { } description )
             {
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
-                var reserved = _optionDirectory?.GetOptions( driver.FeatureType ).Select( o => o.Name ) ?? [];
                 model = ConfigurationModelReader.TryRead( description, [section.Value == null || section.GetChildren().Any() ? section : null], section.Path, collector, reserved );
                 collector.DumpLogs( monitor );
                 if( model == null )
+                {
+                    success = false;
+                    continue;
+                }
+            }
+            else
+            {
+                bool valid = true;
+                foreach( var k in section.GetChildren() )
+                {
+                    if( reserved.Contains( k.Key, StringComparer.OrdinalIgnoreCase ) ) continue;
+                    monitor.Error( $"Unknown key \"{k.Path}\": the client feature '{info.FeatureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")})." );
+                    valid = false;
+                }
+                if( !valid )
                 {
                     success = false;
                     continue;
@@ -241,14 +268,17 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                 success = false;
                 continue;
             }
-            f._name = _componentDirectory.Find( driver.FeatureType )!.FeatureName!;
-            if( !TrySetOptions( monitor, local, f, section ) )
-            {
-                success = false;
-                continue;
-            }
+            f._name = info.FeatureName!;
             // The next features find it (a feature requires the ones before it).
             client.AddFeature( f );
+            created.Add( (f, section) );
+        }
+        if( !success ) return false;
+        // The options once every feature of the client is created: an option may require a feature of its client that
+        // comes after its owner (an option of "NgApp" that requires "Hosting").
+        foreach( var (f, section) in created )
+        {
+            success &= TrySetOptions( monitor, local, client, f, section );
         }
         if( !success ) return false;
         client.Complete();
@@ -261,10 +291,18 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
     }
 
     // Selects the options of a created feature from its section, creates them and gives them to the feature.
-    bool TrySetOptions( IActivityMonitor monitor, ILocalParty local, ClientFeature feature, ImmutableConfigurationSection section )
+    bool TrySetOptions( IActivityMonitor monitor, ILocalParty local, PartyClient client, ClientFeature feature, ImmutableConfigurationSection section )
     {
         if( _optionDirectory == null ) return true;
-        if( !_optionDirectory.TryCreate( monitor, feature.GetType(), section, _services, out var options, o => o.FindMissingFeature( _services, local ) ) ) return false;
+        if( !_optionDirectory.TryCreate( monitor,
+                                         feature.GetType(),
+                                         section,
+                                         _services,
+                                         out var options,
+                                         o => o.FindMissingFeature( _services, local, t => client.Features.FirstOrDefault( f => f.GetType() == t )?.Name ) ) )
+        {
+            return false;
+        }
         feature.Options = options;
         return true;
     }

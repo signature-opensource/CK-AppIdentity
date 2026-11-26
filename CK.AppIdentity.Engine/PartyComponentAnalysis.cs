@@ -152,7 +152,27 @@ public static class PartyComponentAnalysis
                 success = false;
                 continue;
             }
-            infos.Add( new PartyComponentInfo( t, requires[t], abstractions[t], names[t].Name, names[t].Activation, names[t].Side, model ) );
+            // The compile time model ([CompileConfiguration<TModel>]): the run time knows only its keys (accepted and ignored).
+            var compileModelType = GetCompileModelType( t );
+            IReadOnlyList<string>? compileKeys = null;
+            if( compileModelType != null )
+            {
+                if( !ConfigurationModelDescription.TryGet( compileModelType, out var compileModel, out var compileError ) )
+                {
+                    monitor.Error( $"Invalid compile time configuration model of the party component '{t.ToCSharpName()}'. {compileError}" );
+                    success = false;
+                    continue;
+                }
+                compileKeys = compileModel.Properties.Select( p => p.Name ).ToArray();
+                var both = model?.Properties.Select( p => p.Name ).Intersect( compileKeys, StringComparer.OrdinalIgnoreCase ).ToList();
+                if( both?.Count > 0 )
+                {
+                    monitor.Error( $"The keys '{both.Concatenate( "', '" )}' of the party component '{t.ToCSharpName()}' are in its configuration model and in its compile time model: a key is read at run time or at build time." );
+                    success = false;
+                    continue;
+                }
+            }
+            infos.Add( new PartyComponentInfo( t, requires[t], abstractions[t], names[t].Name, names[t].Activation, names[t].Side, model, compileKeys ) );
         }
         if( !success ) return null;
         return new Result( infos, multiple );
@@ -180,6 +200,16 @@ public static class PartyComponentAnalysis
             return false;
         }
     }
+
+    /// <summary>
+    /// Gets the compile time configuration model of a type: its <c>[CompileConfiguration&lt;TModel&gt;]</c>, if any.
+    /// </summary>
+    /// <param name="t">The type.</param>
+    /// <returns>The model type or null.</returns>
+    public static Type? GetCompileModelType( Type t ) => t.GetCustomAttributes( inherit: false )
+                                                          .Select( a => a.GetType() )
+                                                          .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( CompileConfigurationAttribute<> ) )
+                                                          ?.GetGenericArguments()[0];
 
     // Kahn: a component is ready when its required components and all the implementations of its required abstractions
     // are placed. Among the ready ones, the full name gives the order.

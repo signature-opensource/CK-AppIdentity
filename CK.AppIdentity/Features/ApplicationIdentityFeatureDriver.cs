@@ -25,6 +25,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly ConditionalWeakTable<IParty, IReadOnlyList<object>> _options;
     readonly ConditionalWeakTable<IParty, object> _models;
     readonly ConfigurationModelDescription? _model;
+    // The keys of the compile time model of the feature: accepted and ignored at run time.
+    readonly IReadOnlyList<string> _compileKeys;
     // The drivers of an asymmetric feature share this (null for a symmetric feature).
     internal readonly AsymmetricDrivers? _asymmetric;
     // Set by ApplicationIdentityStaticFeatureDriver.
@@ -90,6 +92,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         _options = new ConditionalWeakTable<IParty, IReadOnlyList<object>>();
         _models = new ConditionalWeakTable<IParty, object>();
         _model = info.Model;
+        _compileKeys = info.CompileKeys;
         _isAllowedByDefault = !info.IsOptional;
         _activation = info.Activation;
         _featureName = name;
@@ -286,6 +289,13 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     /// <returns>The option, null when it is not enabled.</returns>
     public T? GetOption<T>( IParty party ) where T : class => GetOptions( party ).OfType<T>().FirstOrDefault();
 
+    /// <summary>
+    /// Gets whether this driver reads the section of its feature itself: only a driver whose section is a set of named
+    /// entries that it handles generically (the clients of "PartyClient"). False by default: a feature without
+    /// configuration model has no configuration of its own, its section has only its options (an unknown key is an error).
+    /// </summary>
+    protected virtual bool OwnsItsSection => false;
+
     // The model of an asymmetric feature is the one of its side: the Local side reads the "XXX" section of the local
     // parties, the Remote side the "XXXRemote" section of the remotes.
     bool IsModelSide( IParty p ) => _asymmetric == null || (p is ILocalParty) == (_asymmetric.Local == this);
@@ -298,6 +308,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         var directory = _s.OptionDirectory;
         var options = directory?.GetOptions( _componentType ) ?? [];
         bool success = true;
+        // The keys of the section that are not the model's: the options and the compile time keys.
+        var reserved = options.Select( o => o.Name ).Concat( _compileKeys ).ToList();
         if( _model != null )
         {
             foreach( var p in parties )
@@ -306,10 +318,32 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
                 var c = GetConfiguration( p );
                 var key = GetFeatureName( p );
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
-                var model = ConfigurationModelReader.TryRead( _model, c.GetFeatureLevels( key ), $"{c.Configuration.Path}:{key}", collector, options.Select( o => o.Name ) );
+                var model = ConfigurationModelReader.TryRead( _model, c.GetFeatureLevels( key ), $"{c.Configuration.Path}:{key}", collector, reserved );
                 collector.DumpLogs( monitor );
                 if( model == null ) success = false;
                 else _models.Add( p, model );
+            }
+        }
+        else if( !OwnsItsSection )
+        {
+            // No model, no configuration: the section of the feature has only its options and its compile time keys.
+            foreach( var p in parties )
+            {
+                // Once per party: a model-less feature marks its checked parties in the models (it has no model to read).
+                if( _models.TryGetValue( p, out _ ) || !IsAllowedFeature( p ) ) continue;
+                _models.Add( p, this );
+                var c = GetConfiguration( p );
+                var key = GetFeatureName( p );
+                foreach( var level in c.GetFeatureLevels( key ) )
+                {
+                    if( level == null ) continue;
+                    foreach( var k in level.GetChildren() )
+                    {
+                        if( reserved.Contains( k.Key, System.StringComparer.OrdinalIgnoreCase ) ) continue;
+                        monitor.Error( $"Unknown key \"{k.Path}\": the feature '{_featureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")})." );
+                        success = false;
+                    }
+                }
             }
         }
         if( options.Count == 0 ) return success;

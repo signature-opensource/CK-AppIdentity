@@ -72,11 +72,19 @@ public sealed class PartyComponentOptionDirectoryImpl : CSCodeGeneratorType
             {
                 var t = o.Type.Type;
                 // A requirement outside the options of the owner: a party feature (a feature driver), allowed or not on
-                // the party of the owner at run time ("only with it").
-                var notFeature = requiredTypes.FirstOrDefault( r => r.IsAbstract || !typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( r ) );
+                // the party of the owner at run time ("only with it"); for an option of a client feature, another client
+                // feature too (a feature of the client of the owner).
+                bool ownerIsClientFeature = !typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( owner );
+                var notFeature = requiredTypes.FirstOrDefault( r => r.IsAbstract
+                                                                    || !(typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( r )
+                                                                         || (ownerIsClientFeature
+                                                                             && typeof( IPartyComponent ).IsAssignableFrom( r )
+                                                                             && !typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( r ))) );
                 if( notFeature != null )
                 {
-                    monitor.Error( $"The option '{o.Name}' ('{t.ToCSharpName()}') requires '{notFeature.ToCSharpName()}': outside the options of its owner, an option of a party component can require a party feature (a concrete feature driver) only." );
+                    monitor.Error( ownerIsClientFeature
+                                    ? $"The option '{o.Name}' ('{t.ToCSharpName()}') requires '{notFeature.ToCSharpName()}': outside the options of its owner, an option of a client feature can require a party feature (a concrete feature driver) or a client feature (a concrete one) only."
+                                    : $"The option '{o.Name}' ('{t.ToCSharpName()}') requires '{notFeature.ToCSharpName()}': outside the options of its owner, an option of a party component can require a party feature (a concrete feature driver) only." );
                     return CSCodeGenerationResult.Failed;
                 }
                 // An option is a resource group, not a StObj type: its assembly may host no StObj type at all (an

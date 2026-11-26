@@ -22,8 +22,9 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     /// <param name="factory">Creates the option from the services of its owner and its configuration (its section, or its model when it has one).</param>
     /// <param name="model">The description of the option's configuration model (<c>[Configuration&lt;TModel&gt;]</c>), if any.</param>
     /// <param name="requiredFeatures">
-    /// The feature drivers that this option requires (its non optional <c>[Requires]</c> to a party feature): it is
-    /// enabled only when their feature is allowed on the party of its owner.
+    /// The features that this option requires (its non optional <c>[Requires]</c> to a party feature driver, or, for
+    /// an option of a client feature, to another client feature): it is enabled only when their feature is allowed on
+    /// the party of its owner (a party feature) or is a feature of the client of its owner (a client feature).
     /// </param>
     public PartyComponentOptionInfo( string name,
                                      Type optionType,
@@ -43,8 +44,9 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     }
 
     /// <summary>
-    /// Gets the feature drivers that this option requires: it is enabled only when their feature is allowed on the party
-    /// of its owner (the "only with it" rule of <see cref="ConfigurationOptionSelector"/>).
+    /// Gets the features that this option requires: the party feature drivers (their feature is allowed on the party of
+    /// its owner) and, for an option of a client feature, the client features (a feature of the client of its owner).
+    /// It is enabled only with them (the "only with it" rule of <see cref="ConfigurationOptionSelector"/>).
     /// </summary>
     public IReadOnlyList<Type> RequiredFeatures { get; }
 
@@ -54,11 +56,20 @@ public sealed class PartyComponentOptionInfo : IConfigurationOption
     /// </summary>
     /// <param name="services">The services where the feature drivers are.</param>
     /// <param name="party">The party of the owner of this option.</param>
-    /// <returns>Null when every required feature is allowed on the party, "the party feature 'Name'" otherwise.</returns>
-    public string? FindMissingFeature( IServiceProvider services, IParty party )
+    /// <param name="findClientFeature">
+    /// For an option of a client feature: the name of a required client feature when the client of the owner has it,
+    /// null otherwise. Without it, a required client feature is missing.
+    /// </param>
+    /// <returns>Null when every required feature is there, "the party feature 'Name'" (or "the client feature 'Name'") otherwise.</returns>
+    public string? FindMissingFeature( IServiceProvider services, IParty party, Func<Type, string?>? findClientFeature = null )
     {
         foreach( var t in RequiredFeatures )
         {
+            if( !typeof( ApplicationIdentityFeatureDriver ).IsAssignableFrom( t ) )
+            {
+                if( findClientFeature?.Invoke( t ) == null ) return $"the client feature '{t.Name}'";
+                continue;
+            }
             if( services.GetService( t ) is not ApplicationIdentityFeatureDriver d )
             {
                 return $"the party feature '{t.ToCSharpName()}' (not a service)";

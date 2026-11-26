@@ -30,6 +30,11 @@ namespace CK.Setup;
 ///   <item>The other keys of a client are its features ("NgApp", "Hosting"...). Its build feature ("NgApp") is handled by
 ///   the contributor of its package (<see cref="DeclaredClient.SetHandled(string)"/>): a client that no contributor builds
 ///   is an error.</item>
+///   <item>The compile time model of a feature (its <c>[CompileConfiguration&lt;TModel&gt;]</c>, the feature found by its
+///   name among the <see cref="AppConfiguration.ConfigurableTypes"/>) is read from its section, the keys of its run time
+///   model and its options reserved: its keys are the compile time keys of the section, the contributors receive the
+///   model (<see cref="DeclaredClient.GetCompileModel{TModel}(string)"/>, <see cref="GetPartyCompileModel{TModel}(AppConfiguration, string)"/>)
+///   and never read the section.</item>
 /// </list>
 /// </summary>
 public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
@@ -42,9 +47,9 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     // The "PartyClient" feature's section (CK.AppIdentity.PartyClient is not referenced by this engine).
     const string PartyClientSectionName = "PartyClient";
 
-    static readonly HashSet<string> _typeSetKeys = new( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
-
     readonly List<DeclaredClient> _clients = new();
+    // The compile time models of the party features of the root party of each App, by feature name.
+    readonly Dictionary<AppConfiguration, Dictionary<string, object>> _partyCompileModels = new();
 
     /// <summary>
     /// A client declared by the root party of an App.
@@ -52,6 +57,7 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     public sealed class DeclaredClient
     {
         readonly Dictionary<string, ImmutableConfigurationSection> _features;
+        internal readonly Dictionary<string, object> _compileModels;
         string? _buildFeature;
 
         internal DeclaredClient( AppConfiguration app, string name, ImmutableConfigurationSection configuration, TypeSetConfiguration typeSet )
@@ -61,9 +67,19 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             Configuration = configuration;
             TypeSet = typeSet;
             _features = configuration.GetChildren()
-                                     .Where( c => !_typeSetKeys.Contains( c.Key ) )
+                                     .Where( c => !TypeSetConfiguration.Keys.Contains( c.Key ) )
                                      .ToDictionary( c => c.Key, StringComparer.OrdinalIgnoreCase );
+            _compileModels = new Dictionary<string, object>( StringComparer.OrdinalIgnoreCase );
         }
+
+        /// <summary>
+        /// Gets the compile time model of a feature of this client (its <c>[CompileConfiguration&lt;TModel&gt;]</c>, read
+        /// from its section): null when the client doesn't have the feature, or when the feature has no compile time model.
+        /// </summary>
+        /// <typeparam name="TModel">The model type (or one of its base types).</typeparam>
+        /// <param name="featureName">The feature name ("NgApp").</param>
+        /// <returns>The model or null.</returns>
+        public TModel? GetCompileModel<TModel>( string featureName ) where TModel : class => _compileModels.GetValueOrDefault( featureName ) as TModel;
 
         /// <summary>
         /// Gets the App whose root party declares this client.
@@ -130,6 +146,18 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
     /// Gets the clients declared by the root party of each App.
     /// </summary>
     public IReadOnlyList<DeclaredClient> Clients => _clients;
+
+    /// <summary>
+    /// Gets the compile time model of a party feature of the root party of an App (its <c>[CompileConfiguration&lt;TModel&gt;]</c>,
+    /// read from its "Local:{FeatureName}" section): null when the party doesn't declare the feature, or when the feature
+    /// has no compile time model.
+    /// </summary>
+    /// <typeparam name="TModel">The model type (or one of its base types).</typeparam>
+    /// <param name="app">The App.</param>
+    /// <param name="featureName">The feature name.</param>
+    /// <returns>The model or null.</returns>
+    public TModel? GetPartyCompileModel<TModel>( AppConfiguration app, string featureName ) where TModel : class
+        => _partyCompileModels.GetValueOrDefault( app )?.GetValueOrDefault( featureName ) as TModel;
 
     /// <summary>
     /// Projects the parties of the central configuration in the Apps of the AppContext. It reads the domain of the
@@ -523,12 +551,25 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 var name = TemplateSetName( section, t.Configuration ) ?? t.PartyName;
                 if( tenantSets.Add( name ) ) CreateTypeSet( monitor, a, name, t.LocalConfiguration.Configuration, null, ref success );
             }
-            var clients = section.TryGetSection( "Local" )?.TryGetSection( PartyClientSectionName );
+            // The compile time models of the party features of the root party.
+            var local = section.TryGetSection( "Local" );
+            if( local != null )
+            {
+                var models = new Dictionary<string, object>( StringComparer.OrdinalIgnoreCase );
+                ReadCompileModels( monitor, a, local, isClient: false, models, ref success );
+                if( models.Count > 0 ) _partyCompileModels[a] = models;
+            }
+            var clients = local?.TryGetSection( PartyClientSectionName );
             if( clients == null || root == null ) continue;
             foreach( var c in clients.GetChildren() )
             {
                 var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
-                if( set != null ) _clients.Add( new DeclaredClient( a, c.Key, c, set ) );
+                if( set != null )
+                {
+                    var client = new DeclaredClient( a, c.Key, c, set );
+                    ReadCompileModels( monitor, a, c, isClient: true, client._compileModels, ref success );
+                    _clients.Add( client );
+                }
                 // A client is the anchor of the restrictions of the client features and their options.
                 a.DeclareAnchor( $"Local:{PartyClientSectionName}:{c.Key}", ["Client"] );
             }
@@ -679,49 +720,15 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                                                 TypeSetConfiguration? parent,
                                                 ref bool success )
     {
-        var set = new TypeSetConfiguration( name );
-        bool ok = true;
-        foreach( var key in _typeSetKeys )
-        {
-            var list = s.TryGetSection( key );
-            if( list == null ) continue;
-            a.AddCompileKey( RelativePath( a, list ) );
-            var target = key.Equals( "Types", StringComparison.OrdinalIgnoreCase ) ? set.Types : set.ExcludedTypes;
-            // A string, or an object whose "Name" is the type (the other keys are the projection's: "Optional"...).
-            IEnumerable<ImmutableConfigurationSection> items = list.Value != null ? new[] { list } : list.GetChildren();
-            foreach( var item in items )
-            {
-                var typeName = item.Value ?? item["Name"];
-                if( string.IsNullOrWhiteSpace( typeName ) )
-                {
-                    monitor.Error( $"\"{item.Path}\" must be a type name or an object with a \"Name\"." );
-                    ok = false;
-                    continue;
-                }
-                var type = SimpleTypeFinder.WeakResolver( typeName, throwOnError: false );
-                if( type == null )
-                {
-                    monitor.Error( $"Unable to find the type '{typeName}' of \"{item.Path}\"." );
-                    ok = false;
-                    continue;
-                }
-                target.Add( type );
-            }
-        }
-        if( parent != null )
-        {
-            // The exclusions apply downward.
-            foreach( var t in set.Types.Where( parent.ExcludedTypes.Contains ) )
-            {
-                monitor.Error( $"The client '{name}' of {a} adds the type '{t:N}' that its party excludes: the exclusions apply downward." );
-                ok = false;
-            }
-            set.ExcludedTypes.AddRange( parent.ExcludedTypes );
-        }
-        if( !ok )
+        var set = TypeSetConfiguration.TryRead( monitor, name, s, parent );
+        if( set == null )
         {
             success = false;
             return null;
+        }
+        foreach( var key in TypeSetConfiguration.Keys )
+        {
+            if( s.TryGetSection( key ) is { } list ) a.AddCompileKey( RelativePath( a, list ) );
         }
         if( a.BinPathConfiguration.FindTypeSet( name ) != null )
         {
@@ -731,12 +738,82 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         }
         a.BinPathConfiguration.AddTypeSet( set );
         return set;
+    }
 
-        static string RelativePath( AppConfiguration a, ImmutableConfigurationSection s )
+    static string RelativePath( AppConfiguration a, ImmutableConfigurationSection s )
+    {
+        var prefix = a.Configuration.Path + ":";
+        return s.Path.StartsWith( prefix, StringComparison.OrdinalIgnoreCase ) ? s.Path[prefix.Length..] : s.Path;
+    }
+
+    // Reads the compile time models of the features declared in a section (a client's section for the client features, a
+    // party's "Local" for the party features): the feature is found by its name among the configurable types of the App.
+    // The keys of its run time model and its options are reserved; the keys of the model are compile time keys, and the
+    // section of the feature stays declared in the projection (written true when all its keys are compile time keys).
+    static void ReadCompileModels( IActivityMonitor monitor,
+                                   AppConfiguration a,
+                                   ImmutableConfigurationSection section,
+                                   bool isClient,
+                                   Dictionary<string, object> models,
+                                   ref bool success )
+    {
+        foreach( var k in section.GetChildren() )
         {
-            var prefix = a.Configuration.Path + ":";
-            return s.Path.StartsWith( prefix, StringComparison.OrdinalIgnoreCase ) ? s.Path[prefix.Length..] : s.Path;
+            if( TypeSetConfiguration.Keys.Contains( k.Key ) ) continue;
+            if( k.Value != null && !(bool.TryParse( k.Value, out var declared ) && declared) ) continue;
+            var t = FindComponent( a.ConfigurableTypes, k.Key, isClient );
+            if( t == null || PartyComponentAnalysis.GetCompileModelType( t ) is not { } modelType ) continue;
+            if( !ConfigurationModelDescription.TryGet( modelType, out var description, out var error ) )
+            {
+                monitor.Error( $"Invalid compile time configuration model of '{t.ToCSharpName()}'. {error}" );
+                success = false;
+                continue;
+            }
+            var reserved = new List<string>();
+            if( GetModelType( t ) is { } runModel && ConfigurationModelDescription.TryGet( runModel, out var runDescription, out _ ) )
+            {
+                reserved.AddRange( runDescription.Properties.Select( p => p.Name ) );
+            }
+            reserved.AddRange( OptionNames( a.ConfigurableTypes, t ) );
+            var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
+            var model = ConfigurationModelReader.TryRead( description, [k.Value == null ? k : null], k.Path, collector, reserved );
+            collector.DumpLogs( monitor );
+            if( model == null )
+            {
+                success = false;
+                continue;
+            }
+            models[k.Key] = model;
+            foreach( var p in description.Properties )
+            {
+                if( k.TryGetSection( p.Name ) is { } v ) a.AddCompileKey( RelativePath( a, v ) );
+            }
+            a.AddDeclarationKey( RelativePath( a, k ) );
         }
+
+        // A client feature (a party component that is not a feature driver) or a feature driver, by its configuration name.
+        static Type? FindComponent( IReadOnlyCollection<Type> types, string name, bool isClient )
+            => types.FirstOrDefault( t => t.IsClass
+                                          && !t.IsAbstract
+                                          && typeof( IPartyComponent ).IsAssignableFrom( t )
+                                          && typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( t ) != isClient
+                                          && string.Equals( t.GetCustomAttributes( inherit: false ).OfType<IConfigurableTypeAttribute>().FirstOrDefault()?.Name,
+                                                            name,
+                                                            StringComparison.OrdinalIgnoreCase ) );
+
+        static Type? GetModelType( Type t ) => t.GetCustomAttributes( inherit: false )
+                                                .Select( a => a.GetType() )
+                                                .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
+                                                ?.GetGenericArguments()[0];
+
+        // The names of the options of an owner (an option of a base owner applies to it).
+        static IEnumerable<string> OptionNames( IReadOnlyCollection<Type> types, Type owner )
+            => types.Where( o => o.GetInterfaces().Any( i => i.IsGenericType
+                                                             && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> )
+                                                             && i.GetGenericArguments()[0].IsAssignableFrom( owner ) ) )
+                    .Select( o => o.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().FirstOrDefault()?.Name )
+                    .Where( n => n != null )
+                    .Select( n => n! );
     }
 
     /// <summary>

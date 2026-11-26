@@ -31,7 +31,6 @@ namespace CK.Setup;
 static class ProjectionCheck
 {
     const string PartyClientSectionName = "PartyClient";
-    static readonly HashSet<string> _typeSetKeys = new( StringComparer.OrdinalIgnoreCase ) { "Types", "ExcludedTypes" };
 
     sealed record Option( string Name, Type Owner, Type Type, IReadOnlyList<Type> RequiredFeatures );
 
@@ -126,9 +125,11 @@ static class ProjectionCheck
             {
                 var scope = clientFeatures.Where( f => IsMember( client.Key, f.ComponentType ) && IsActive( f, client.TryGetSection( f.FeatureName ) ) ).ToList();
                 success &= PartyComponentDirectory.CheckScope( monitor, $"the client '{client.Key}'", scope, result.MultipleAbstractions.Contains, outer.Contains );
+                // An option of a client feature may require a party feature or another feature of the client.
+                var active = outer.Concat( scope.Select( f => f.ComponentType ) ).ToHashSet();
                 foreach( var k in client.GetChildren() )
                 {
-                    if( _typeSetKeys.Contains( k.Key ) || IsFalse( k ) ) continue;
+                    if( TypeSetConfiguration.Keys.Contains( k.Key ) || IsFalse( k ) ) continue;
                     var f = clientFeatures.FirstOrDefault( i => string.Equals( i.FeatureName, k.Key, StringComparison.OrdinalIgnoreCase ) );
                     if( f == null ) continue;
                     if( !IsMember( client.Key, f.ComponentType ) )
@@ -137,7 +138,7 @@ static class ProjectionCheck
                     }
                     else if( k.Value == null )
                     {
-                        CheckOptions( f.ComponentType, client.Key, name => k.TryGetSection( name ), outer );
+                        CheckOptions( f.ComponentType, client.Key, name => k.TryGetSection( name ), active );
                     }
                 }
             }
@@ -193,8 +194,11 @@ static class ProjectionCheck
                 {
                     if( !activeDrivers.Contains( r ) )
                     {
-                        var name = drivers.FirstOrDefault( d => d.ComponentType == r )?.FeatureName ?? r.ToCSharpName();
-                        monitor.Error( $"\"{Trim( s.Path )}\": the option '{o.Name}' requires the party feature '{name}' that is not active in the party '{setName}'." );
+                        var required = result.Components.FirstOrDefault( d => d.ComponentType == r );
+                        var name = required?.FeatureName ?? r.ToCSharpName();
+                        monitor.Error( typeof( IApplicationIdentityFeatureDriver ).IsAssignableFrom( r )
+                                        ? $"\"{Trim( s.Path )}\": the option '{o.Name}' requires the party feature '{name}' that is not active in the party '{setName}'."
+                                        : $"\"{Trim( s.Path )}\": the option '{o.Name}' requires the client feature '{name}' that is not active in the client '{setName}'." );
                         success = false;
                     }
                 }
