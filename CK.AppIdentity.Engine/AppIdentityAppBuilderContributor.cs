@@ -760,9 +760,18 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
         foreach( var k in section.GetChildren() )
         {
             if( TypeSetConfiguration.Keys.Contains( k.Key ) ) continue;
-            if( k.Value != null && !(bool.TryParse( k.Value, out var declared ) && declared) ) continue;
             var t = FindComponent( a.ConfigurableTypes, k.Key, isClient );
             if( t == null || PartyComponentAnalysis.GetCompileModelType( t ) is not { } modelType ) continue;
+            // A feature is declared by true or by its section (false turns it off).
+            if( k.Value != null )
+            {
+                if( !bool.TryParse( k.Value, out var declared ) )
+                {
+                    monitor.Error( $"Invalid \"{k.Path}\" = '{k.Value}': a feature is declared by true or by its section (false turns off a feature that is there by default)." );
+                    success = false;
+                }
+                if( !declared ) continue;
+            }
             if( !ConfigurationModelDescription.TryGet( modelType, out var description, out var error ) )
             {
                 monitor.Error( $"Invalid compile time configuration model of '{t.ToCSharpName()}'. {error}" );
