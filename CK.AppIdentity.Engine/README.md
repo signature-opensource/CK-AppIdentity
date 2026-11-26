@@ -90,7 +90,7 @@ all the implementations, a client that declares two of them is ambiguous. The ru
 
 ## The parties of the Apps ("ckonf.json")
 
-When a "XXX.Builder" project has a `ckonf.json` (see CK.AppBuilder), the
+When a Builder (the "{Name}.Builder" project of an AppContext) has a `ckonf.json` (see CK.AppBuilder), the
 [`AppIdentityAppBuilderContributor`](AppIdentityAppBuilderContributor.cs) reads the party of each App before the
 engine runs:
 
@@ -98,8 +98,8 @@ engine runs:
   (`ApplicationIdentityServiceConfiguration.RootKeys`: "FullName", "Local", "Parties", "Defaults"...), next to the other
   sections of the host (`Logging`...). They are projected in the "CK-AppIdentity" section of the host's
   `appsettings.json`. An App without any of them is not a party.
-- **the party is validated at build time** (`ApplicationIdentityServiceConfiguration`, the App name is the default
-  party name, the host project the base path): an invalid configuration is a build error.
+- **the party is validated at build time** (`ApplicationIdentityServiceConfiguration`, the party of the App name is
+  the default party name, the host project the base path): an invalid configuration is a build error.
 - **each local party and each client of the root party has its type set**, a `TypeSetConfiguration` of the App's
   BinPath (computed by the engine as a subset of its types, `IRunningBinPathGroup.TypeSets`): the `Types` and
   `ExcludedTypes` of its section (`Local` for a party, `Parties[i]:Local` for a tenant domain, `Local:PartyClient:{Name}`
@@ -115,16 +115,17 @@ engine runs:
 ## The parties of the central configuration
 
 When the repository has a central configuration (a `ckonf.json` at its root, see the App builder model of
-CK.Engine.Configuration), the same contributor projects the parties in the `ckonf.json` of each builder
-(`AppIdentityAppBuilderContributor.ProjectFromCentral`). It handles four root keys:
+CK.Engine.Configuration), the same contributor projects the parties in the `ckonf.json` of each Builder
+(`AppIdentityAppBuilderContributor.ProjectFromCentral`). It reads the domain of the solution (`"Domain"`, a key of the
+central configuration itself: `CentralConfiguration.Domain`) and handles the root keys `"Environment"` and `"Links"`:
 
 ```jsonc
 {
   "Domain": "Sample/Auth3",
-  // Optional: the prefix of the domain that the names of the Apps leave out.
+  // Optional: the prefix of the domain that the names of the projects of the Apps leave out.
   "GlobalDomainPrefix": "Sample",
   // "Environment": "#Dev" is the default.
-  "Builders": { "Front/Auth3.Front.Builder": { ... }, "Auth3/Auth3.Auth3.Builder": { ... } },
+  "AppContexts": { "Front": { "RootPath": "Front", "App": { ... } }, "Auth3": { "RootPath": "Auth3", "App": { ... } } },
   "Links": [
     { "From": "$Front", "To": "$Auth3", "Link": { "AuthCenterRemote": true, "Address": "tcp:127.0.0.1:37300" } },
     { "From": "$Auth3", "To": "$Front", "Link": { "AuthCenterRemote": true } }
@@ -132,22 +133,20 @@ CK.Engine.Configuration), the same contributor projects the parties in the `ckon
 }
 ```
 
-- **The name of an App is the identity of its party:** its domain then its party name, the `/` mapped to `.`
-  (`Sample.Auth3.Front`: the party `$Front` of the domain `Sample/Auth3`), and so are its projects
-  (`Sample.Auth3.Front.App`, `.Builder`, `.Host`). The parts of a domain and a party name have no `.`: the name is
-  reversible. The optional `"GlobalDomainPrefix"` (the `"Domain"` or a prefix of it, whole parts) is left out of the
-  names: with `"Sample"`, the App is `Auth3.Front`; with the whole domain, the names are the party names. Its domain is
-  the `"Domain"`, or the one of its explicit `FullName` (under the prefix); an explicit party (`PartyName`, `FullName`)
-  must be the one of the name. A name that disagrees is an error that gives the expected name. `"GlobalDomainPrefix"`
-  is written in the central configuration only (not in a deployment: it names the projects).
-- **The `FullName` of an App that doesn't write it** is `{Domain}/${Party}/{Environment}`.
+- **The name of an App is its party name** (`"$Front"`; the single App of an AppContext is `"$<AppContext name>"`),
+  possibly after the segments of its domain relative to the `"Domain"` (`"Customers.$Acme"`: the party `$Acme` of the
+  domain `Sample/Auth3/Customers`). Its projects are named after it by the central configuration (`Auth3.Front.App`:
+  the domain without its `"GlobalDomainPrefix"`). An explicit `FullName` (or `PartyName`) must be the party of the App
+  in its domain: a name that disagrees is an error. Without `"Domain"`, the domain of an App is its segments, or the
+  one of its explicit `FullName`.
+- **The `FullName` of an App that doesn't write it** is `{Domain}[/{segments}]/{Party}/{Environment}`.
 - **A link is directed:** its `Link` is the remote entry that `From` has for `To` (its `PartyName` is `To`), appended
   to the `Parties` of `From` in the order of the links. A link without its reverse is valid (a party known on one side
   only). The keys of a remote entry are not checked here: the builder of `From` validates its party as above.
 - **The remotes outside the solution stay in the `Parties` of their App;** a remote both linked and explicit is an
   error.
 - **A fleet** (an App with `"InstanceCount"`, `"Instances"` or `"MaxInstanceCount"`) is named by its pattern: its
-  derived `FullName` is `{Domain}/${Party}-{Name}/{Environment}` (`$Worker-{Name}`), an explicit one uses the
+  derived `FullName` is `{Domain}/{Party}-{Name}/{Environment}` (`$Worker-{Name}`), an explicit one uses the
   placeholders. A link from it is a remote of every instance; a link to it is a remote template in `From` (the fleet's
   `"InstanceCount"` or `"Instances"`, and its `"MaxInstanceCount"`, copied in the entry): one remote per instance at
   run time, its values can use the placeholders (`"Address": "tcp:10.0.0.1:{37300+Index}"`).
