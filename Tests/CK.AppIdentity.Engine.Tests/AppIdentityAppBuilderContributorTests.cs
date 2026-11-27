@@ -64,7 +64,7 @@ public class AppIdentityAppBuilderContributorTests
               "Local": {
                 "ExcludedTypes": [ "{{OtherType}}" ],
                 "PartyClient": {
-                  "App": { "Types": [ "{{FakeType}}" ], "NgApp": { "ActiveCultures": "fr" }, "Hosting": { "RequestPath": "/" } },
+                  "App": { "Types": [ "{{FakeType}}" ], "NgApp": { "ActiveCultures": "fr", "RequestPath": "/" }, "Hosting": true },
                   "Tool": { "Types": [ "{{FakeType}}" ], "Native": { "Store": "Play" } }
                 }
               },

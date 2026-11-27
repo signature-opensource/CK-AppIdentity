@@ -38,6 +38,7 @@ the options of the App builder's aspects):
 | A parameter of a derived configuration type (`IConfigurationSection`, `ImmutableConfigurationSection`) | The configuration of an option is a plain `IConfiguration`. |
 | Two options of an owner with the same name (whatever their namespace) | They have the same name. |
 | A cycle between the options of an owner | Reported by the ResourceSpace. |
+| A requirement outside the options of the owner that is not a feature: a party feature driver, or another client feature for an option of a client feature | An option can require a feature only. |
 
 ## The party components
 
@@ -62,6 +63,9 @@ test with it):
 - **The names are unique in their scope**: among the feature drivers (the keys of a party, the "XXXRemote" ones
   included) and among the client features (the keys of a client). A party feature and a client feature can have the
   same name.
+- **Their models:** the configuration model (`[Configuration<TModel>]`, `PartyComponentInfo.Model`, its description
+  generated) and the keys of the compile time model (`[CompileConfiguration<TModel>]`, `PartyComponentInfo.CompileKeys`:
+  the run time accepts and ignores them). A key in both models is an error.
 
 The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
 
@@ -103,10 +107,16 @@ engine runs:
 - **each local party and each client of the root party has its type set**, a `TypeSetConfiguration` of the App's
   BinPath (computed by the engine as a subset of its types, `IRunningBinPathGroup.TypeSets`): the `Types` and
   `ExcludedTypes` of its section (`Local` for a party, `Parties[i]:Local` for a tenant domain, `Local:PartyClient:{Name}`
-  for a client), compile time keys (not projected). A party's set is named after the party (`$Front`), a client's after
-  the client (`MiniApp`). A type is its assembly qualified name, or an object whose `Name` is (the other keys are the
-  projection's: `{ "Name": "...", "Optional": true }`). The exclusions of the root party apply to its clients: a client
-  that adds a type that its party excludes is an error.
+  for a client), compile time keys (not projected), read by `TypeSetConfiguration.TryRead`. A party's set is named after
+  the party (`$Front`), a client's after the client (`MiniApp`). A type is its assembly qualified name. The exclusions of
+  the root party apply to its clients: a client that adds a type that its party excludes is an error.
+- **the compile time models:** the type of a feature of a client (or of the root party's "Local") is found by its name
+  among the configurable types of the App (`AppConfiguration.ConfigurableTypes`). When it declares a compile time model
+  (`[CompileConfiguration<TModel>]`), the model is read from its section (the keys of its configuration model and its
+  options reserved: an unknown key is a build error), its keys are compile time keys and the section stays declared.
+  The contributors receive the model, they never read the section: `DeclaredClient.GetCompileModel<TModel>( featureName )`,
+  `AppIdentityAppBuilderContributor.GetPartyCompileModel<TModel>( app, featureName )`. What the configuration enables is
+  known too: `DeclaredClient.IsOptionEnabled( featureName, optionType )`.
 - **its root party's clients** ("Local:PartyClient:{Name}") are exposed (`Clients`, their `Features` by name, their
   `TypeSet`) to the contributors that build them: the contributor of a build feature ("NgApp") calls
   `DeclaredClient.SetHandled( "NgApp" )`, a client has one build feature. A declared client that no contributor builds

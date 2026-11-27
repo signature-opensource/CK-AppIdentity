@@ -27,8 +27,8 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
   "PartyClient": {
     "App": {
       "Types": [ "..." ], "ExcludedTypes": [ "..." ],   // Its type set: compile time keys, ignored at run time.
-      "NgApp": true,                                    // A feature without configuration: true (an empty object is nothing).
-      "Hosting": { "RequestPath": "/", "DevServerPort": 4200 }
+      "NgApp": { "RequestPath": "/", "DevServerPort": 4200 },  // Its compile time keys: ignored at run time.
+      "Hosting": true                                   // A feature without configuration: true (an empty object is nothing).
     }
   }
 }
@@ -57,7 +57,8 @@ domains, those of the initial configuration and the dynamic ones (a remote has n
 by its description). It is **allowed by default**: `"PartyClient": false` makes a party without clients. The
 clients of a party are its [`PartyClientFeature`](PartyClientFeature.cs) (`Clients`, `Find( name )`), in the order of their
 declaration. For each client, it finds the driver of each feature, checks the requirements
-(`PartyComponentDirectory.CheckScope`), creates the features in their order, then their options.
+(`PartyComponentDirectory.CheckScope`), creates the features in their order then, once they are all created, their
+options.
 
 The rules fail closed:
 
@@ -68,7 +69,7 @@ The rules fail closed:
 | A feature that requires a feature that the party doesn't have | An error. |
 | A feature that requires an abstraction that no feature of the client implements | An error. |
 | Two features of a client that implement a unique abstraction | An error. |
-| A key of a feature that the feature doesn't have | An error, reported by its driver. |
+| A key of a feature that is neither a key of its model nor one of its options nor a key of its compile time model | An error. |
 
 The declarations are read on the party only: a "Defaults" section doesn't declare clients.
 
@@ -76,9 +77,16 @@ The declarations are read on the party only: a "Defaults" section doesn't declar
 
 A client feature may declare its configuration model (`[Configuration<TModel>]` on the feature type): its driver
 specializes `ClientFeatureDriver<T, TModel>` and creates the feature from the model. `PartyClientFeatureDriver` reads it
-from the feature's section (a bare `true` is the defaults of the model), the names of the options of the feature
-reserved: an unknown key, a missing required one or an invalid value is an error before the driver is called. A driver
-without model specializes `ClientFeatureDriver<T>` and reads its section itself.
+from the feature's section (a bare `true` is the defaults of the model), the names of the options of the feature and the
+keys of its compile time model reserved: an unknown key, a missing required one or an invalid value is an error before
+the driver is called.
+
+**No model, no configuration:** a feature without model (its driver specializes `ClientFeatureDriver<T>`) has no key of
+its own: its section has only its options and the keys of its compile time model, any other key is an error. A driver
+never checks its keys.
+
+**The compile time model** of a feature (`[CompileConfiguration<TModel>]`, read by the App builder: see
+CK.AppIdentity.Engine) is read by the build: its keys are accepted and ignored at run time (`PartyComponentInfo.CompileKeys`).
 
 ## The options of a client feature
 
@@ -87,13 +95,16 @@ A package can add an option to a client feature: a class decorated with `[PartyC
 applies to `TFeature` and to the features derived from it. See
 [the options of the party components](../CK.AppIdentity/PartyComponentOptions/README.md).
 
-- **The feature driver of the party creates them:** once a feature is created, `PartyClientFeatureDriver` selects the
-  options of its type from its section (their key is their name), creates them (each one reads its configuration in its
-  constructor: an invalid one throws and makes the client an error) and gives them to the feature: `ClientFeature.Options`,
-  in their order, and `ClientFeature.GetOption<T>()`.
+- **The feature driver of the party creates them:** once every feature of the client is created,
+  `PartyClientFeatureDriver` selects the options of each feature from its section (their key is their name), creates
+  them (each one reads its configuration in its constructor: an invalid one throws and makes the client an error) and
+  gives them to the feature: `ClientFeature.Options`, in their order, and `ClientFeature.GetOption<T>()`.
+- **An option can require a feature:** a feature of the party (`[Requires<XXXFeatureDriver>]`, allowed by the party) or
+  another feature of the client (`[Requires<HostingClientFeature>]`): it is enabled only with it.
 - **The feature applies them:** applying an option is the feature's business (the base type of its options).
-- **A driver ignores the option keys** of the section it receives: it refuses only a key that is neither one of its own
-  nor an option name of its feature (`PartyComponentOptionDirectory.IsOptionName`).
+- **Before the setup:** `PartyClientFeatureDriver.TryFindOptionModels` finds the clients whose feature enables an option
+  and reads the option's model from the configuration, for what must be known before the host starts (the window of a
+  desktop application).
 
 ```jsonc
 "Hosting": { "StaticFiles": { "AssetsMaxAge": "01:00:00" } }

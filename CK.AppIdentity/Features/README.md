@@ -189,12 +189,11 @@ feature (`TransportFeatureDriver`, in CK.AppIdentity.TransportLayer) requires th
 remote, in CK.AppIdentity.KeyManagement) to be available on a party: if this is not the case, the `TransportFeatureDriver` issues a warning:
 *"Remote 'AcmeCorp/$Server' cannot support the allowed 'Transport' feature because the remote has a disallowed 'KeyManagement' feature."*.
 
-A driver reads the configuration of a party: the `LocalConfiguration` of a local party (the root or a tenant domain, its "Local"
-section) or the configuration of a remote. Nothing is implicitly inherited from the levels above: a setting that can have a default
-value is resolved with the `TryResolveValue` / `TryResolveSection` extension methods of CK.Configuration (the party's own key, then the
-"Defaults" sections above it, see [the levels and the defaults](../../CK.AppIdentity.Configuration/README.md#the-structural-levels-and-the-defaults)).
-A setting that must be configured on each party (anything to do with security, for example) is read on the party only
-(`TryGetSection`).
+The configuration of a feature is its section in a party (the "Local" section of a local party, the root or a tenant
+domain, or the configuration of a remote), and a section is read only through its owner's model: a driver gets the model
+of each party (below), never the keys of a section, its own or another one's. The model is read along the levels (the
+party's own key, then the "Defaults" sections above it, see
+[the levels and the defaults](../../CK.AppIdentity.Configuration/README.md#the-structural-levels-and-the-defaults)).
 
 ### A feature with a configuration model
 
@@ -208,6 +207,12 @@ party without section gets the defaults of the model. The model of an asymmetric
 Local side has the model of the local parties ("XXX"), the Remote side the one of the remotes ("XXXRemote"). The engine
 generates the description of the model
 (`PartyComponentInfo.Model`, CK.ConfigurationModel.Engine): no reflection at run time; the model must be public.
+
+**No model, no configuration:** a feature without model has no key of its own: the levels of its section have only its
+options and the keys of its compile time model (`[CompileConfiguration<TModel>]`, read by the build); any other key is
+an error and the setup fails. A driver never reads its section. Only a driver whose section is a set of named entries
+that it handles generically overrides `ApplicationIdentityFeatureDriver.OwnsItsSection` ("PartyClient": its section is
+the set of the clients).
 
 __Important:__ There is no namespace or other partitioning of names/keys: drivers who don't know each other can perfectly well use
 common keys... or should but don't. We didn't consider this to be an issue at this stage, and even saw it as a
