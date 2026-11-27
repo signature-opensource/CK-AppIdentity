@@ -20,7 +20,7 @@ public class CentralProjectionTests
             "Auth3": {
               "RootPath": "Auth3",
               "App": {
-                "Defaults": { "Transport": { "ListeningAddress": [ "tcp:127.0.0.1:37300" ] } },
+                "Defaults": { "Transport": { "ListeningAddress": { "tcp": "127.0.0.1:37300" } } },
                 "Local": { "AuthCenter": {} }
               }
             },
