@@ -310,6 +310,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         bool success = true;
         // The keys of the section that are not the model's: the options and the compile time keys.
         var reserved = options.Select( o => o.Name ).Concat( _compileKeys ).ToList();
+        // Not strict ("#Dev" by default): an unknown key or an unreadable value is a warning (the key keeps its default).
+        bool lenient = !_s.Configuration.StrictConfigurationMode;
         if( _model != null )
         {
             foreach( var p in parties )
@@ -318,7 +320,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
                 var c = GetConfiguration( p );
                 var key = GetFeatureName( p );
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
-                var model = ConfigurationModelReader.TryRead( _model, c.GetFeatureLevels( key ), $"{c.Configuration.Path}:{key}", collector, reserved );
+                var model = ConfigurationModelReader.TryRead( _model, c.GetFeatureLevels( key ), $"{c.Configuration.Path}:{key}", collector, reserved, lenient );
                 collector.DumpLogs( monitor );
                 if( model == null ) success = false;
                 else _models.Add( p, model );
@@ -340,8 +342,16 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
                     foreach( var k in level.GetChildren() )
                     {
                         if( reserved.Contains( k.Key, System.StringComparer.OrdinalIgnoreCase ) ) continue;
-                        monitor.Error( $"Unknown key \"{k.Path}\": the feature '{_featureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")})." );
-                        success = false;
+                        var text = $"Unknown key \"{k.Path}\": the feature '{_featureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")}).";
+                        if( lenient )
+                        {
+                            monitor.Warn( text + " It is ignored." );
+                        }
+                        else
+                        {
+                            monitor.Error( text );
+                            success = false;
+                        }
                     }
                 }
             }
@@ -358,7 +368,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
                                                          $"{c.Configuration.Path}:{key}",
                                                          _s.Services,
                                                          out var created,
-                                                         o => o.FindMissingFeature( _s.Services, p ) ) )
+                                                         o => o.FindMissingFeature( _s.Services, p ),
+                                                         lenient ) )
             {
                 _options.Add( p, created );
             }

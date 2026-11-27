@@ -129,6 +129,9 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         static bool IsFalse( ImmutableConfigurationSection s ) => string.Equals( s.Value, "false", StringComparison.OrdinalIgnoreCase );
     }
 
+    // Not strict ("#Dev" by default): an unknown key or an unreadable value is a warning (the key keeps its default).
+    bool Lenient => !_s.Configuration.StrictConfigurationMode;
+
     /// <summary>
     /// The section of "PartyClient" is the set of the clients of the party: this driver reads it (the client features
     /// are configured by their models).
@@ -287,7 +290,7 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
             if( info.Model is { } description )
             {
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );
-                model = ConfigurationModelReader.TryRead( description, [section.Value == null || section.GetChildren().Any() ? section : null], section.Path, collector, reserved );
+                model = ConfigurationModelReader.TryRead( description, [section.Value == null || section.GetChildren().Any() ? section : null], section.Path, collector, reserved, Lenient );
                 collector.DumpLogs( monitor );
                 if( model == null )
                 {
@@ -301,8 +304,16 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                 foreach( var k in section.GetChildren() )
                 {
                     if( reserved.Contains( k.Key, StringComparer.OrdinalIgnoreCase ) ) continue;
-                    monitor.Error( $"Unknown key \"{k.Path}\": the client feature '{info.FeatureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")})." );
-                    valid = false;
+                    var text = $"Unknown key \"{k.Path}\": the client feature '{info.FeatureName}' has no configuration of its own (no [Configuration<TModel>]), its keys are its options ({(options.Count > 0 ? options.Select( o => o.Name ).Concatenate() : "none")}).";
+                    if( Lenient )
+                    {
+                        monitor.Warn( text + " It is ignored." );
+                    }
+                    else
+                    {
+                        monitor.Error( text );
+                        valid = false;
+                    }
                 }
                 if( !valid )
                 {
@@ -353,7 +364,8 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
                                          section,
                                          _services,
                                          out var options,
-                                         o => o.FindMissingFeature( _services, local, t => client.Features.FirstOrDefault( f => f.GetType() == t )?.Name ) ) )
+                                         o => o.FindMissingFeature( _services, local, t => client.Features.FirstOrDefault( f => f.GetType() == t )?.Name ),
+                                         Lenient ) )
         {
             return false;
         }

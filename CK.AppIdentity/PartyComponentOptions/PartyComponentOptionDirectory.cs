@@ -82,14 +82,16 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// <param name="created">The created options, in their order.</param>
     /// <returns>True on success, false on error (errors are logged).</returns>
     /// <param name="findMissingRequirement">Optional: see <see cref="PartyComponentOptionInfo.FindMissingFeature"/>.</param>
+    /// <param name="lenient">True to read the models of the options leniently (see the static TryCreate).</param>
     public bool TryCreate( IActivityMonitor monitor,
                            Type ownerType,
                            ImmutableConfigurationSection? ownerSection,
                            IServiceProvider services,
                            out IReadOnlyList<object> created,
-                           Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null )
+                           Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null,
+                           bool lenient = false )
     {
-        return TryCreate( monitor, GetOptions( ownerType ), name => [ownerSection?.TryGetSection( name )], ownerSection?.Path, services, out created, findMissingRequirement );
+        return TryCreate( monitor, GetOptions( ownerType ), name => [ownerSection?.TryGetSection( name )], ownerSection?.Path, services, out created, findMissingRequirement, lenient );
     }
 
     /// <summary>
@@ -106,6 +108,11 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
     /// <param name="services">The owner's services.</param>
     /// <param name="created">The created options, in their order.</param>
     /// <param name="findMissingRequirement">Optional: see <see cref="PartyComponentOptionInfo.FindMissingFeature"/>.</param>
+    /// <param name="lenient">
+    /// True to read the models of the options leniently (an unknown key or an unreadable value is a warning: see
+    /// <see cref="ConfigurationModelReader.TryRead(ConfigurationModelDescription, IReadOnlyList{ImmutableConfigurationSection?}, string, UserMessageCollector, IEnumerable{string}?, bool)"/>):
+    /// when the configuration is not strict (<see cref="ApplicationIdentityServiceConfiguration.StrictConfigurationMode"/>).
+    /// </param>
     /// <returns>True on success, false on error (errors are logged).</returns>
     public static bool TryCreate( IActivityMonitor monitor,
                                   IReadOnlyList<PartyComponentOptionInfo> options,
@@ -113,7 +120,8 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
                                   string? ownerPath,
                                   IServiceProvider services,
                                   out IReadOnlyList<object> created,
-                                  Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null )
+                                  Func<PartyComponentOptionInfo, string?>? findMissingRequirement = null,
+                                  bool lenient = false )
     {
         created = [];
         if( !ConfigurationOptionSelector.TrySelect( monitor,
@@ -138,7 +146,8 @@ public abstract class PartyComponentOptionDirectory : ISingletonAutoService
                 arg = ConfigurationModelReader.TryRead( info.Model,
                                                         levels,
                                                         configuration?.Path ?? (ownerPath != null ? $"{ownerPath}:{info.Name}" : info.Name),
-                                                        collector );
+                                                        collector,
+                                                        lenient: lenient );
                 collector.DumpLogs( monitor );
                 if( arg == null )
                 {
