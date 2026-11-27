@@ -47,8 +47,8 @@ public class AppIdentityAppBuilderContributorTests
         // The architecture of the host describes the party and its client: the features, their options and their
         // compile time choices.
         var architecture = context.Apps[0].Architecture;
-        architecture.Select( s => s.Title ).ShouldBe( ["The party 'Front'", "The client 'App' of 'Front'"] );
-        architecture[0].Markdown.ShouldContain( "- Full name: `Sample/$Front`" );
+        architecture.Select( s => s.Title ).ShouldBe( ["The party '$Front'", "The client 'App' of '$Front'"] );
+        architecture[0].Markdown.ShouldContain( "- Full name: `Sample/$Front/#Dev`" );
         var client = architecture[1].Markdown.ReplaceLineEndings( "\n" );
         client.ShouldContain( "### Client feature `Build`\n\nPackage: `CK.AppIdentity.Engine.Tests`\n\nOptions: `Window`\n\nBuild time:\n\n| Key | Value |\n|---|---|\n| Port | `3000` |\n" );
         client.ShouldContain( "### Client feature `Serve`" );
