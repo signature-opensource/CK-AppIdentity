@@ -272,6 +272,7 @@ public class PartyClientFeatureTests
         using var logs = new AllMonitorsTexts();
         using var host = BuildHost( c =>
         {
+            c["StrictConfigurationMode"] = "true";
             c["Local:Serving"] = "true";
             c["Local:PartyClient:App:Served:Origin"] = "https://cdn.acme.com";
         }, _drivers );
@@ -286,7 +287,11 @@ public class PartyClientFeatureTests
     public async Task a_feature_without_model_has_no_configuration_Async( CancellationToken cancel )
     {
         using var logs = new AllMonitorsTexts();
-        using var host = BuildHost( c => c["Local:PartyClient:App:Tool:Size"] = "3", _drivers );
+        using var host = BuildHost( c =>
+        {
+            c["StrictConfigurationMode"] = "true";
+            c["Local:PartyClient:App:Tool:Size"] = "3";
+        }, _drivers );
         {
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
             (await logs.WaitForAsync( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Tool:Size\": the client feature 'Tool' has no configuration of its own (no [Configuration<TModel>]), its keys are its options (none)." )).ShouldBeTrue();
@@ -387,5 +392,23 @@ public class PartyClientFeatureTests
             await Should.ThrowAsync<CKException>( () => host.StartAsync( cancel ) );
             (await logs.WaitForAsync( t => t.StartsWith( "The client feature \"CK-AppIdentity:Local:PartyClient:App:Always\" is not a member of the type set of the client 'App'" ) )).ShouldBeTrue();
         }
+    }
+
+    [Test]
+    [CancelAfter( 10000 )]
+    public async Task in_Dev_a_configuration_problem_is_a_warning_Async( CancellationToken cancel )
+    {
+        // Not strict (the "#Dev" environment by default): an unknown key is ignored, an unreadable value keeps its default.
+        using var logs = new AllMonitorsTexts();
+        using var host = BuildHost( c =>
+        {
+            c["Local:Serving"] = "true";
+            c["Local:PartyClient:App:Served:Origin"] = "https://cdn.acme.com";
+            c["Local:PartyClient:Tool:Tool:Size"] = "3";
+        }, _drivers );
+        await host.StartAsync( cancel );
+        (await logs.WaitForAsync( "Unknown key 'CK-AppIdentity:Local:PartyClient:App:Served:Origin': the keys of 'CK-AppIdentity:Local:PartyClient:App:Served' are Color. Its default is used." )).ShouldBeTrue();
+        (await logs.WaitForAsync( "Unknown key \"CK-AppIdentity:Local:PartyClient:Tool:Tool:Size\": the client feature 'Tool' has no configuration of its own (no [Configuration<TModel>]), its keys are its options (none). It is ignored." )).ShouldBeTrue();
+        await host.StopAsync( cancel );
     }
 }

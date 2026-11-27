@@ -179,10 +179,21 @@ namespace CK.AppIdentity.Engine.Tests
             return (services, party);
         }
 
+        /// <summary>
+        /// Strict mode, with a store that only the current user can write (the store of the solution's folder may be
+        /// writable by other accounts: a warning, an error in strict mode).
+        /// </summary>
+        internal static void Strict( MutableConfigurationSection c )
+        {
+            c["StrictConfigurationMode"] = "true";
+            c["StoreRootPath"] = System.IO.Path.Combine( System.IO.Path.GetTempPath(), "CK-AppIdentity-Engine-Tests-Strict" );
+        }
+
+        // A configuration error fails the start in strict mode (the "#Dev" party of these tests is lenient by default).
         static async Task<string[]> FailAsync( Action<MutableConfigurationSection> configure )
         {
             using var logs = GrandOutput.Default!.CreateMemoryCollector( 5000 );
-            await Should.ThrowAsync<Exception>( () => StartAsync( configure ) );
+            await Should.ThrowAsync<Exception>( () => StartAsync( c => { Strict( c ); configure( c ); } ) );
             return logs.ExtractCurrentTexts().ToArray();
         }
 

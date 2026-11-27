@@ -81,7 +81,8 @@ public class PartyClientOptionsTests
     static async Task<string[]> FailAsync( Action<MutableConfigurationSection> clients )
     {
         using var logs = GrandOutput.Default!.CreateMemoryCollector( 5000 );
-        await Should.ThrowAsync<Exception>( () => StartAsync( clients ) );
+        // A configuration error fails the start in strict mode (the "#Dev" party of these tests is lenient by default).
+        await Should.ThrowAsync<Exception>( () => StartAsync( c => { ComponentModelTests.Strict( c ); clients( c ); } ) );
         return logs.ExtractCurrentTexts().ToArray();
     }
 

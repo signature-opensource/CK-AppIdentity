@@ -145,7 +145,12 @@ public class FeatureActivationTests
     public async Task a_feature_without_model_has_no_configuration_Async( CancellationToken cancel )
     {
         using var logs = GrandOutput.Default.ShouldNotBeNull().CreateMemoryCollector( 200 );
-        var (sp, s) = await StartAsync( c => c["Parties:0:OptOut:Some"] = "Setting", cancel );
+        var (sp, s) = await StartAsync( c =>
+        {
+            // Strict mode: a configuration problem fails the start (in the "#Dev" environment, it is a warning).
+            c["StrictConfigurationMode"] = "true";
+            c["Parties:0:OptOut:Some"] = "Setting";
+        }, cancel );
         await using( sp )
         {
             await Should.ThrowAsync<CKException>( () => s.InitializationTask.WaitAsync( cancel ) );
