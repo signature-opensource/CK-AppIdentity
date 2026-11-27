@@ -582,19 +582,22 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                 if( models.Count > 0 ) _partyCompileModels[a] = models;
             }
             var clients = local?.TryGetSection( PartyClientSectionName );
-            if( clients == null || root == null ) continue;
-            foreach( var c in clients.GetChildren() )
+            if( clients != null && root != null )
             {
-                var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
-                if( set != null )
+                foreach( var c in clients.GetChildren() )
                 {
-                    var client = new DeclaredClient( a, c.Key, c, set );
-                    ReadCompileModels( monitor, a, c, isClient: true, client._compileModels, ref success );
-                    _clients.Add( client );
+                    var set = CreateTypeSet( monitor, a, c.Key, c, root, ref success );
+                    if( set != null )
+                    {
+                        var client = new DeclaredClient( a, c.Key, c, set );
+                        ReadCompileModels( monitor, a, c, isClient: true, client._compileModels, ref success );
+                        _clients.Add( client );
+                    }
+                    // A client is the anchor of the restrictions of the client features and their options.
+                    a.DeclareAnchor( $"Local:{PartyClientSectionName}:{c.Key}", ["Client"] );
                 }
-                // A client is the anchor of the restrictions of the client features and their options.
-                a.DeclareAnchor( $"Local:{PartyClientSectionName}:{c.Key}", ["Client"] );
             }
+            AddArchitecture( a, configuration, local );
         }
         return success;
 
@@ -614,6 +617,61 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             var template = unresolved.TryGetSection( party.Path[prefix.Length..] );
             if( template == null || !ConfigurationTemplate.IsTemplate( template ) ) return null;
             return RawPartyName( template );
+        }
+    }
+
+    // The sections of the "architecture.md" of the host: the party (its remotes and tenants, its configured features, their
+    // options and compile time choices), then each of its clients (its type set, its features).
+    void AddArchitecture( AppConfiguration a, ApplicationIdentityServiceConfiguration c, ImmutableConfigurationSection? local )
+    {
+        var b = new System.Text.StringBuilder();
+        b.Append( "- Full name: `" ).Append( c.FullName ).Append( '`' ).Append( '\n' );
+        if( c.Remotes.Count > 0 ) b.Append( "- Remotes: " ).Append( string.Join( ", ", c.Remotes.Select( r => $"`{r.PartyName}`" ) ) ).Append( '\n' );
+        if( c.TenantDomains.Count > 0 ) b.Append( "- Tenant domains: " ).Append( string.Join( ", ", c.TenantDomains.Select( t => $"`{t.FullName}`" ) ) ).Append( '\n' );
+        if( local != null ) AppendComponents( b, a, local, isClient: false, _partyCompileModels.GetValueOrDefault( a ) );
+        a.AddArchitecture( $"The party '{c.PartyName}'", b.ToString() );
+        foreach( var client in _clients.Where( x => x.App == a ) )
+        {
+            b.Clear();
+            foreach( var key in TypeSetConfiguration.Keys )
+            {
+                if( client.Configuration.TryGetSection( key ) is not { } list ) continue;
+                var items = list.Value != null ? [list.Value] : list.GetChildren().Select( i => i.Value ).Where( v => v != null ).ToList();
+                b.Append( "- " ).Append( key ).Append( ": " ).Append( items.Count == 0 ? "*(none)*" : string.Join( ", ", items.Select( i => $"`{i}`" ) ) ).Append( '\n' );
+            }
+            AppendComponents( b, a, client.Configuration, isClient: true, client._compileModels );
+            a.AddArchitecture( $"The client '{client.Name}' of '{c.PartyName}'", b.ToString() );
+        }
+
+        // The configured features of a section: their package, their enabled options, their compile time model (its
+        // values, the defaults marked).
+        static void AppendComponents( System.Text.StringBuilder b,
+                                      AppConfiguration a,
+                                      ImmutableConfigurationSection section,
+                                      bool isClient,
+                                      IReadOnlyDictionary<string, object>? models )
+        {
+            foreach( var k in section.GetChildren() )
+            {
+                if( TypeSetConfiguration.Keys.Contains( k.Key ) ) continue;
+                var t = FindComponent( a.ConfigurableTypes, k.Key, isClient );
+                if( t == null ) continue;
+                b.Append( '\n' ).Append( "### " ).Append( isClient ? "Client feature" : "Feature" ).Append( " `" ).Append( k.Key ).Append( '`' ).Append( '\n' ).Append( '\n' );
+                b.Append( "Package: `" ).Append( t.Assembly.GetName().Name ).Append( '`' );
+                if( k.Value != null && bool.TryParse( k.Value, out var on ) && !on )
+                {
+                    b.Append( " (turned off)" ).Append( '\n' );
+                    continue;
+                }
+                b.Append( '\n' );
+                var options = OptionNames( a.ConfigurableTypes, t ).Where( o => k.TryGetSection( o ) is { } os && !string.Equals( os.Value, "false", StringComparison.OrdinalIgnoreCase ) ).ToList();
+                if( options.Count > 0 ) b.Append( '\n' ).Append( "Options: " ).Append( string.Join( ", ", options.Select( o => $"`{o}`" ) ) ).Append( '\n' );
+                if( models != null && models.TryGetValue( k.Key, out var model ) && ConfigurationModelDescription.TryGet( model.GetType(), out var description, out _ ) )
+                {
+                    b.Append( '\n' ).Append( "Build time:" ).Append( '\n' ).Append( '\n' );
+                    ConfigurationModelMarkdown.AppendTable( b, description, model, k.Value == null ? k.GetChildren().Select( c => c.Key ) : [] );
+                }
+            }
         }
     }
 
@@ -821,9 +879,10 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
             }
             a.AddDeclarationKey( RelativePath( a, k ) );
         }
+    }
 
-        // A client feature (a party component that is not a feature driver) or a feature driver, by its configuration name.
-        static Type? FindComponent( IReadOnlyCollection<Type> types, string name, bool isClient )
+    // A client feature (a party component that is not a feature driver) or a feature driver, by its configuration name.
+    static Type? FindComponent( IReadOnlyCollection<Type> types, string name, bool isClient )
             => types.FirstOrDefault( t => t.IsClass
                                           && !t.IsAbstract
                                           && typeof( IPartyComponent ).IsAssignableFrom( t )
@@ -832,20 +891,19 @@ public sealed class AppIdentityAppBuilderContributor : IAppBuilderContributor
                                                             name,
                                                             StringComparison.OrdinalIgnoreCase ) );
 
-        static Type? GetModelType( Type t ) => t.GetCustomAttributes( inherit: false )
+    static Type? GetModelType( Type t ) => t.GetCustomAttributes( inherit: false )
                                                 .Select( a => a.GetType() )
                                                 .FirstOrDefault( a => a.IsGenericType && a.GetGenericTypeDefinition() == typeof( ConfigurationAttribute<> ) )
                                                 ?.GetGenericArguments()[0];
 
-        // The names of the options of an owner (an option of a base owner applies to it).
-        static IEnumerable<string> OptionNames( IReadOnlyCollection<Type> types, Type owner )
+    // The names of the options of an owner (an option of a base owner applies to it).
+    static IEnumerable<string> OptionNames( IReadOnlyCollection<Type> types, Type owner )
             => types.Where( o => o.GetInterfaces().Any( i => i.IsGenericType
                                                              && i.GetGenericTypeDefinition() == typeof( IPartyComponentOption<> )
                                                              && i.GetGenericArguments()[0].IsAssignableFrom( owner ) ) )
                     .Select( o => o.GetCustomAttributes( inherit: false ).OfType<IPartyComponentOptionAttribute>().FirstOrDefault()?.Name )
                     .Where( n => n != null )
                     .Select( n => n! );
-    }
 
     /// <summary>
     /// Resolves the sections of an option (<see cref="IPartyComponentOption{TOwner}"/>): the section of the option in the

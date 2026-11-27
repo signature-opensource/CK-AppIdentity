@@ -26,7 +26,6 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
     readonly ConditionalWeakTable<IParty, object> _models;
     readonly ConfigurationModelDescription? _model;
     // The keys of the compile time model of the feature: accepted and ignored at run time.
-    readonly IReadOnlyList<string> _compileKeys;
     // The drivers of an asymmetric feature share this (null for a symmetric feature).
     internal readonly AsymmetricDrivers? _asymmetric;
     // Set by ApplicationIdentityStaticFeatureDriver.
@@ -92,7 +91,6 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         _options = new ConditionalWeakTable<IParty, IReadOnlyList<object>>();
         _models = new ConditionalWeakTable<IParty, object>();
         _model = info.Model;
-        _compileKeys = info.CompileKeys;
         _isAllowedByDefault = !info.IsOptional;
         _activation = info.Activation;
         _featureName = name;
@@ -308,8 +306,8 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         var directory = _s.OptionDirectory;
         var options = directory?.GetOptions( _componentType ) ?? [];
         bool success = true;
-        // The keys of the section that are not the model's: the options and the compile time keys.
-        var reserved = options.Select( o => o.Name ).Concat( _compileKeys ).ToList();
+        // The keys of the section that are not the model's: the options.
+        var reserved = options.Select( o => o.Name ).ToList();
         // Not strict ("#Dev" by default): an unknown key or an unreadable value is a warning (the key keeps its default).
         bool lenient = !_s.Configuration.StrictConfigurationMode;
         if( _model != null )
@@ -328,7 +326,7 @@ public abstract class ApplicationIdentityFeatureDriver : IApplicationIdentityFea
         }
         else if( !OwnsItsSection )
         {
-            // No model, no configuration: the section of the feature has only its options and its compile time keys.
+            // No model, no configuration: the section of the feature has only its options.
             foreach( var p in parties )
             {
                 // Once per party: a model-less feature marks its checked parties in the models (it has no model to read).

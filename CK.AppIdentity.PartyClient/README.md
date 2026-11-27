@@ -26,8 +26,8 @@ A client is to its features what a party is to its features: [`PartyClient`](Par
 "Local": {
   "PartyClient": {
     "App": {
-      "Types": [ "..." ], "ExcludedTypes": [ "..." ],   // Its type set: compile time keys, ignored at run time.
-      "NgApp": { "RequestPath": "/", "DevServerPort": 4200 },  // Its compile time keys: ignored at run time.
+      "Types": [ "..." ], "ExcludedTypes": [ "..." ],   // Its type set: compile time keys (not in "appsettings.json").
+      "NgApp": { "RequestPath": "/", "DevServerPort": 4200 },  // Its compile time keys (not in "appsettings.json").
       "Hosting": true                                   // A feature without configuration: true (an empty object is nothing).
     }
   }
@@ -82,11 +82,11 @@ keys of its compile time model reserved: an unknown key, a missing required one 
 the driver is called.
 
 **No model, no configuration:** a feature without model (its driver specializes `ClientFeatureDriver<T>`) has no key of
-its own: its section has only its options and the keys of its compile time model, any other key is an error. A driver
-never checks its keys.
+its own: its section has only its options, any other key is an error. A driver never checks its keys.
 
 **The compile time model** of a feature (`[CompileConfiguration<TModel>]`, read by the App builder: see
-CK.AppIdentity.Engine) is read by the build: its keys are accepted and ignored at run time (`PartyComponentInfo.CompileKeys`).
+CK.AppIdentity.Engine) is read by the build: its keys are never in the host's `appsettings.json` (the build describes
+them in the host's `architecture.md`), and one of them in a run time configuration is an unknown key.
 
 ## The options of a client feature
 

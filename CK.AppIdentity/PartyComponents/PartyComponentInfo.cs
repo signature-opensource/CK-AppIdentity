@@ -19,18 +19,15 @@ public sealed class PartyComponentInfo
     /// <param name="activation">The activation of this component.</param>
     /// <param name="side">The side of an asymmetric feature.</param>
     /// <param name="model">The description of the configuration model of the component (its <c>[Configuration&lt;TModel&gt;]</c>), if any.</param>
-    /// <param name="compileKeys">The keys of its compile time model (its <c>[CompileConfiguration&lt;TModel&gt;]</c>), if any.</param>
     public PartyComponentInfo( Type componentType,
                                IReadOnlyList<Type> requires,
                                IReadOnlyList<Type> abstractions,
                                string featureName,
                                TypeActivation activation,
                                FeatureSide side,
-                               ConfigurationModelDescription? model = null,
-                               IReadOnlyList<string>? compileKeys = null )
+                               ConfigurationModelDescription? model = null )
     {
         Model = model;
-        CompileKeys = compileKeys ?? [];
         ComponentType = componentType;
         Requires = requires;
         Abstractions = abstractions;
@@ -84,29 +81,10 @@ public sealed class PartyComponentInfo
     /// Gets the description of the configuration model of this component (its <c>[Configuration&lt;TModel&gt;]</c>):
     /// a feature driver reads the model of each party (<see cref="ApplicationIdentityFeatureDriver.GetModel{TModel}(IParty)"/>),
     /// a client feature receives it from its driver. Null when the component has no configuration of its own (its section
-    /// has only its options and its <see cref="CompileKeys"/>).
+    /// has only its options). The keys of its compile time model (its <c>[CompileConfiguration&lt;TModel&gt;]</c>) are
+    /// never in the run time configuration: the build reads them, the host's "appsettings.json" doesn't have them.
     /// </summary>
     public ConfigurationModelDescription? Model { get; }
-
-    /// <summary>
-    /// Gets the keys of the compile time model of this component (its <c>[CompileConfiguration&lt;TModel&gt;]</c>): the
-    /// build reads them, the run time accepts and ignores them in the component's section. Empty when it has none.
-    /// </summary>
-    public IReadOnlyList<string> CompileKeys { get; }
-
-    /// <summary>
-    /// Gets whether a key of the component's section is a compile time key (see <see cref="CompileKeys"/>).
-    /// </summary>
-    /// <param name="key">The key.</param>
-    /// <returns>True for a compile time key.</returns>
-    public bool IsCompileKey( string key )
-    {
-        foreach( var k in CompileKeys )
-        {
-            if( string.Equals( k, key, StringComparison.OrdinalIgnoreCase ) ) return true;
-        }
-        return false;
-    }
 
     /// <inheritdoc />
     public override string ToString() => ComponentType.Name;

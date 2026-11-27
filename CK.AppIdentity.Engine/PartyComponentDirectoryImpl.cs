@@ -47,12 +47,6 @@ public sealed class PartyComponentDirectoryImpl : CSCodeGeneratorType
                  .Append( ", global::CK.Core.TypeActivation." ).Append( i.Activation.ToString() )
                  .Append( ", global::CK.AppIdentity.FeatureSide." ).Append( i.Side.ToString() )
                  .Append( ", " ).Append( modelDescription ?? "null" );
-            if( i.CompileKeys.Count > 0 )
-            {
-                scope.Append( ", new string[] {" );
-                foreach( var k in i.CompileKeys ) scope.AppendSourceString( k ).Append( "," );
-                scope.Append( "}" );
-            }
             scope.Append( " )," ).NewLine();
         }
         scope.Append( "}, new global::System.Collections.Generic.HashSet<global::System.Type>() {" );

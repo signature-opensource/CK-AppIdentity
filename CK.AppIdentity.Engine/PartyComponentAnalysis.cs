@@ -152,9 +152,9 @@ public static class PartyComponentAnalysis
                 success = false;
                 continue;
             }
-            // The compile time model ([CompileConfiguration<TModel>]): the run time knows only its keys (accepted and ignored).
+            // The compile time model ([CompileConfiguration<TModel>]): read by the build, unknown to the run time (the host's
+            // "appsettings.json" never has its keys). A key is read at run time or at build time, not both.
             var compileModelType = GetCompileModelType( t );
-            IReadOnlyList<string>? compileKeys = null;
             if( compileModelType != null )
             {
                 if( !ConfigurationModelDescription.TryGet( compileModelType, out var compileModel, out var compileError ) )
@@ -163,7 +163,7 @@ public static class PartyComponentAnalysis
                     success = false;
                     continue;
                 }
-                compileKeys = compileModel.Properties.Select( p => p.Name ).ToArray();
+                var compileKeys = compileModel.Properties.Select( p => p.Name ).ToArray();
                 var both = model?.Properties.Select( p => p.Name ).Intersect( compileKeys, StringComparer.OrdinalIgnoreCase ).ToList();
                 if( both?.Count > 0 )
                 {
@@ -172,7 +172,7 @@ public static class PartyComponentAnalysis
                     continue;
                 }
             }
-            infos.Add( new PartyComponentInfo( t, requires[t], abstractions[t], names[t].Name, names[t].Activation, names[t].Side, model, compileKeys ) );
+            infos.Add( new PartyComponentInfo( t, requires[t], abstractions[t], names[t].Name, names[t].Activation, names[t].Side, model ) );
         }
         if( !success ) return null;
         return new Result( infos, multiple );

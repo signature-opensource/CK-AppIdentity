@@ -282,11 +282,11 @@ public sealed class PartyClientFeatureDriver : ApplicationIdentityFeatureDriver
         foreach( var (driver, section) in declared )
         {
             // The configuration model of the feature: read from its section (a bare true without keys has none), its options
-            // and its compile time keys reserved. No model, no configuration: the section has only these keys.
+            // reserved. No model, no configuration: the section has only its options.
             object? model = null;
             var info = _componentDirectory.Find( driver.FeatureType )!;
             var options = _optionDirectory?.GetOptions( driver.FeatureType ) ?? [];
-            var reserved = options.Select( o => o.Name ).Concat( info.CompileKeys ).ToList();
+            var reserved = options.Select( o => o.Name ).ToList();
             if( info.Model is { } description )
             {
                 var collector = new UserMessageCollector( new CurrentCultureInfo( new TranslationService(), NormalizedCultureInfo.CodeDefault ) );

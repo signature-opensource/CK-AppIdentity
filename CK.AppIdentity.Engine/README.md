@@ -64,8 +64,8 @@ test with it):
   included) and among the client features (the keys of a client). A party feature and a client feature can have the
   same name.
 - **Their models:** the configuration model (`[Configuration<TModel>]`, `PartyComponentInfo.Model`, its description
-  generated) and the keys of the compile time model (`[CompileConfiguration<TModel>]`, `PartyComponentInfo.CompileKeys`:
-  the run time accepts and ignores them). A key in both models is an error.
+  generated) and the compile time model (`[CompileConfiguration<TModel>]`: read by the build, its keys never in the
+  host's `appsettings.json`, unknown at run time). A key in both models is an error.
 
 The "PartyClient" feature (CK.AppIdentity.PartyClient) checks the features of each client against it at start.
 

@@ -193,18 +193,12 @@ public class PartyClientOptionsTests
     }
 
     [Test]
-    public async Task the_compile_time_keys_are_ignored_at_run_time_Async()
+    public async Task a_compile_time_key_is_unknown_at_run_time_Async()
     {
-        // Build has no configuration model: only its options and the keys of its compile time model are accepted.
-        var (services, party) = await StartAsync( c => c["Local:PartyClient:App:Build:Port"] = "3000" );
-        await using( services )
-        {
-            services.Services.GetRequiredService<PartyComponentDirectory>().Find( typeof( BuildClientFeature ) ).ShouldNotBeNull().CompileKeys.ShouldBe( ["Port"] );
-            Client( party, "App" ).GetFeature<BuildClientFeature>().ShouldNotBeNull();
-            await ((IHostedService)party).StopAsync( default );
-        }
-        var texts = await FailAsync( c => c["Local:PartyClient:App:Build:Nope"] = "3000" );
-        texts.ShouldContain( t => t.Contains( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Build:Nope\"" ) && t.Contains( "(Window)" ) );
+        // Build has no configuration model: only its options are accepted. The keys of its compile time model are the
+        // build's: the host's "appsettings.json" never has them.
+        var texts = await FailAsync( c => c["Local:PartyClient:App:Build:Port"] = "3000" );
+        texts.ShouldContain( t => t.Contains( "Unknown key \"CK-AppIdentity:Local:PartyClient:App:Build:Port\"" ) && t.Contains( "(Window)" ) );
     }
 
     [Test]

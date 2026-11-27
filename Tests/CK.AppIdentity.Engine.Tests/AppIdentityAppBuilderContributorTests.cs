@@ -44,6 +44,14 @@ public class AppIdentityAppBuilderContributorTests
         app.IsOptionEnabled( "Build", typeof( Fake.WindowOption ) ).ShouldBeTrue();
         app.IsOptionEnabled( "Serve", typeof( Fake.WindowOption ) ).ShouldBeFalse();
         app.IsOptionEnabled( "Nope", typeof( Fake.WindowOption ) ).ShouldBeFalse();
+        // The architecture of the host describes the party and its client: the features, their options and their
+        // compile time choices.
+        var architecture = context.Apps[0].Architecture;
+        architecture.Select( s => s.Title ).ShouldBe( ["The party 'Front'", "The client 'App' of 'Front'"] );
+        architecture[0].Markdown.ShouldContain( "- Full name: `Sample/$Front`" );
+        var client = architecture[1].Markdown.ReplaceLineEndings( "\n" );
+        client.ShouldContain( "### Client feature `Build`\n\nPackage: `CK.AppIdentity.Engine.Tests`\n\nOptions: `Window`\n\nBuild time:\n\n| Key | Value |\n|---|---|\n| Port | `3000` |\n" );
+        client.ShouldContain( "### Client feature `Serve`" );
 
         // An unknown key of a feature that has a compile time model is a build error.
         context = CreateContext( """{ "FullName": "Sample/$Front", "Local": { "PartyClient": { "App": { "Build": { "Nope": 1 } } } } }""" );
