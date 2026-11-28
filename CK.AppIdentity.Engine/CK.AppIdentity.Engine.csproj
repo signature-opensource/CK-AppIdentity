@@ -4,11 +4,11 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CK.StObj.Engine" Version="37.0.0-0.uc.4.ci.85" />
+    <PackageReference Include="CK.StObj.Engine" Version="37.0.0-0.uc.4.ci.89" />
     <!-- The App builder contributor (the parties of the "ckonf.json"). -->
-    <PackageReference Include="CK.Engine" Version="37.0.0-0.uc.4.ci.85" />
+    <PackageReference Include="CK.Engine" Version="37.0.0-0.uc.4.ci.89" />
     <!-- The options of an owner are ordered by a ResourceSpace island. -->
-    <PackageReference Include="CK.ResourceSpace" Version="36.0.2-0.uc.4.ci.86" />
+    <PackageReference Include="CK.ResourceSpace" Version="36.0.2-0.uc.4.ci.87" />
     <!-- The description and the creation of the options' configuration models (generated: no reflection at run time). -->
     <PackageReference Include="CK.ConfigurationModel.Engine" Version="0.0.0-0.uc.2.ci.32" />
   </ItemGroup>
